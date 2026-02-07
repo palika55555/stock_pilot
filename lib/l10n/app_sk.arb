@@ -1,0 +1,185 @@
+{
+  "@@locale": "sk",
+  "appTitle": "StockPilot",
+  "settings": "Nastavenia",
+  "overview": "Prehľad",
+  "scanProduct": "Skenovať tovar",
+  "warehouseSupplies": "Skladové zásoby",
+  "goodsReceipt": "Príjem tovaru",
+  "warehouseMovements": "Pohyby na sklade",
+  "suppliers": "Dodávatelia",
+  "logout": "Odhlásiť sa",
+  "login": "Prihlásenie",
+  "stockSystem": "Skladový Systém",
+  "loginSubtitle": "Prihláste sa pre pokračovanie",
+  "loginLabel": "Login",
+  "passwordLabel": "Heslo",
+  "loginButton": "PRIHLÁSIŤ SA",
+  "loginError": "Nesprávny login alebo heslo",
+  "loginRequired": "Zadajte login",
+  "passwordMinLength": "Heslo musí mať aspoň 4 znaky",
+  "loggedInAs": "Prihlásený ako {name}",
+  "@loggedInAs": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roleChangedTo": "Rola zmenená na {role}",
+  "@roleChangedTo": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "notifications": "Notifikácie",
+  "darkMode": "Tmavý režim",
+  "darkModeSubtitle": "Použiť tmavú tému aplikácie",
+  "language": "Jazyk",
+  "notificationsSubtitle": "Povoliť upozornenia a oznámenia",
+  "application": "Aplikácia",
+  "database": "Databáza",
+  "databaseLocation": "Umiestnenie databázy",
+  "defaultPath": "Predvolené",
+  "about": "O aplikácii",
+  "stockManagement": "Skladový manažment",
+  "close": "Zavrieť",
+  "unknown": "Neznáme",
+  "darkModeOn": "Tmavý režim zapnutý",
+  "darkModeOff": "Tmavý režim vypnutý",
+  "languageChanged": "Jazyk zmenený na {lang}",
+  "@languageChanged": {
+    "placeholders": {
+      "lang": {
+        "type": "String"
+      }
+    }
+  },
+  "languageSlovak": "Slovenčina",
+  "languageCzech": "Čeština",
+  "languageEnglish": "English",
+  "search": "Hľadať",
+  "addSupplier": "Pridať dodávateľa",
+  "add": "Pridať",
+  "active": "Aktívny",
+  "inactive": "Neaktívny",
+  "all": "Všetci",
+  "allActive": "Aktívni",
+  "allInactive": "Neaktívni",
+  "noSuppliers": "Žiadni dodávatelia",
+  "noResults": "Žiadne výsledky",
+  "searchHintSuppliers": "Hľadať podľa názvu, IČO, mesta...",
+  "deleteSupplier": "Vymazať dodávateľa?",
+  "deleteSupplierConfirm": "Naozaj chcete vymazať dodávateľa \"{name}\"?",
+  "@deleteSupplierConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "cancel": "Zrušiť",
+  "delete": "Vymazať",
+  "edit": "Upraviť",
+  "supplierDeleted": "Dodávateľ bol vymazaný",
+  "inbound": "Príchod",
+  "outbound": "Výdaj",
+  "detail": "Detail",
+  "stockMovements": "Pohyby zásob",
+  "inboundReceipts": "Príjemky",
+  "inboundGoods": "Príjem tovaru",
+  "outboundReceipts": "Výdajky",
+  "outboundGoods": "Výdaj tovaru",
+  "customers": "Zákazníci",
+  "addCustomer": "Pridať zákazníka",
+  "noCustomers": "Žiadni zákazníci",
+  "searchHintCustomers": "Hľadať podľa názvu, IČO, mesta...",
+  "deleteCustomer": "Vymazať zákazníka?",
+  "deleteCustomerConfirm": "Naozaj chcete vymazať zákazníka \"{name}\"?",
+  "@deleteCustomerConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "customerDeleted": "Zákazník bol vymazaný",
+  "priceQuote": "Cenová ponuka",
+  "quoteDetails": "Údaje cenovej ponuky",
+  "quoteNumber": "Číslo ponuky",
+  "validUntil": "Platnosť do",
+  "notes": "Poznámky",
+  "notesHint": "Poznámka pre zákazníka (zobrazí sa na ponuke)",
+  "pricesIncludeVat": "Ceny vrátane DPH",
+  "quoteItems": "Položky ponuky",
+  "addItem": "Pridať položku",
+  "noQuoteItems": "Žiadne položky. Pridajte produkty.",
+  "subtotalWithoutVat": "Medzisúčet bez DPH",
+  "totalWithVat": "Spolu s DPH",
+  "saveQuote": "Uložiť cenovú ponuku",
+  "quoteSaved": "Cenová ponuka bola uložená",
+  "quoteNumberRequired": "Zadajte číslo ponuky",
+  "offerFor": "Ponuka pre:",
+  "dateOfIssue": "Dátum vystavenia",
+  "itemDescription": "Popis položky",
+  "quantity": "Množstvo",
+  "unitShort": "MJ",
+  "pricePerUnit": "Cena za MJ",
+  "totalWithoutVatShort": "Celkom bez DPH",
+  "vatShort": "DPH",
+  "totalWithVatShort": "Celkom s DPH",
+  "totalLabel": "Spolu:",
+  "vatPayer": "Platiteľ DPH",
+  "ourCompany": "Naša firma",
+  "editCompany": "Upraviť údaje firmy",
+  "printPdf": "Tlačiť / PDF",
+  "saveChanges": "Uložiť zmeny",
+  "noSavedQuotes": "Žiadne uložené ponuky",
+  "oneSavedQuote": "1 uložená ponuka",
+  "savedQuotesCount": "{count} uložených ponúk",
+  "@savedQuotesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "warehouses": "Sklady",
+  "addWarehouse": "Pridať sklad",
+  "warehouseName": "Názov skladu",
+  "warehouseCode": "Kód skladu",
+  "noWarehouses": "Žiadne sklady",
+  "searchHintWarehouses": "Hľadať podľa názvu, kódu, mesta...",
+  "deleteWarehouse": "Vymazať sklad?",
+  "deleteWarehouseConfirm": "Naozaj chcete vymazať sklad \"{name}\"?",
+  "@deleteWarehouseConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "warehouseDeleted": "Sklad bol vymazaný",
+  "editWarehouse": "Upraviť sklad",
+  "addNewWarehouse": "Pridať nový sklad",
+  "saveWarehouse": "Uložiť sklad",
+  "warehouseSaved": "Sklad bol uložený",
+  "warehouseUpdated": "Sklad bol upravený",
+  "changePassword": "Zmeniť heslo",
+  "changePasswordTitle": "Zmena hesla",
+  "currentPassword": "Súčasné heslo",
+  "newPassword": "Nové heslo",
+  "confirmPassword": "Potvrďte nové heslo",
+  "currentPasswordRequired": "Zadajte súčasné heslo",
+  "newPasswordRequired": "Zadajte nové heslo",
+  "confirmPasswordRequired": "Potvrďte nové heslo",
+  "passwordsDoNotMatch": "Heslá sa nezhodujú",
+  "passwordChanged": "Heslo bolo úspešne zmenené",
+  "passwordChangeError": "Chyba pri zmene hesla",
+  "invalidCurrentPassword": "Nesprávne súčasné heslo",
+  "usernameRequired": "Zadajte používateľské meno",
+  "category": "Kategória",
+  "city": "Mesto"
+}

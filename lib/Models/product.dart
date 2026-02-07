@@ -5,14 +5,19 @@ class Product {
   final String category;
   final int qty;
   final String unit;
-  final double price;
-  final double withoutVat;
-  final int vat;
+  final double price; // Sales price with VAT
+  final double withoutVat; // Sales price without VAT
+  final int vat; // Sales VAT %
   final int discount;
   final double lastPurchasePrice;
   final String lastPurchaseDate;
   final String currency;
   final String location;
+  final double purchasePrice; // Purchase price with VAT
+  final double purchasePriceWithoutVat; // Purchase price without VAT
+  final int purchaseVat; // Purchase VAT %
+  final double recyclingFee;
+  final String productType; // e.g. 'Sklad', 'Výroba'
 
   Product({
     this.uniqueId,
@@ -29,6 +34,11 @@ class Product {
     required this.lastPurchaseDate,
     required this.currency,
     required this.location,
+    this.purchasePrice = 0.0,
+    this.purchasePriceWithoutVat = 0.0,
+    this.purchaseVat = 23,
+    this.recyclingFee = 0.0,
+    this.productType = 'Sklad',
   });
 
   Map<String, dynamic> toMap() {
@@ -47,6 +57,11 @@ class Product {
       'last_purchase_date': lastPurchaseDate,
       'currency': currency,
       'location': location,
+      'purchase_price': purchasePrice,
+      'purchase_price_without_vat': purchasePriceWithoutVat,
+      'purchase_vat': purchaseVat,
+      'recycling_fee': recyclingFee,
+      'product_type': productType,
     };
   }
 
@@ -58,18 +73,21 @@ class Product {
       category: map['category'],
       qty: map['qty'],
       unit: map['unit'],
-      price: map['price'],
-      withoutVat: map['without_vat'],
-      vat: map['vat'],
-      discount: map['discount'],
-      lastPurchasePrice: map['last_purchase_price'],
-      lastPurchaseDate: map['last_purchase_date'],
-      currency: map['currency'],
-      location: map['location'],
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      withoutVat: (map['without_vat'] as num?)?.toDouble() ?? 0.0,
+      vat: map['vat'] ?? 23,
+      discount: map['discount'] ?? 0,
+      lastPurchasePrice:
+          (map['last_purchase_price'] as num?)?.toDouble() ?? 0.0,
+      lastPurchaseDate: map['last_purchase_date'] ?? '',
+      currency: map['currency'] ?? 'EUR',
+      location: map['location'] ?? '',
+      purchasePrice: (map['purchase_price'] as num?)?.toDouble() ?? 0.0,
+      purchasePriceWithoutVat:
+          (map['purchase_price_without_vat'] as num?)?.toDouble() ?? 0.0,
+      purchaseVat: map['purchase_vat'] ?? 23,
+      recyclingFee: (map['recycling_fee'] as num?)?.toDouble() ?? 0.0,
+      productType: map['product_type'] ?? 'Sklad',
     );
   }
 }
-
-
-
-

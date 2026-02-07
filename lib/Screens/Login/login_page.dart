@@ -1,0 +1,198 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import '../home/home_screen.dart';
+import '../../services/Database/database_service.dart';
+import '../../models/user.dart';
+import '../../l10n/app_localizations.dart';
+import '../../widgets/common/change_password_dialog.dart';
+import '../../widgets/Common/glassmorphism_container.dart';
+import '../../widgets/Common/glass_text_field.dart';
+import '../../widgets/Common/purple_button.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  bool _isObscured = true;
+  bool _isLoading = false;
+  final DatabaseService _dbService = DatabaseService();
+
+  // Kontroléry pre vstup
+  final TextEditingController _loginController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  void _handleLogin() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+
+      // Skúsime nájsť používateľa v DB
+      User? user = await _dbService.getUserByUsername(_loginController.text);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+
+        if (user != null && user.password == _passwordController.text) {
+          // Navigácia na HomeScreen s reálnymi dátami používateľa
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(user: user),
+            ),
+          );
+          
+          final l10n = AppLocalizations.of(context)!;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.loggedInAs(user.fullName)),
+              backgroundColor: user.role == 'admin' ? Colors.redAccent : Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.loginError),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Pozadie s obrázkom
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('lib/assets/back_login.png'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Container(color: Colors.black.withOpacity(0.3)),
+          ),
+
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Container(
+                // Efekt vonkajšej fialovej žiary pod boxom
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.purpleAccent.withOpacity(0.4),
+                      blurRadius: 50,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: GlassmorphismContainer(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+                    child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "SKLADOVÝ SYSTÉM",
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+
+                        // Sekcia Username
+                        GlassTextField(
+                          controller: _loginController,
+                          labelText: "Username",
+                          hintText: "Enter your Username",
+                          validator: (v) => v!.isEmpty ? l10n.loginRequired : null,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Sekcia Password
+                        GlassTextField(
+                          controller: _passwordController,
+                          labelText: "Password",
+                          hintText: "Enter your password",
+                          isPassword: true,
+                          obscureText: _isObscured,
+                          onToggleVisibility: () => setState(() => _isObscured = !_isObscured),
+                          validator: (v) => v!.length < 4 ? l10n.passwordMinLength : null,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Remember me & Forgot Password riadok
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: Checkbox(
+                                    value: false,
+                                    onChanged: (v) {},
+                                    side: const BorderSide(color: Colors.white),
+                                  ),
+                                ),
+                                const Text(
+                                  "Zapamätať si",
+                                  style: TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            TextButton(
+                              onPressed: () => showChangePasswordDialog(context),
+                              child: const Text(
+                                "zabudol som heslo",
+                                style: TextStyle(color: Colors.white, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Login Tlačidlo
+                        PurpleButton(
+                          text: "Login",
+                          isLoading: _isLoading,
+                          onPressed: _handleLogin,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _loginController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+}
