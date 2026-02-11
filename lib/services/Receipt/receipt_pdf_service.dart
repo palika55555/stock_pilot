@@ -3,19 +3,40 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../models/receipt.dart';
+import '../../models/receipt_pdf_style_config.dart';
 
 /// Generuje PDF príjemky (inbound receipt) pre tlač alebo uloženie.
+/// Štýl môže byť upravený cez [styleConfig] (Nastavenia → Generovanie PDF).
 class ReceiptPdfService {
   static String _formatDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   static String _formatPrice(double v) =>
       v.toStringAsFixed(2).replaceAll('.', ',');
 
-  /// Vráti PDF ako bajty. Používa Unicode font (Open Sans) z balíka printing pre slovenskú diakritiku a €.
+  static PdfColor? _colorFromHex(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    try {
+      final h = hex.replaceFirst('#', '');
+      final value = h.length <= 6 ? 0xFF000000 | int.parse(h, radix: 16) : int.parse(h, radix: 16);
+      return PdfColor.fromInt(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Vráti PDF ako bajty. [issuedBy] = meno prihláseného; [styleConfig] = štýl z nastavení;
+  /// [lastPurchaseDateByProductId] = mapa productUniqueId -> formátovaný dátum (pre stĺpec Posledný dátum nákupu).
   static Future<Uint8List> buildPdf({
     required InboundReceipt receipt,
     required List<InboundReceiptItem> items,
+    String? issuedBy,
+    ReceiptPdfStyleConfig? styleConfig,
+    Map<String, String>? lastPurchaseDateByProductId,
   }) async {
+    final c = styleConfig ?? const ReceiptPdfStyleConfig();
+    final primaryColor = _colorFromHex(c.primaryColorHex);
+    final tableHeaderColor = _colorFromHex(c.tableHeaderColorHex) ?? PdfColors.grey300;
+
     final baseFont = await PdfGoogleFonts.openSansRegular();
     final boldFont = await PdfGoogleFonts.openSansBold();
     final theme = pw.ThemeData.withFont(base: baseFont, bold: boldFont);
@@ -27,162 +48,324 @@ class ReceiptPdfService {
     }
     total = (total * 100).round() / 100;
 
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) => [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+    final headerChildren = <pw.Widget>[
+      pw.Text(
+        c.effectiveDocumentTitle,
+        style: pw.TextStyle(
+          fontSize: c.titleFontSize.toDouble(),
+          fontWeight: pw.FontWeight.bold,
+          color: primaryColor,
+        ),
+      ),
+      pw.SizedBox(height: 8),
+      pw.Text(
+        receipt.receiptNumber,
+        style: pw.TextStyle(
+          fontSize: (c.bodyFontSize + 2).toDouble(),
+          fontWeight: pw.FontWeight.bold,
+          color: primaryColor,
+        ),
+      ),
+      pw.SizedBox(height: 12),
+      pw.Text(
+        'Dátum: ${_formatDate(receipt.createdAt)}',
+        style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+      ),
+      if (receipt.invoiceNumber != null && receipt.invoiceNumber!.isNotEmpty)
+        pw.Text(
+          'Faktúra: ${receipt.invoiceNumber}',
+          style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+        ),
+      if (receipt.supplierName != null && receipt.supplierName!.isNotEmpty) ...[
+        pw.SizedBox(height: 6),
+        pw.Text(
+          'Dodávateľ:',
+          style: pw.TextStyle(
+            fontSize: c.bodyFontSize.toDouble(),
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.Text(
+          receipt.supplierName!,
+          style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+        ),
+      ],
+      if (receipt.notes != null && receipt.notes!.trim().isNotEmpty) ...[
+        pw.SizedBox(height: 8),
+        pw.Text(
+          'Poznámka:',
+          style: pw.TextStyle(
+            fontSize: c.bodyFontSize.toDouble(),
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.Text(
+          receipt.notes!.trim(),
+          style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+        ),
+      ],
+      pw.SizedBox(height: 4),
+      pw.Text(
+        receipt.pricesIncludeVat ? 'Ceny sú s DPH' : 'Ceny sú bez DPH',
+        style: pw.TextStyle(
+          fontSize: (c.bodyFontSize - 1).toDouble(),
+          color: PdfColors.grey700,
+        ),
+      ),
+      if (c.showIssuedBy) ...[
+        pw.SizedBox(height: 8),
+        pw.Text(
+          'Vystavil: ${receipt.username ?? issuedBy ?? '–'}',
+          style: pw.TextStyle(
+            fontSize: c.bodyFontSize.toDouble(),
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ],
+    ];
+
+    final pageChildren = <pw.Widget>[
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: headerChildren,
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 20),
+      _buildTable(
+        receipt: receipt,
+        items: items,
+        c: c,
+        tableHeaderColor: tableHeaderColor,
+        lastPurchaseDateByProductId: lastPurchaseDateByProductId ?? {},
+      ),
+      pw.SizedBox(height: 16),
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.end,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'PRÍJEMKA TOVARU',
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 8),
-                    pw.Text(
-                      receipt.receiptNumber,
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 12),
-                    pw.Text(
-                      'Dátum: ${_formatDate(receipt.createdAt)}',
-                      style: const pw.TextStyle(fontSize: 10),
-                    ),
-                    if (receipt.invoiceNumber != null &&
-                        receipt.invoiceNumber!.isNotEmpty)
-                      pw.Text(
-                        'Faktúra: ${receipt.invoiceNumber}',
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    if (receipt.supplierName != null &&
-                        receipt.supplierName!.isNotEmpty) ...[
-                      pw.SizedBox(height: 6),
-                      pw.Text(
-                        'Dodávateľ:',
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.Text(
-                        receipt.supplierName!,
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    ],
-                    if (receipt.notes != null &&
-                        receipt.notes!.trim().isNotEmpty) ...[
-                      pw.SizedBox(height: 8),
-                      pw.Text(
-                        'Poznámka:',
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.Text(
-                        receipt.notes!.trim(),
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    ],
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      receipt.pricesIncludeVat
-                          ? 'Ceny sú s DPH'
-                          : 'Ceny sú bez DPH',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                  ],
+              pw.Text(
+                'Spolu: ${_formatPrice(total)} €',
+                style: pw.TextStyle(
+                  fontSize: (c.bodyFontSize + 1).toDouble(),
+                  fontWeight: pw.FontWeight.bold,
                 ),
               ),
             ],
           ),
-          pw.SizedBox(height: 20),
-          pw.Table(
-            border: pw.TableBorder.all(width: 0.5),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(3),
-              1: const pw.FlexColumnWidth(0.6),
-              2: const pw.FlexColumnWidth(0.5),
-              3: const pw.FlexColumnWidth(1),
-              4: const pw.FlexColumnWidth(1),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                children: [
-                  ReceiptPdfService._cell('Položka / PLU', bold: true),
-                  ReceiptPdfService._cell('Mn.', bold: true),
-                  ReceiptPdfService._cell('MJ', bold: true),
-                  ReceiptPdfService._cell('Cena za MJ', bold: true),
-                  ReceiptPdfService._cell('Celkom', bold: true),
-                ],
-              ),
-              ...items.map((item) {
-                final lineTotal =
-                    (item.unitPrice * item.qty * 100).round() / 100;
-                final name = item.productName ?? item.productUniqueId;
-                final plu = item.plu != null && item.plu!.isNotEmpty
-                    ? ' (${item.plu})'
-                    : '';
-                return pw.TableRow(
-                  children: [
-                    ReceiptPdfService._cell('$name$plu'),
-                    ReceiptPdfService._cell('${item.qty}'),
-                    ReceiptPdfService._cell(item.unit),
-                    ReceiptPdfService._cell(_formatPrice(item.unitPrice)),
-                    ReceiptPdfService._cell(_formatPrice(lineTotal)),
-                  ],
-                );
-              }),
-            ],
-          ),
-          pw.SizedBox(height: 16),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
+        ],
+      ),
+    ];
+
+    if (c.showSignatureBlock) {
+      pageChildren.addAll([
+        pw.SizedBox(height: 28),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'Spolu: ${_formatPrice(total)} €',
+                    'Podpis prijímajúceho',
                     style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
+                      fontSize: (c.bodyFontSize - 1).toDouble(),
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Container(
+                    width: double.infinity,
+                    height: 1,
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey400),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    '(meno a podpis)',
+                    style: pw.TextStyle(
+                      fontSize: (c.bodyFontSize - 2).toDouble(),
+                      color: PdfColors.grey600,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-        ],
+            ),
+            pw.SizedBox(width: 40),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Dátum prijatia',
+                    style: pw.TextStyle(
+                      fontSize: (c.bodyFontSize - 1).toDouble(),
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Container(
+                    width: double.infinity,
+                    height: 1,
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey400),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ]);
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) => pageChildren,
       ),
     );
 
     return doc.save();
   }
 
-  static pw.Widget _cell(String text, {bool bold = false}) {
+  static pw.Widget _buildTable({
+    required InboundReceipt receipt,
+    required List<InboundReceiptItem> items,
+    required ReceiptPdfStyleConfig c,
+    required PdfColor tableHeaderColor,
+    required Map<String, String> lastPurchaseDateByProductId,
+  }) {
+    final vatRate = receipt.vatRate ?? 0;
+    double unitPriceWithoutVat(double unitPrice) {
+      if (!receipt.pricesIncludeVat || vatRate <= 0) return unitPrice;
+      return (unitPrice / (1 + vatRate / 100) * 100).round() / 100;
+    }
+
+    final headerCells = <pw.Widget>[];
+    final columnWidths = <int, pw.FlexColumnWidth>{};
+    int colIndex = 0;
+
+    if (c.showColProductName) {
+      headerCells.add(ReceiptPdfService._cell('Položka', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(3);
+    }
+    if (c.showColPlu) {
+      headerCells.add(ReceiptPdfService._cell('PLU', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.8);
+    }
+    if (c.showColQty) {
+      headerCells.add(ReceiptPdfService._cell('Mn.', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.5);
+    }
+    if (c.showColUnit) {
+      headerCells.add(ReceiptPdfService._cell('MJ', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.5);
+    }
+    if (c.showColUnitPriceWithVat) {
+      headerCells.add(ReceiptPdfService._cell('Cena za MJ s DPH', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
+    }
+    if (c.showColUnitPriceWithoutVat) {
+      headerCells.add(ReceiptPdfService._cell('Cena za MJ bez DPH', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
+    }
+    if (c.showColTotal) {
+      headerCells.add(ReceiptPdfService._cell('Celkom', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
+    }
+    if (c.showColVatRate) {
+      headerCells.add(ReceiptPdfService._cell('DPH %', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.6);
+    }
+    if (c.showColVatAmount) {
+      headerCells.add(ReceiptPdfService._cell('DPH (€)', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.8);
+    }
+    if (c.showColLastPurchaseDate) {
+      headerCells.add(ReceiptPdfService._cell('Posl. dátum nákupu', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1.2);
+    }
+
+    if (headerCells.isEmpty) {
+      headerCells.add(ReceiptPdfService._cell('Položka', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[0] = const pw.FlexColumnWidth(4);
+    }
+
+    final rows = <pw.TableRow>[
+      pw.TableRow(
+        decoration: pw.BoxDecoration(color: tableHeaderColor),
+        children: headerCells,
+      ),
+      ...items.map((item) {
+        final lineTotal = (item.unitPrice * item.qty * 100).round() / 100;
+        final name = item.productName ?? item.productUniqueId;
+        final pluStr = item.plu ?? '';
+        final unitPriceNoVat = unitPriceWithoutVat(item.unitPrice);
+        final lineTotalNoVat = (unitPriceNoVat * item.qty * 100).round() / 100;
+        final vatAmount = ((lineTotal - lineTotalNoVat) * 100).round() / 100;
+        final lastPurchase = lastPurchaseDateByProductId[item.productUniqueId] ?? '–';
+        final vatRateStr = vatRate > 0 ? '$vatRate' : '0';
+
+        final cells = <pw.Widget>[];
+        if (c.showColProductName) {
+          cells.add(ReceiptPdfService._cell(name, fontSize: c.bodyFontSize));
+        }
+        if (c.showColPlu) {
+          cells.add(ReceiptPdfService._cell(pluStr, fontSize: c.bodyFontSize));
+        }
+        if (c.showColQty) {
+          cells.add(ReceiptPdfService._cell('${item.qty}', fontSize: c.bodyFontSize));
+        }
+        if (c.showColUnit) {
+          cells.add(ReceiptPdfService._cell(item.unit, fontSize: c.bodyFontSize));
+        }
+        if (c.showColUnitPriceWithVat) {
+          cells.add(ReceiptPdfService._cell(_formatPrice(item.unitPrice), fontSize: c.bodyFontSize));
+        }
+        if (c.showColUnitPriceWithoutVat) {
+          cells.add(ReceiptPdfService._cell(_formatPrice(unitPriceNoVat), fontSize: c.bodyFontSize));
+        }
+        if (c.showColTotal) {
+          cells.add(ReceiptPdfService._cell(_formatPrice(lineTotal), fontSize: c.bodyFontSize));
+        }
+        if (c.showColVatRate) {
+          cells.add(ReceiptPdfService._cell(vatRateStr, fontSize: c.bodyFontSize));
+        }
+        if (c.showColVatAmount) {
+          cells.add(ReceiptPdfService._cell(_formatPrice(vatAmount), fontSize: c.bodyFontSize));
+        }
+        if (c.showColLastPurchaseDate) {
+          cells.add(ReceiptPdfService._cell(lastPurchase, fontSize: c.bodyFontSize));
+        }
+        if (cells.isEmpty) {
+          cells.add(ReceiptPdfService._cell(name, fontSize: c.bodyFontSize));
+        }
+        return pw.TableRow(children: cells);
+      }),
+    ];
+
+    return pw.Table(
+      border: pw.TableBorder.all(width: 0.5),
+      columnWidths: columnWidths,
+      children: rows,
+    );
+  }
+
+  static pw.Widget _cell(String text, {bool bold = false, int fontSize = 9}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 9,
+          fontSize: fontSize.toDouble(),
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         ),
         maxLines: 3,

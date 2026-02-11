@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/user.dart';
 import '../../screens/profile/profile_page.dart';
 import '../../screens/login/login_page.dart';
-import '../../screens/settings/settings_page.dart';
+import '../../services/Database/database_service.dart';
+import '../../screens/Settings/settings_page.dart';
 import '../notifications/notifications_sheet_widget.dart';
 
 class UserOptionsSheet extends StatelessWidget {
@@ -142,7 +143,7 @@ class UserOptionsSheet extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const SettingsPage(),
+                            builder: (context) => SettingsPage(userRole: currentRole),
                           ),
                         );
                       },
@@ -169,7 +170,9 @@ class UserOptionsSheet extends StatelessWidget {
                       Icons.logout_rounded,
                       "Odhlásiť sa",
                       Colors.redAccent,
-                      onTap: () {
+                      onTap: () async {
+                        await DatabaseService().clearSavedLogin();
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                         Navigator.pushAndRemoveUntil(
                           context,

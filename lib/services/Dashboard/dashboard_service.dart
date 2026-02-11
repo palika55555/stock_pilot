@@ -5,7 +5,11 @@ class DashboardService {
   final DatabaseService _db = DatabaseService();
 
   Future<Map<String, dynamic>> getOverviewStats() async {
-    // V budúcnosti tu bude reálna logika výpočtu z viacerých tabuliek
-    return await _db.getDashboardStats();
+    final stats = await _db.getDashboardStats();
+    final recentInbound = await _db.getRecentInboundReceiptsWithTotal(limit: 5);
+    final recentOutbound = await _db.getRecentStockOutsWithTotal(limit: 5);
+    stats['recentInbound'] = recentInbound;
+    stats['recentOutbound'] = recentOutbound;
+    return stats;
   }
 }

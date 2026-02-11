@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../screens/login/login_page.dart';
+import '../../services/Database/database_service.dart';
 
 class MobileUserInfoWidget extends StatelessWidget {
   final String userName;
@@ -176,9 +177,10 @@ class MobileUserInfoWidget extends StatelessWidget {
               ),
             ],
           ),
-          onTap: () {
+          onTap: () async {
+            await DatabaseService().clearSavedLogin();
+            if (!context.mounted) return;
             Navigator.pop(context);
-            // Odhlásenie - presmerovanie na login stránku
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => const LoginPage()),

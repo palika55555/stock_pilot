@@ -10,6 +10,7 @@ class Product {
   final int vat; // Sales VAT %
   final int discount;
   final double lastPurchasePrice;
+  final double lastPurchasePriceWithoutVat; // Posledný nákup bez DPH (jedna hodnota)
   final String lastPurchaseDate;
   final String currency;
   final String location;
@@ -18,6 +19,16 @@ class Product {
   final int purchaseVat; // Purchase VAT %
   final double recyclingFee;
   final String productType; // e.g. 'Sklad', 'Výroba'
+  final String? supplierName; // Dodávateľ (z poslednej schválenej príjemky)
+  /// ID druhu produktu (napr. klince, montážna pena) – pre sklady.
+  final int? kindId;
+  /// ID skladu – priradenie produktu ku konkrétnemu skladu.
+  final int? warehouseId;
+
+  /// Marža v % z predajnej ceny: (predajná - nákupná) / predajná × 100.
+  /// Null ak predajná cena je 0 (nelze počítať).
+  double? get marginPercent =>
+      price > 0 ? ((price - purchasePrice) / price) * 100 : null;
 
   Product({
     this.uniqueId,
@@ -31,6 +42,7 @@ class Product {
     required this.vat,
     required this.discount,
     required this.lastPurchasePrice,
+    this.lastPurchasePriceWithoutVat = 0.0,
     required this.lastPurchaseDate,
     required this.currency,
     required this.location,
@@ -39,6 +51,9 @@ class Product {
     this.purchaseVat = 23,
     this.recyclingFee = 0.0,
     this.productType = 'Sklad',
+    this.supplierName,
+    this.kindId,
+    this.warehouseId,
   });
 
   Map<String, dynamic> toMap() {
@@ -54,6 +69,7 @@ class Product {
       'vat': vat,
       'discount': discount,
       'last_purchase_price': lastPurchasePrice,
+      'last_purchase_price_without_vat': lastPurchasePriceWithoutVat,
       'last_purchase_date': lastPurchaseDate,
       'currency': currency,
       'location': location,
@@ -62,6 +78,9 @@ class Product {
       'purchase_vat': purchaseVat,
       'recycling_fee': recyclingFee,
       'product_type': productType,
+      'supplier_name': supplierName,
+      'kind_id': kindId,
+      'warehouse_id': warehouseId,
     };
   }
 
@@ -79,6 +98,8 @@ class Product {
       discount: map['discount'] ?? 0,
       lastPurchasePrice:
           (map['last_purchase_price'] as num?)?.toDouble() ?? 0.0,
+      lastPurchasePriceWithoutVat:
+          (map['last_purchase_price_without_vat'] as num?)?.toDouble() ?? 0.0,
       lastPurchaseDate: map['last_purchase_date'] ?? '',
       currency: map['currency'] ?? 'EUR',
       location: map['location'] ?? '',
@@ -88,6 +109,9 @@ class Product {
       purchaseVat: map['purchase_vat'] ?? 23,
       recyclingFee: (map['recycling_fee'] as num?)?.toDouble() ?? 0.0,
       productType: map['product_type'] ?? 'Sklad',
+      supplierName: map['supplier_name'] as String?,
+      kindId: map['kind_id'] as int?,
+      warehouseId: map['warehouse_id'] as int?,
     );
   }
 }

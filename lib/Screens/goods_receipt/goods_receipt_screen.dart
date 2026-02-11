@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/receipt.dart';
+import '../../models/receipt_pdf_style_config.dart';
+import '../../services/Database/database_service.dart';
 import '../../services/Receipt/receipt_service.dart';
 import '../../services/Receipt/receipt_pdf_service.dart';
 import '../../widgets/receipts/goods_receipt_list_widget.dart';
@@ -92,9 +95,29 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
       ).showSnackBar(const SnackBar(content: Text('Pripravujem PDF...')));
     }
     try {
+      String? issuedBy;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        issuedBy = prefs.getString('current_user_fullname') ??
+            prefs.getString('current_user_username');
+      } catch (_) {}
+      final styleConfig = await ReceiptPdfStyleConfig.load();
+      Map<String, String> lastPurchaseByProduct = {};
+      if (styleConfig.showColLastPurchaseDate) {
+        final db = DatabaseService();
+        for (final item in items) {
+          final product = await db.getProductByUniqueId(item.productUniqueId);
+          if (product != null && product.lastPurchaseDate.isNotEmpty) {
+            lastPurchaseByProduct[item.productUniqueId] = product.lastPurchaseDate;
+          }
+        }
+      }
       final pdfBytes = await ReceiptPdfService.buildPdf(
         receipt: receipt,
         items: items,
+        issuedBy: issuedBy,
+        styleConfig: styleConfig,
+        lastPurchaseDateByProductId: lastPurchaseByProduct,
       );
       final filename =
           'prijemka_${receipt.receiptNumber.replaceAll(RegExp(r'[^\w\-.]'), '_')}.pdf';

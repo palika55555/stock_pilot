@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
 import '../purchase/purchase_price_history_sheet_widget.dart';
 
@@ -295,6 +296,43 @@ class _ProductCard extends StatelessWidget {
                             height: 1.2,
                           ),
                         ),
+                        if (product.lastPurchasePriceWithoutVat > 0) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Posl. nákup bez DPH: ${product.lastPurchasePriceWithoutVat.toStringAsFixed(2)} €',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                        if (product.marginPercent != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '${AppLocalizations.of(context)!.margin}: ${product.marginPercent!.toStringAsFixed(1)} %',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                        if (product.supplierName != null &&
+                            product.supplierName!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Dodávateľ: ${product.supplierName}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              height: 1.2,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -20,11 +20,31 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isObscured = true;
   bool _isLoading = false;
+  bool _rememberMe = false;
   final DatabaseService _dbService = DatabaseService();
 
   // Kontroléry pre vstup
   final TextEditingController _loginController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedLogin();
+  }
+
+  Future<void> _loadSavedLogin() async {
+    final rememberMe = await _dbService.getRememberMe();
+    final savedUsername = await _dbService.getSavedUsername();
+    if (mounted) {
+      setState(() {
+        _rememberMe = rememberMe;
+        if (savedUsername != null && savedUsername.isNotEmpty) {
+          _loginController.text = savedUsername;
+        }
+      });
+    }
+  }
 
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
@@ -37,6 +57,13 @@ class _LoginPageState extends State<LoginPage> {
         setState(() => _isLoading = false);
 
         if (user != null && user.password == _passwordController.text) {
+          if (_rememberMe) {
+            await _dbService.setRememberMe(true);
+            await _dbService.setSavedUsername(user.username);
+          } else {
+            await _dbService.clearSavedLogin();
+          }
+          if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(
             context,
@@ -44,7 +71,6 @@ class _LoginPageState extends State<LoginPage> {
               builder: (context) => HomeScreen(user: user),
             ),
           );
-          
           final l10n = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -148,11 +174,13 @@ class _LoginPageState extends State<LoginPage> {
                                   height: 24,
                                   width: 24,
                                   child: Checkbox(
-                                    value: false,
-                                    onChanged: (v) {},
+                                    value: _rememberMe,
+                                    onChanged: (v) =>
+                                        setState(() => _rememberMe = v ?? false),
                                     side: const BorderSide(color: Colors.white),
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 const Text(
                                   "Zapamätať si",
                                   style: TextStyle(color: Colors.white, fontSize: 13),

@@ -6,7 +6,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login/login_page.dart';
 import 'screens/first_startup/first_startup_screen.dart';
-import 'services/database/database_service.dart';
+import 'screens/Home/Home_screen.dart';
+import 'services/Database/database_service.dart';
+import 'models/user.dart';
+import 'services/Shortcuts/app_shortcuts_service.dart';
 import 'Providers/theme_locale_provider.dart';
 import 'l10n/app_localizations.dart';
 
@@ -34,17 +37,38 @@ void main() async {
     initialLocale: localeCode,
   );
 
-  runApp(MyApp(isFirstRun: isFirstRun, themeProvider: themeProvider));
+  User? initialUser;
+  if (!isFirstRun) {
+    final db = DatabaseService();
+    final rememberMe = await db.getRememberMe();
+    final savedUsername = await db.getSavedUsername();
+    if (rememberMe && savedUsername != null && savedUsername.isNotEmpty) {
+      initialUser = await db.getUserByUsername(savedUsername);
+    }
+  }
+
+  final routeObserver = RouteObserver<ModalRoute<void>>();
+
+  runApp(MyApp(
+    isFirstRun: isFirstRun,
+    themeProvider: themeProvider,
+    initialUser: initialUser,
+    routeObserver: routeObserver,
+  ));
 }
 
 class MyApp extends StatelessWidget {
   final bool isFirstRun;
   final ThemeLocaleProvider themeProvider;
+  final User? initialUser;
+  final RouteObserver<ModalRoute<void>> routeObserver;
 
   const MyApp({
     super.key,
     required this.isFirstRun,
     required this.themeProvider,
+    this.initialUser,
+    required this.routeObserver,
   });
 
   static ThemeData _buildLightTheme() {
@@ -80,6 +104,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'StockPilot',
             debugShowCheckedModeBanner: false,
+            navigatorObservers: [routeObserver],
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
             themeMode: provider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
@@ -91,7 +116,12 @@ class MyApp extends StatelessWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: AppLocalizations.supportedLocales,
-            home: isFirstRun ? const FirstStartupScreen() : const LoginPage(),
+            builder: (context, child) => AppShortcuts(child: child ?? const SizedBox.shrink()),
+            home: isFirstRun
+                ? const FirstStartupScreen()
+                : (initialUser != null
+                    ? HomeScreen(user: initialUser!, routeObserver: routeObserver)
+                    : const LoginPage()),
           );
         },
       ),

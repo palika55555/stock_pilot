@@ -460,6 +460,12 @@ abstract class AppLocalizations {
   /// **'Pohyby zásob'**
   String get stockMovements;
 
+  /// No description provided for @recentMovements.
+  ///
+  /// In sk, this message translates to:
+  /// **'Posledné pohyby'**
+  String get recentMovements;
+
   /// No description provided for @inboundReceipts.
   ///
   /// In sk, this message translates to:
@@ -531,6 +537,42 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'Cenová ponuka'**
   String get priceQuote;
+
+  /// No description provided for @overviewNotesAndTasks.
+  ///
+  /// In sk, this message translates to:
+  /// **'Poznámky a úlohy'**
+  String get overviewNotesAndTasks;
+
+  /// No description provided for @overviewNotesTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Poznámky'**
+  String get overviewNotesTitle;
+
+  /// No description provided for @overviewTasksTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Úlohy'**
+  String get overviewTasksTitle;
+
+  /// No description provided for @overviewNotesPlaceholder.
+  ///
+  /// In sk, this message translates to:
+  /// **'Pridajte poznámku...'**
+  String get overviewNotesPlaceholder;
+
+  /// No description provided for @overviewNewTaskHint.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nová úloha...'**
+  String get overviewNewTaskHint;
+
+  /// No description provided for @overviewAddTask.
+  ///
+  /// In sk, this message translates to:
+  /// **'Pridať úlohu'**
+  String get overviewAddTask;
 
   /// No description provided for @quoteDetails.
   ///
@@ -748,6 +790,36 @@ abstract class AppLocalizations {
   /// **'Kód skladu'**
   String get warehouseCode;
 
+  /// No description provided for @warehouseType.
+  ///
+  /// In sk, this message translates to:
+  /// **'Typ skladu'**
+  String get warehouseType;
+
+  /// No description provided for @warehouseTypePredaj.
+  ///
+  /// In sk, this message translates to:
+  /// **'Predaj'**
+  String get warehouseTypePredaj;
+
+  /// No description provided for @warehouseTypeVyroba.
+  ///
+  /// In sk, this message translates to:
+  /// **'Výroba'**
+  String get warehouseTypeVyroba;
+
+  /// No description provided for @warehouseTypeRezijnyMaterial.
+  ///
+  /// In sk, this message translates to:
+  /// **'Režijný materiál'**
+  String get warehouseTypeRezijnyMaterial;
+
+  /// No description provided for @warehouseTypeSklad.
+  ///
+  /// In sk, this message translates to:
+  /// **'Sklad'**
+  String get warehouseTypeSklad;
+
   /// No description provided for @noWarehouses.
   ///
   /// In sk, this message translates to:
@@ -897,6 +969,72 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'Mesto'**
   String get city;
+
+  /// No description provided for @clearDatabase.
+  ///
+  /// In sk, this message translates to:
+  /// **'Vymazať dáta z databázy?'**
+  String get clearDatabase;
+
+  /// No description provided for @clearDatabaseConfirm.
+  ///
+  /// In sk, this message translates to:
+  /// **'Naozaj chcete vymazať všetky dáta z databázy? Táto akcia je nevratná. Používatelia zostanú zachovaní.'**
+  String get clearDatabaseConfirm;
+
+  /// No description provided for @clearDatabaseDone.
+  ///
+  /// In sk, this message translates to:
+  /// **'Dáta z databázy boli vymazané.'**
+  String get clearDatabaseDone;
+
+  /// No description provided for @adminOnly.
+  ///
+  /// In sk, this message translates to:
+  /// **'Iba administrátor môže vymazať dáta z databázy.'**
+  String get adminOnly;
+
+  /// No description provided for @margin.
+  ///
+  /// In sk, this message translates to:
+  /// **'Marža'**
+  String get margin;
+
+  /// No description provided for @inventoryTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Inventúra'**
+  String get inventoryTitle;
+
+  /// No description provided for @inventorySearchHint.
+  ///
+  /// In sk, this message translates to:
+  /// **'Hľadať podľa názvu alebo kódu'**
+  String get inventorySearchHint;
+
+  /// No description provided for @actualStock.
+  ///
+  /// In sk, this message translates to:
+  /// **'Skutočný stav'**
+  String get actualStock;
+
+  /// No description provided for @inSystemKs.
+  ///
+  /// In sk, this message translates to:
+  /// **'V systéme:'**
+  String get inSystemKs;
+
+  /// No description provided for @saveInventory.
+  ///
+  /// In sk, this message translates to:
+  /// **'Uložiť inventúru'**
+  String get saveInventory;
+
+  /// No description provided for @inventorySaved.
+  ///
+  /// In sk, this message translates to:
+  /// **'Inventúra bola uložená'**
+  String get inventorySaved;
 }
 
 class _AppLocalizationsDelegate

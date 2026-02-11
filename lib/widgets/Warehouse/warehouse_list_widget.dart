@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/warehouse.dart';
+import '../../models/product.dart';
+import '../../models/warehouse_transfer.dart';
 import '../../services/warehouse/warehouse_service.dart';
+import '../../services/Product/product_service.dart';
 import '../../l10n/app_localizations.dart';
 import 'add_warehouse_modal_widget.dart';
+import 'warehouse_inventory_sheet_widget.dart';
 
 class WarehouseListWidget extends StatefulWidget {
   const WarehouseListWidget({super.key});
@@ -14,6 +19,7 @@ class WarehouseListWidget extends StatefulWidget {
 class WarehouseListWidgetState extends State<WarehouseListWidget>
     with TickerProviderStateMixin {
   final WarehouseService _warehouseService = WarehouseService();
+  final ProductService _productService = ProductService();
   final TextEditingController _searchController = TextEditingController();
 
   List<Warehouse> _warehouses = [];
@@ -62,7 +68,7 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
 
   Future<void> _loadWarehouses() async {
     setState(() => _loading = true);
-    final list = await _warehouseService.getAllWarehouses();
+    final list = await _warehouseService.getAllWarehousesWithStats();
     if (mounted) {
       setState(() {
         _warehouses = list;
@@ -104,12 +110,40 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
                         itemCount: _filteredWarehouses.length,
                         itemBuilder: (context, index) {
                           final w = _filteredWarehouses[index];
-                          return _WarehouseCard(
-                            warehouse: w,
-                            index: index,
-                            controller: _listController,
-                            onEdit: () => _editWarehouse(w),
-                            onDelete: () => _deleteWarehouse(w),
+                          return Dismissible(
+                            key: ValueKey<String>('warehouse_${w.id ?? index}'),
+                            direction: DismissDirection.horizontal,
+                            background: _buildSwipeBackground(
+                              context,
+                              color: Colors.blue,
+                              icon: Icons.edit_note,
+                              alignment: Alignment.centerLeft,
+                            ),
+                            secondaryBackground: _buildSwipeBackground(
+                              context,
+                              color: Colors.orange,
+                              icon: Icons.move_up,
+                              alignment: Alignment.centerRight,
+                              label: 'Presun',
+                            ),
+                            confirmDismiss: (direction) async {
+                              if (direction == DismissDirection.startToEnd) {
+                                _showInventorySheet(context, w);
+                                return false;
+                              }
+                              if (direction == DismissDirection.endToStart) {
+                                _showTransferDialog(context, w);
+                                return false;
+                              }
+                              return true;
+                            },
+                            child: _WarehouseCard(
+                              warehouse: w,
+                              index: index,
+                              controller: _listController,
+                              onEdit: () => _editWarehouse(w),
+                              onDelete: () => _deleteWarehouse(w),
+                            ),
                           );
                         },
                       ),
@@ -192,6 +226,100 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
     });
   }
 
+  Widget _buildSwipeBackground(
+    BuildContext context, {
+    required Color color,
+    required IconData icon,
+    required Alignment alignment,
+    String? label,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: alignment == Alignment.centerRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white, size: 32),
+          if (label != null) ...[
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _onWarehouseDismissed(Warehouse w) {
+    setState(() {
+      _filteredWarehouses.removeWhere((x) => x.id == w.id);
+      _warehouses.removeWhere((x) => x.id == w.id);
+    });
+  }
+
+  Future<void> _showTransferDialog(BuildContext context, Warehouse sourceWarehouse) async {
+    final targetWarehouses =
+        _warehouses.where((w) => w.id != sourceWarehouse.id && w.isActive).toList();
+    if (targetWarehouses.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nie je k dispozícii žiadny iný aktívny sklad na presun.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _QuickTransferDialogContent(
+        sourceWarehouse: sourceWarehouse,
+        targetWarehouses: targetWarehouses,
+        productService: _productService,
+        warehouseService: _warehouseService,
+        onSuccess: () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Presun bol úspešne zaznamenaný.'),
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  void _showInventorySheet(BuildContext context, Warehouse w) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => WarehouseInventorySheetWidget(
+        warehouse: w,
+        onSaved: () => refreshWarehouses(),
+      ),
+    );
+  }
+
   void _editWarehouse(Warehouse w) {
     showModalBottomSheet(
       context: context,
@@ -239,6 +367,267 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
         );
       }
     }
+  }
+}
+
+class _QuickTransferDialogContent extends StatefulWidget {
+  final Warehouse sourceWarehouse;
+  final List<Warehouse> targetWarehouses;
+  final ProductService productService;
+  final WarehouseService warehouseService;
+  final VoidCallback onSuccess;
+
+  const _QuickTransferDialogContent({
+    required this.sourceWarehouse,
+    required this.targetWarehouses,
+    required this.productService,
+    required this.warehouseService,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_QuickTransferDialogContent> createState() => _QuickTransferDialogContentState();
+}
+
+class _QuickTransferDialogContentState extends State<_QuickTransferDialogContent> {
+  Warehouse? _targetWarehouse;
+  Product? _product;
+  final TextEditingController _amountController = TextEditingController(text: '1');
+  bool _loading = true;
+  bool _saving = false;
+  List<Product> _products = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProducts() async {
+    final all = await widget.productService.getAllProducts();
+    if (mounted) {
+      setState(() {
+        _products = widget.sourceWarehouse.id != null
+            ? all.where((p) => p.warehouseId == widget.sourceWarehouse.id).toList()
+            : all;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _confirmTransfer() async {
+    if (_targetWarehouse == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vyberte cieľový sklad')),
+      );
+      return;
+    }
+    if (_product == null && _products.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vyberte tovar na presun')),
+      );
+      return;
+    }
+    final amount = int.tryParse(_amountController.text.trim());
+    if (amount == null || amount < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Zadajte platné množstvo (celé číslo väčšie ako 0)')),
+      );
+      return;
+    }
+    if (_product != null && amount > _product!.qty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Na sklade je len ${_product!.qty} ${_product!.unit}. Zadajte nižšie množstvo.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_product == null && _products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('V zdrojovom sklade nie sú žiadne produkty na presun.')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final product = _product!;
+      final transfer = WarehouseTransfer(
+        fromWarehouseId: widget.sourceWarehouse.id!,
+        toWarehouseId: _targetWarehouse!.id!,
+        productUniqueId: product.uniqueId!,
+        productName: product.name,
+        productPlu: product.plu,
+        quantity: amount,
+        unit: product.unit,
+        createdAt: DateTime.now(),
+      );
+      await widget.warehouseService.createWarehouseTransfer(transfer);
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onSuccess();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba pri presune: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AlertDialog(
+      icon: Icon(Icons.move_up, color: colorScheme.primary, size: 28),
+      title: Text(
+        'Presun zo skladu: ${widget.sourceWarehouse.name}',
+        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      content: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.5,
+          ),
+          child: _loading
+              ? const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      'Cieľový sklad',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<Warehouse>(
+                      value: _targetWarehouse,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      ),
+                      dropdownColor: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                      hint: const Text('Vyberte sklad'),
+                      items: widget.targetWarehouses
+                          .map((w) => DropdownMenuItem(
+                                value: w,
+                                child: Text('${w.name} (${w.code})'),
+                              ))
+                          .toList(),
+                      onChanged: (w) => setState(() => _targetWarehouse = w),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_products.isNotEmpty) ...[
+                      Text(
+                        'Tovar',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<Product>(
+                        value: _product,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        ),
+                        dropdownColor: colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
+                        hint: const Text('Vyberte tovar'),
+                        items: _products
+                            .map((p) => DropdownMenuItem(
+                                  value: p,
+                                  child: Text('${p.name} (${p.plu}) · ${p.qty} ${p.unit}'),
+                                ))
+                            .toList(),
+                        onChanged: (p) => setState(() => _product = p),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Text(
+                      'Množstvo',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        hintText: '1',
+                        suffixText: _product?.unit ?? 'ks',
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Zrušiť'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _confirmTransfer,
+          child: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Potvrdiť presun'),
+        ),
+      ],
+      actionsAlignment: MainAxisAlignment.end,
+    );
   }
 }
 
@@ -345,6 +734,25 @@ class _WarehouseCard extends StatelessWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _buildMetricItem(
+                              Icons.inventory_2_outlined,
+                              '${w.itemCount ?? 0} druhov',
+                            ),
+                            const SizedBox(width: 12),
+                            _buildMetricItem(
+                              Icons.history,
+                              _formatLastUpdate(w.lastUpdate),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildMetricItem(
+                              Icons.pie_chart_outline,
+                              _formatFillPercent(w.currentStock, w.maxCapacity),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -375,6 +783,43 @@ class _WarehouseCard extends StatelessWidget {
         size: 28,
       ),
     );
+  }
+
+  Widget _buildMetricItem(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[600]),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Formátuje čas poslednej zmeny ako "pred X" alebo 'N/A' ak je null.
+  static String _formatLastUpdate(DateTime? lastUpdate) {
+    if (lastUpdate == null) return 'N/A';
+    final now = DateTime.now();
+    final diff = now.difference(lastUpdate);
+    if (diff.inMinutes < 60) return 'pred ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'pred ${diff.inHours}h';
+    if (diff.inDays < 7) return 'pred ${diff.inDays} dňami';
+    return 'pred ${diff.inDays} dní';
+  }
+
+  /// Vypočíta percento zaplnenia (currentStock / maxCapacity * 100) alebo vráti 'N/A'.
+  static String _formatFillPercent(num? currentStock, num? maxCapacity) {
+    if (currentStock == null || maxCapacity == null || maxCapacity <= 0) {
+      return 'N/A';
+    }
+    final percent = (currentStock / maxCapacity * 100).toStringAsFixed(0);
+    return '$percent%';
   }
 
   Widget _buildStatusDot(bool active) {

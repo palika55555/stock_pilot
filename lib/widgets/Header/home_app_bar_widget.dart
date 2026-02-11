@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../profile/user_info_widget.dart';
 import '../profile/user_options_sheet_widget.dart';
 import 'header_actions_widget.dart';
-import '../time/time_display_widget.dart';
+import '../Time/time_display_widget.dart';
 import '../notifications/notifications_sheet_widget.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
@@ -11,11 +11,13 @@ import '../../screens/Settings/settings_page.dart';
 import '../../screens/Search/search_screen.dart';
 import '../../screens/Transport/transport_calculator_screen.dart';
 
+
 class HomeAppBar extends StatelessWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
   final User user;
   final String currentRole;
   final ValueChanged<String> onRoleChanged;
+  final RouteObserver<ModalRoute<void>>? routeObserver;
 
   const HomeAppBar({
     super.key,
@@ -23,6 +25,7 @@ class HomeAppBar extends StatelessWidget {
     required this.user,
     required this.currentRole,
     required this.onRoleChanged,
+    this.routeObserver,
   });
 
   @override
@@ -102,7 +105,7 @@ class HomeAppBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   const Spacer(),
-                  const TimeDisplayWidget(),
+                  TimeDisplayWidget(routeObserver: routeObserver),
                   const SizedBox(width: 12),
                   HeaderActionsWidget(
                     notificationCount: 3,
@@ -117,7 +120,7 @@ class HomeAppBar extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SettingsPage(),
+                          builder: (context) => SettingsPage(userRole: currentRole),
                         ),
                       );
                     },

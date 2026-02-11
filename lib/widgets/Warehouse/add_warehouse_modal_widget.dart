@@ -24,6 +24,7 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
 
   bool _isSaving = false;
   bool _isActive = true;
+  late String _warehouseType;
 
   bool get _isEditMode => widget.warehouse != null;
 
@@ -37,6 +38,7 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
     _cityController = TextEditingController(text: w?.city ?? '');
     _postalCodeController = TextEditingController(text: w?.postalCode ?? '');
     _isActive = w?.isActive ?? true;
+    _warehouseType = w?.warehouseType ?? WarehouseType.predaj;
   }
 
   @override
@@ -61,6 +63,7 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
           id: widget.warehouse?.id,
           name: _nameController.text.trim(),
           code: _codeController.text.trim(),
+          warehouseType: _warehouseType,
           address: _addressController.text.trim().isEmpty
               ? null
               : _addressController.text.trim(),
@@ -77,6 +80,7 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
         final newWarehouse = Warehouse(
           name: _nameController.text.trim(),
           code: _codeController.text.trim(),
+          warehouseType: _warehouseType,
           address: _addressController.text.trim().isEmpty
               ? null
               : _addressController.text.trim(),
@@ -225,6 +229,34 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
                 style: _isEditMode ? TextStyle(color: Colors.grey[600]) : null,
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Zadajte kód skladu' : null,
+              ),
+              const SizedBox(height: 16),
+
+              DropdownButtonFormField<String>(
+                value: _warehouseType,
+                decoration: _buildInputDecoration(
+                  l10n.warehouseType,
+                  Icons.category_rounded,
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: WarehouseType.predaj,
+                    child: Text(l10n.warehouseTypePredaj),
+                  ),
+                  DropdownMenuItem(
+                    value: WarehouseType.vyroba,
+                    child: Text(l10n.warehouseTypeVyroba),
+                  ),
+                  DropdownMenuItem(
+                    value: WarehouseType.rezijnyMaterial,
+                    child: Text(l10n.warehouseTypeRezijnyMaterial),
+                  ),
+                  DropdownMenuItem(
+                    value: WarehouseType.sklad,
+                    child: Text(l10n.warehouseTypeSklad),
+                  ),
+                ],
+                onChanged: (v) => setState(() => _warehouseType = v ?? WarehouseType.predaj),
               ),
               const SizedBox(height: 16),
 

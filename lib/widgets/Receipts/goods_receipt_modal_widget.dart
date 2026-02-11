@@ -322,33 +322,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           ? priceWithVat
           : priceWithoutVat;
 
-      if (!allowEmpty &&
-          row.product != null &&
-          (row.product!.purchasePriceWithoutVat != priceWithoutVat ||
-              row.product!.purchaseVat != vat)) {
-        final updatedProduct = Product(
-          uniqueId: row.product!.uniqueId,
-          name: row.product!.name,
-          plu: row.product!.plu,
-          category: row.product!.category,
-          qty: row.product!.qty,
-          unit: row.product!.unit,
-          price: row.product!.price,
-          withoutVat: row.product!.withoutVat,
-          vat: row.product!.vat,
-          discount: row.product!.discount,
-          lastPurchasePrice: _roundPrice(priceWithVat),
-          lastPurchaseDate: row.product!.lastPurchaseDate,
-          currency: row.product!.currency,
-          location: row.product!.location,
-          purchasePrice: _roundPrice(priceWithVat),
-          purchasePriceWithoutVat: _roundPrice(priceWithoutVat),
-          purchaseVat: vat,
-          recyclingFee: row.product!.recyclingFee,
-          productType: row.product!.productType,
-        );
-        await _productService.updateProduct(updatedProduct);
-      }
+      // Nákupná cena produktu (vážený priemer) sa mení len pri schválení príjemky, nie pri ukladaní.
+      // Tu len pripravíme položky príjemky.
 
       items.add(
         InboundReceiptItem(

@@ -2,7 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/product.dart';
+import '../../models/product_kind.dart';
+import '../../models/warehouse.dart';
 import '../../services/Product/product_service.dart';
+import '../../services/Product/product_kind_service.dart';
+import '../../services/Warehouse/warehouse_service.dart';
 
 class AddProductModal extends StatefulWidget {
   final String? initialPlu;
@@ -21,13 +25,16 @@ class AddProductModal extends StatefulWidget {
 class _AddProductModalState extends State<AddProductModal> {
   final _formKey = GlobalKey<FormState>();
   final ProductService _productService = ProductService();
+  final ProductKindService _kindService = ProductKindService();
+  final WarehouseService _warehouseService = WarehouseService();
   bool _isLoading = false;
+  List<ProductKind> _kinds = [];
+  List<Warehouse> _warehouses = [];
+  int? _selectedKindId;
+  int? _selectedWarehouseId;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _pluController = TextEditingController();
-  final TextEditingController _categoryController = TextEditingController(
-    text: 'Sklad',
-  );
 
   // Sales prices
   final TextEditingController _salesPriceWithoutVatController =
@@ -53,23 +60,27 @@ class _AddProductModalState extends State<AddProductModal> {
   final TextEditingController _locationController = TextEditingController();
 
   String _selectedUnit = 'ks';
-  String _selectedType = 'Sklad';
+  String _selectedCategory = WarehouseType.sklad;
 
   final List<String> _units = ['ks', 'l', 'm2', 'm3', 'kg', 'bm', 'bal'];
-  final List<String> _types = ['Sklad', 'Výroba', 'Služba'];
 
   bool get _isEditMode => widget.productToEdit != null;
 
   @override
   void initState() {
     super.initState();
+    _loadKinds();
+    _loadWarehouses();
     if (widget.productToEdit != null) {
       final p = widget.productToEdit!;
       _nameController.text = p.name;
       _pluController.text = p.plu;
-      _categoryController.text = p.category;
+      _selectedCategory = WarehouseType.all.contains(p.category)
+          ? p.category
+          : (WarehouseType.all.contains(p.productType) ? p.productType : WarehouseType.sklad);
       _selectedUnit = p.unit;
-      _selectedType = p.productType;
+      _selectedKindId = p.kindId;
+      _selectedWarehouseId = p.warehouseId;
       _salesPriceWithoutVatController.text = p.withoutVat.toStringAsFixed(2);
       _salesVatController.text = p.vat.toString();
       _salesPriceWithVatController.text = p.price.toStringAsFixed(2);
@@ -89,6 +100,87 @@ class _AddProductModalState extends State<AddProductModal> {
     _salesVatController.addListener(_calculateSalesWithVat);
     _purchasePriceWithoutVatController.addListener(_calculatePurchaseWithVat);
     _purchaseVatController.addListener(_calculatePurchaseWithVat);
+    _salesPriceWithVatController.addListener(() => setState(() {}));
+    _purchasePriceWithVatController.addListener(() => setState(() {}));
+  }
+
+  Future<void> _loadKinds() async {
+    final list = await _kindService.getKinds();
+    if (mounted) setState(() => _kinds = list);
+  }
+
+  Future<void> _loadWarehouses() async {
+    final list = await _warehouseService.getActiveWarehouses();
+    if (mounted) setState(() => _warehouses = list);
+  }
+
+  Future<void> _showAddKindDialog() async {
+    final nameController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Nový druh produktu'),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: 'Názov druhu',
+              hintText: 'napr. klince, montážna pena',
+            ),
+            autofocus: true,
+            onSubmitted: (_) => Navigator.pop(ctx, true),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Zrušiť'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Pridať'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != true || !mounted) return;
+    final name = nameController.text.trim();
+    if (name.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Zadajte názov druhu')),
+        );
+      }
+      return;
+    }
+    try {
+      final id = await _kindService.createKind(ProductKind(name: name));
+      await _loadKinds();
+      if (mounted) setState(() => _selectedKindId = id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Druh bol pridaný'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// Marža v % z predajnej ceny. Null ak predajná cena je 0.
+  double? get _marginPercent {
+    final sell = double.tryParse(
+          _salesPriceWithVatController.text.trim().replaceAll(',', '.')) ??
+        0.0;
+    if (sell <= 0) return null;
+    final buy = double.tryParse(
+          _purchasePriceWithVatController.text.trim().replaceAll(',', '.')) ??
+        0.0;
+    return ((sell - buy) / sell) * 100;
   }
 
   void _calculateSalesWithVat() {
@@ -100,6 +192,7 @@ class _AddProductModalState extends State<AddProductModal> {
     final vat = int.tryParse(_salesVatController.text) ?? 0;
     final withVat = _productService.calculateWithVat(price, vat);
     _salesPriceWithVatController.text = withVat.toStringAsFixed(2);
+    if (mounted) setState(() {});
   }
 
   void _calculatePurchaseWithVat() {
@@ -111,13 +204,13 @@ class _AddProductModalState extends State<AddProductModal> {
     final vat = int.tryParse(_purchaseVatController.text) ?? 0;
     final withVat = _productService.calculateWithVat(price, vat);
     _purchasePriceWithVatController.text = withVat.toStringAsFixed(2);
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _pluController.dispose();
-    _categoryController.dispose();
     _salesPriceWithoutVatController.dispose();
     _salesVatController.dispose();
     _salesPriceWithVatController.dispose();
@@ -165,7 +258,7 @@ class _AddProductModalState extends State<AddProductModal> {
         uniqueId: existing?.uniqueId ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}',
         name: _nameController.text.trim(),
         plu: _pluController.text.trim(),
-        category: _categoryController.text.trim(),
+        category: _selectedCategory,
         qty: existing?.qty ?? 0,
         unit: _selectedUnit,
         price: salesPriceWithVat,
@@ -173,6 +266,7 @@ class _AddProductModalState extends State<AddProductModal> {
         vat: salesVat,
         discount: existing?.discount ?? 0,
         lastPurchasePrice: purchasePriceWithVat,
+        lastPurchasePriceWithoutVat: existing?.lastPurchasePriceWithoutVat ?? 0.0,
         lastPurchaseDate: existing?.lastPurchaseDate ?? '',
         currency: existing?.currency ?? 'EUR',
         location: _locationController.text.trim(),
@@ -180,7 +274,10 @@ class _AddProductModalState extends State<AddProductModal> {
         purchasePriceWithoutVat: purchasePriceWithoutVat,
         purchaseVat: purchaseVat,
         recyclingFee: recyclingFee,
-        productType: _selectedType,
+        productType: _selectedCategory,
+        supplierName: existing?.supplierName,
+        kindId: _selectedKindId,
+        warehouseId: _selectedWarehouseId,
       );
 
       if (_isEditMode) {
@@ -364,15 +461,27 @@ class _AddProductModalState extends State<AddProductModal> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedType,
-                                  decoration: _inputDecoration('Typ'),
+                                child: DropdownButtonFormField<int?>(
+                                  value: _selectedWarehouseId != null &&
+                                          _warehouses.any((w) => w.id == _selectedWarehouseId)
+                                      ? _selectedWarehouseId
+                                      : null,
+                                  decoration: _inputDecoration('Sklad'),
                                   dropdownColor: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
-                                  items: _types
-                                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                                      .toList(),
-                                  onChanged: (v) => setState(() => _selectedType = v!),
+                                  items: [
+                                    const DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text('— Žiadny —'),
+                                    ),
+                                    ..._warehouses.map(
+                                      (w) => DropdownMenuItem<int?>(
+                                        value: w.id,
+                                        child: Text(w.name),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (v) => setState(() => _selectedWarehouseId = v),
                                 ),
                               ),
                             ],
@@ -381,9 +490,15 @@ class _AddProductModalState extends State<AddProductModal> {
                           Row(
                             children: [
                               Expanded(
-                                child: TextFormField(
-                                  controller: _categoryController,
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedCategory,
                                   decoration: _inputDecoration('Kategória'),
+                                  dropdownColor: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  items: WarehouseType.all
+                                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                      .toList(),
+                                  onChanged: (v) => setState(() => _selectedCategory = v ?? WarehouseType.sklad),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -397,6 +512,58 @@ class _AddProductModalState extends State<AddProductModal> {
                                       .map((u) => DropdownMenuItem(value: u, child: Text(u)))
                                       .toList(),
                                   onChanged: (v) => setState(() => _selectedUnit = v!),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<int?>(
+                                  value: _selectedKindId != null &&
+                                          _kinds.any((k) => k.id == _selectedKindId)
+                                      ? _selectedKindId
+                                      : null,
+                                  decoration: _inputDecoration('Druh (pre sklady)'),
+                                  dropdownColor: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  items: [
+                                    const DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text('— Žiadny —'),
+                                    ),
+                                    ..._kinds.map(
+                                      (k) => DropdownMenuItem<int?>(
+                                        value: k.id,
+                                        child: Text(k.name),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (v) => setState(() => _selectedKindId = v),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: _showAddKindDialog,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: _accent.withValues(alpha: 0.5)),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.add_rounded, color: _accent, size: 22),
+                                        SizedBox(width: 6),
+                                        Text('Pridať druh', style: TextStyle(color: _accent, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -473,6 +640,16 @@ class _AddProductModalState extends State<AddProductModal> {
                                   ),
                                 ],
                               ),
+                              if (_marginPercent != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Marža: ${_marginPercent!.toStringAsFixed(1)} %',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 12),

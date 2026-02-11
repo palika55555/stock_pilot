@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui';
-import '../../services/dashboard/dashboard_service.dart';
+import '../../services/Dashboard/dashboard_service.dart';
+import '../../screens/price_quote/price_quotes_list_screen.dart';
 
 class TimeDisplayWidget extends StatefulWidget {
-  const TimeDisplayWidget({super.key});
+  final RouteObserver<ModalRoute<void>>? routeObserver;
+
+  const TimeDisplayWidget({super.key, this.routeObserver});
 
   @override
   State<TimeDisplayWidget> createState() => _TimeDisplayWidgetState();
 }
 
-class _TimeDisplayWidgetState extends State<TimeDisplayWidget> {
+class _TimeDisplayWidgetState extends State<TimeDisplayWidget>
+    with RouteAware {
   late DateTime _now;
   Timer? _timer;
   final DashboardService _dashboardService = DashboardService();
@@ -24,6 +28,28 @@ class _TimeDisplayWidgetState extends State<TimeDisplayWidget> {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() => _now = DateTime.now());
     });
+    _loadQuickStats();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (widget.routeObserver != null && route is ModalRoute<void>) {
+      widget.routeObserver!.unsubscribe(this);
+      widget.routeObserver!.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    widget.routeObserver?.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
     _loadQuickStats();
   }
 
@@ -43,12 +69,6 @@ class _TimeDisplayWidgetState extends State<TimeDisplayWidget> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -136,49 +156,66 @@ class _TimeDisplayWidgetState extends State<TimeDisplayWidget> {
                 color: Colors.white.withOpacity(0.3),
               ),
               const SizedBox(width: 12),
-              // Rýchle štatistiky
+              // Rýchle štatistiky – Ponuky (kliknutím na obrazovku ponúk)
               _isLoading
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.pending_actions_rounded,
-                              size: 14,
-                              color: _pendingTasks > 0
-                                  ? Colors.orange[300]
-                                  : Colors.white.withOpacity(0.5),
+                  : Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  const PriceQuotesListScreen(),
                             ),
-                            const SizedBox(width: 4),
+                          ).then((_) {
+                            if (mounted) _loadQuickStats();
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.pending_actions_rounded,
+                                  size: 14,
+                                  color: _pendingTasks > 0
+                                      ? Colors.orange[300]
+                                      : Colors.white.withOpacity(0.5),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _pendingTasks.toString(),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: _pendingTasks > 0
+                                        ? Colors.orange[300]
+                                        : Colors.white.withOpacity(0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
                             Text(
-                              _pendingTasks.toString(),
+                              'Ponuky',
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: _pendingTasks > 0
-                                    ? Colors.orange[300]
-                                    : Colors.white.withOpacity(0.5),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withOpacity(0.7),
                               ),
                             ),
                           ],
                         ),
-                        Text(
-                          'Ponuky',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withOpacity(0.7),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
             ],
           ),

@@ -197,6 +197,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get stockMovements => 'Pohyby zásob';
 
   @override
+  String get recentMovements => 'Poslední pohyby';
+
+  @override
   String get inboundReceipts => 'Příjemky';
 
   @override
@@ -233,6 +236,24 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get priceQuote => 'Cenová nabídka';
+
+  @override
+  String get overviewNotesAndTasks => 'Poznámky a úkoly';
+
+  @override
+  String get overviewNotesTitle => 'Poznámky';
+
+  @override
+  String get overviewTasksTitle => 'Úkoly';
+
+  @override
+  String get overviewNotesPlaceholder => 'Přidejte poznámku...';
+
+  @override
+  String get overviewNewTaskHint => 'Nový úkol...';
+
+  @override
+  String get overviewAddTask => 'Přidat úkol';
 
   @override
   String get quoteDetails => 'Údaje cenové nabídky';
@@ -345,6 +366,21 @@ class AppLocalizationsCs extends AppLocalizations {
   String get warehouseCode => 'Kód skladu';
 
   @override
+  String get warehouseType => 'Typ skladu';
+
+  @override
+  String get warehouseTypePredaj => 'Prodej';
+
+  @override
+  String get warehouseTypeVyroba => 'Výroba';
+
+  @override
+  String get warehouseTypeRezijnyMaterial => 'Režijní materiál';
+
+  @override
+  String get warehouseTypeSklad => 'Sklad';
+
+  @override
   String get noWarehouses => 'Žádné sklady';
 
   @override
@@ -420,4 +456,38 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get city => 'Město';
+
+  @override
+  String get clearDatabase => 'Vymazat data z databáze?';
+
+  @override
+  String get clearDatabaseConfirm =>
+      'Opravdu chcete vymazat všechna data z databáze? Tato akce je nevratná. Uživatelé zůstanou zachováni.';
+
+  @override
+  String get clearDatabaseDone => 'Data z databáze byla vymazána.';
+
+  @override
+  String get adminOnly => 'Pouze administrátor může vymazat data z databáze.';
+
+  @override
+  String get margin => 'Marže';
+
+  @override
+  String get inventoryTitle => 'Inventura';
+
+  @override
+  String get inventorySearchHint => 'Hledat podle názvu nebo kódu';
+
+  @override
+  String get actualStock => 'Skutečný stav';
+
+  @override
+  String get inSystemKs => 'V systému:';
+
+  @override
+  String get saveInventory => 'Uložit inventuru';
+
+  @override
+  String get inventorySaved => 'Inventura byla uložena';
 }

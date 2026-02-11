@@ -4,10 +4,11 @@ import 'package:stock_pilot/screens/scanner/scan_product.dart';
 import 'package:stock_pilot/screens/warehouse/warehouse_supplies.dart';
 import 'package:stock_pilot/screens/warehouse/warehouses_page.dart';
 import 'package:stock_pilot/screens/login/login_page.dart';
+import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/screens/customers/customers_page.dart';
 import 'package:stock_pilot/screens/suppliers/suppliers_page.dart';
-import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
-import 'package:stock_pilot/screens/settings/settings_page.dart';
+import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
+import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -199,7 +200,6 @@ class _MenuItemsList extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: EdgeInsets.zero,
-      // Pridané pre lepší scrolling výkon
       cacheExtent: 250.0,
       children: [
         _AnimatedMenuItem(
@@ -253,25 +253,16 @@ class _MenuItemsList extends StatelessWidget {
         ),
         _AnimatedMenuItem(
           delay: 300,
-          icon: Icons.south_west_rounded,
-          title: l10n.goodsReceipt,
+          icon: Icons.swap_horiz_rounded,
+          title: l10n.warehouseMovements,
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const GoodsReceiptScreen(),
+                builder: (context) => WarehouseMovementsScreen(userRole: userRole),
               ),
             );
-          },
-        ),
-        _AnimatedMenuItem(
-          delay: 350,
-          icon: Icons.swap_horiz_rounded,
-          title: l10n.warehouseMovements,
-          onTap: () {
-            Navigator.pop(context);
-            // Tu neskôr pridáš: Navigator.push(...)
           },
         ),
         _AnimatedMenuItem(
@@ -307,7 +298,7 @@ class _MenuItemsList extends StatelessWidget {
             Navigator.pop(context);
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
+              MaterialPageRoute(builder: (context) => SettingsPage(userRole: userRole)),
             );
           },
         ),
@@ -327,7 +318,9 @@ class _LogoutItem extends StatelessWidget {
       icon: Icons.logout_rounded,
       title: l10n.logout,
       color: Colors.redAccent.withOpacity(0.8),
-      onTap: () {
+      onTap: () async {
+        await DatabaseService().clearSavedLogin();
+        if (!context.mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const LoginPage()),

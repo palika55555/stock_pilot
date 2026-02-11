@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 
 class WarehouseSuppliesHeader extends StatelessWidget {
   final bool isAdmin;
+  final VoidCallback onFilterTap;
+  final VoidCallback? onColumnsTap;
+  final String? selectedWarehouseName;
 
-  const WarehouseSuppliesHeader({super.key, required this.isAdmin});
+  const WarehouseSuppliesHeader({
+    super.key,
+    required this.isAdmin,
+    required this.onFilterTap,
+    this.onColumnsTap,
+    this.selectedWarehouseName,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final hasFilter = selectedWarehouseName != null && selectedWarehouseName!.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
@@ -22,23 +32,52 @@ class WarehouseSuppliesHeader extends StatelessWidget {
             constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 8),
-          const Text(
-            'Skladové zásoby',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+          const Expanded(
+            child: Text(
+              'Skladové zásoby',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const Spacer(),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.white24,
-            child: Icon(
-              isAdmin ? Icons.admin_panel_settings : Icons.person,
-              color: Colors.white,
-              size: 18,
+          if (onColumnsTap != null)
+            IconButton(
+              icon: const Icon(
+                Icons.view_column_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+              onPressed: onColumnsTap,
+              tooltip: 'Zobrazenie stĺpcov',
             ),
+          IconButton(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.filter_list_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                if (hasFilter)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.amber,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: onFilterTap,
+            tooltip: 'Filtrovať podľa skladu',
           ),
         ],
       ),

@@ -54,41 +54,10 @@ class ReceiptService {
       );
       await _db.insertInboundReceiptItem(dbItem);
     }
-
-    if (!isDraft && items.isNotEmpty) {
-      final today = DateTime.now().toIso8601String().substring(0, 10);
-      for (final item in items) {
-        final product = await _db.getProductByUniqueId(item.productUniqueId);
-        if (product != null) {
-          final roundedPrice = _roundPrice(item.unitPrice);
-          final updated = Product(
-            uniqueId: product.uniqueId,
-            name: product.name,
-            plu: product.plu,
-            category: product.category,
-            qty: product.qty + item.qty,
-            unit: product.unit,
-            price: product.price,
-            withoutVat: product.withoutVat,
-            vat: product.vat,
-            discount: product.discount,
-            lastPurchasePrice: roundedPrice,
-            lastPurchaseDate: today,
-            currency: product.currency,
-            location: product.location,
-            purchasePrice: roundedPrice,
-            purchasePriceWithoutVat: product.purchasePriceWithoutVat,
-            purchaseVat: product.purchaseVat,
-            recyclingFee: product.recyclingFee,
-            productType: product.productType,
-          );
-          await _db.updateProduct(updated);
-        }
-      }
-    }
+    // Množstvo sa pridá do skladu až po schválení príjemky (v approveReceipt).
   }
 
-  /// Aktualizuje existujúcu príjemku. Pri rozpracovanej len ukladá dáta; pri vykázanej alebo dokončení draftu aktualizuje sklad.
+  /// Aktualizuje existujúcu príjemku. Množstvo sa do skladu pridáva až po schválení.
   Future<void> updateReceipt({
     required InboundReceipt receipt,
     required List<InboundReceiptItem> items,
@@ -96,14 +65,6 @@ class ReceiptService {
     if (receipt.id == null) return;
     final existing = await _db.getInboundReceiptById(receipt.id!);
     if (existing == null || existing.isApproved) return;
-
-    final wasDraft = existing.isDraft;
-    final completingDraft =
-        wasDraft && receipt.status == InboundReceiptStatus.vykazana;
-
-    if (!wasDraft) {
-      await _revertReceiptFromProducts(receipt.id!);
-    }
 
     await _db.deleteInboundReceiptItemsByReceiptId(receipt.id!);
     await _db.updateInboundReceipt(receipt);
@@ -121,76 +82,64 @@ class ReceiptService {
       );
       await _db.insertInboundReceiptItem(dbItem);
     }
-
-    if (!wasDraft || completingDraft) {
-      if (items.isNotEmpty) {
-        final today = DateTime.now().toIso8601String().substring(0, 10);
-        for (final item in items) {
-          final product = await _db.getProductByUniqueId(item.productUniqueId);
-          if (product != null) {
-            final roundedPrice = _roundPrice(item.unitPrice);
-            final updated = Product(
-              uniqueId: product.uniqueId,
-              name: product.name,
-              plu: product.plu,
-              category: product.category,
-              qty: product.qty + item.qty,
-              unit: product.unit,
-              price: product.price,
-              withoutVat: product.withoutVat,
-              vat: product.vat,
-              discount: product.discount,
-              lastPurchasePrice: roundedPrice,
-              lastPurchaseDate: today,
-              currency: product.currency,
-              location: product.location,
-              purchasePrice: roundedPrice,
-              purchasePriceWithoutVat: product.purchasePriceWithoutVat,
-              purchaseVat: product.purchaseVat,
-              recyclingFee: product.recyclingFee,
-              productType: product.productType,
-            );
-            await _db.updateProduct(updated);
-          }
-        }
-      }
-    }
   }
 
-  /// Odčíta množstvá položiek príjemky zo skladu.
-  Future<void> _revertReceiptFromProducts(int receiptId) async {
+  /// Schváli príjemku a pridá množstvá položiek do skladu. Nákupná cena = vážený aritmetický priemer.
+  Future<void> approveReceipt(int receiptId) async {
+    final receipt = await _db.getInboundReceiptById(receiptId);
+    if (receipt == null) return;
     final items = await _db.getInboundReceiptItems(receiptId);
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final vatPercent = receipt.vatRate ?? 20;
+
     for (final item in items) {
       final product = await _db.getProductByUniqueId(item.productUniqueId);
-      if (product != null && product.qty >= item.qty) {
+      if (product != null) {
+        final itemPriceWithVat = receipt.pricesIncludeVat
+            ? item.unitPrice
+            : calculateWithVat(item.unitPrice, vatPercent);
+        final itemPriceWithoutVat = receipt.pricesIncludeVat
+            ? calculateWithoutVat(item.unitPrice, vatPercent)
+            : item.unitPrice;
+
+        final newQty = product.qty + item.qty;
+        final weightedPurchasePriceWithVat = product.qty <= 0
+            ? itemPriceWithVat
+            : _roundPrice((product.qty * product.purchasePrice + item.qty * itemPriceWithVat) / newQty);
+        final weightedPurchasePriceWithoutVat = product.qty <= 0
+            ? itemPriceWithoutVat
+            : _roundPrice((product.qty * product.purchasePriceWithoutVat + item.qty * itemPriceWithoutVat) / newQty);
+
         final updated = Product(
           uniqueId: product.uniqueId,
           name: product.name,
           plu: product.plu,
           category: product.category,
-          qty: product.qty - item.qty,
+          qty: newQty,
           unit: product.unit,
           price: product.price,
           withoutVat: product.withoutVat,
           vat: product.vat,
           discount: product.discount,
-          lastPurchasePrice: product.lastPurchasePrice,
-          lastPurchaseDate: product.lastPurchaseDate,
+          lastPurchasePrice: _roundPrice(itemPriceWithVat),
+          lastPurchasePriceWithoutVat: _roundPrice(itemPriceWithoutVat),
+          lastPurchaseDate: today,
           currency: product.currency,
           location: product.location,
-          purchasePrice: product.purchasePrice,
-          purchasePriceWithoutVat: product.purchasePriceWithoutVat,
+          purchasePrice: weightedPurchasePriceWithVat,
+          purchasePriceWithoutVat: weightedPurchasePriceWithoutVat,
           purchaseVat: product.purchaseVat,
           recyclingFee: product.recyclingFee,
           productType: product.productType,
+          supplierName: receipt.supplierName?.trim().isNotEmpty == true
+              ? receipt.supplierName
+              : product.supplierName,
+          kindId: product.kindId,
+          warehouseId: product.warehouseId,
         );
         await _db.updateProduct(updated);
       }
     }
-  }
-
-  /// Schváli príjemku.
-  Future<void> approveReceipt(int receiptId) async {
     await _db.updateInboundReceiptStatus(
       receiptId,
       InboundReceiptStatus.schvalena,

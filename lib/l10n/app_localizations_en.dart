@@ -197,6 +197,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stockMovements => 'Stock movements';
 
   @override
+  String get recentMovements => 'Recent movements';
+
+  @override
   String get inboundReceipts => 'Inbound receipts';
 
   @override
@@ -233,6 +236,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get priceQuote => 'Price quote';
+
+  @override
+  String get overviewNotesAndTasks => 'Notes and tasks';
+
+  @override
+  String get overviewNotesTitle => 'Notes';
+
+  @override
+  String get overviewTasksTitle => 'Tasks';
+
+  @override
+  String get overviewNotesPlaceholder => 'Add a note...';
+
+  @override
+  String get overviewNewTaskHint => 'New task...';
+
+  @override
+  String get overviewAddTask => 'Add task';
 
   @override
   String get quoteDetails => 'Quote details';
@@ -345,6 +366,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get warehouseCode => 'Warehouse code';
 
   @override
+  String get warehouseType => 'Warehouse type';
+
+  @override
+  String get warehouseTypePredaj => 'Sales';
+
+  @override
+  String get warehouseTypeVyroba => 'Production';
+
+  @override
+  String get warehouseTypeRezijnyMaterial => 'Overhead material';
+
+  @override
+  String get warehouseTypeSklad => 'Warehouse';
+
+  @override
   String get noWarehouses => 'No warehouses';
 
   @override
@@ -420,4 +456,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get city => 'City';
+
+  @override
+  String get clearDatabase => 'Clear database data?';
+
+  @override
+  String get clearDatabaseConfirm =>
+      'Do you really want to delete all data from the database? This action cannot be undone. Users will be preserved.';
+
+  @override
+  String get clearDatabaseDone => 'Database data has been cleared.';
+
+  @override
+  String get adminOnly => 'Only administrator can clear database data.';
+
+  @override
+  String get margin => 'Margin';
+
+  @override
+  String get inventoryTitle => 'Inventory';
+
+  @override
+  String get inventorySearchHint => 'Search by name or code';
+
+  @override
+  String get actualStock => 'Actual count';
+
+  @override
+  String get inSystemKs => 'In system:';
+
+  @override
+  String get saveInventory => 'Save inventory';
+
+  @override
+  String get inventorySaved => 'Inventory has been saved';
 }

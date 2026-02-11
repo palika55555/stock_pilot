@@ -3,12 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../Providers/theme_locale_provider.dart';
-import '../../services/database/database_service.dart';
+import '../../services/Database/database_service.dart';
 import '../../l10n/app_localizations.dart';
 import 'company_edit_screen.dart';
+import 'receipt_pdf_style_screen.dart';
+import 'product_kinds_screen.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  /// Rola prihláseného používateľa ('admin' alebo 'user'). Určuje napr. zobrazenie položky „Vymazať dáta z DB”.
+  final String userRole;
+
+  const SettingsPage({super.key, required this.userRole});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -36,6 +41,33 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', value);
     setState(() => _notificationsEnabled = value);
+  }
+
+  Future<void> _showClearDatabaseDialog(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.clearDatabase),
+        content: Text(l10n.clearDatabaseConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await DatabaseService().clearAllData();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.clearDatabaseDone)),
+    );
   }
 
   @override
@@ -158,6 +190,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       : l10n.defaultPath,
                   onTap: () => _showDbPathInfo(),
                 ),
+                if (widget.userRole == 'admin')
+                  _buildListTile(
+                    icon: Icons.delete_forever_outlined,
+                    title: l10n.clearDatabase,
+                    trailing: l10n.delete,
+                    onTap: () => _showClearDatabaseDialog(context),
+                  ),
               ],
             ),
             _buildSection(
@@ -173,6 +212,44 @@ class _SettingsPageState extends State<SettingsPage> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CompanyEditScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            _buildSection(
+              title: 'Generovanie PDF',
+              icon: Icons.picture_as_pdf_rounded,
+              children: [
+                _buildListTile(
+                  icon: Icons.receipt_long_rounded,
+                  title: 'Štýl PDF pre príjemky',
+                  trailing: 'Nastaviť',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ReceiptPdfStyleScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            _buildSection(
+              title: 'Sklady a produkty',
+              icon: Icons.inventory_2_rounded,
+              children: [
+                _buildListTile(
+                  icon: Icons.category_rounded,
+                  title: 'Druhy produktov',
+                  trailing: 'Klince, montážna pena, …',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ProductKindsScreen(),
                       ),
                     );
                   },
