@@ -490,4 +490,31 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get inventorySaved => 'Inventura byla uložena';
+
+  @override
+  String get exportReport => 'Exportovat report';
+
+  @override
+  String get exportFormat => 'Formát reportu';
+
+  @override
+  String get formatPdf => 'PDF';
+
+  @override
+  String get formatExcel => 'Excel';
+
+  @override
+  String get chooseWarehouse => 'Vyberte sklad';
+
+  @override
+  String get reportGenerated => 'Report byl vygenerován. Můžete ho sdílet.';
+
+  @override
+  String get reportError => 'Chyba při generování reportu';
+
+  @override
+  String get reportProduct => 'Produkt';
+
+  @override
+  String get reportQuantity => 'Počet';
 }

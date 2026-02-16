@@ -22,7 +22,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _currentRole = widget.user.role;
+    // Pri štarte aplikácie vždy východisková rola 'user' (admin si môže prepnúť)
+    _currentRole = 'user';
     _persistCurrentUser();
   }
 

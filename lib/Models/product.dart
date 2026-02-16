@@ -20,9 +20,7 @@ class Product {
   final double recyclingFee;
   final String productType; // e.g. 'Sklad', 'Výroba'
   final String? supplierName; // Dodávateľ (z poslednej schválenej príjemky)
-  /// ID druhu produktu (napr. klince, montážna pena) – pre sklady.
   final int? kindId;
-  /// ID skladu – priradenie produktu ku konkrétnemu skladu.
   final int? warehouseId;
 
   /// Marža v % z predajnej ceny: (predajná - nákupná) / predajná × 100.
@@ -90,12 +88,12 @@ class Product {
       name: map['name'],
       plu: map['plu'],
       category: map['category'],
-      qty: map['qty'],
+      qty: (map['qty'] as num?)?.toInt() ?? 0,
       unit: map['unit'],
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       withoutVat: (map['without_vat'] as num?)?.toDouble() ?? 0.0,
-      vat: map['vat'] ?? 23,
-      discount: map['discount'] ?? 0,
+      vat: (map['vat'] as num?)?.toInt() ?? 23,
+      discount: (map['discount'] as num?)?.toInt() ?? 0,
       lastPurchasePrice:
           (map['last_purchase_price'] as num?)?.toDouble() ?? 0.0,
       lastPurchasePriceWithoutVat:
@@ -106,7 +104,7 @@ class Product {
       purchasePrice: (map['purchase_price'] as num?)?.toDouble() ?? 0.0,
       purchasePriceWithoutVat:
           (map['purchase_price_without_vat'] as num?)?.toDouble() ?? 0.0,
-      purchaseVat: map['purchase_vat'] ?? 23,
+      purchaseVat: (map['purchase_vat'] as num?)?.toInt() ?? 23,
       recyclingFee: (map['recycling_fee'] as num?)?.toDouble() ?? 0.0,
       productType: map['product_type'] ?? 'Sklad',
       supplierName: map['supplier_name'] as String?,

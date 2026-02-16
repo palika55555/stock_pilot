@@ -5,16 +5,16 @@ import 'password_service.dart';
 class ChangePasswordService {
   final PasswordService _passwordService = PasswordService();
 
-  /// ZmenĂ­ heslo pouĹľĂ­vateÄľa
-  /// VrĂˇti true ak bola zmena ĂşspeĹˇnĂˇ, false inak
-  /// VyhodĂ­ vĂ˝nimku pri chybe
+  /// Zmení heslo používateľa
+  /// Vráti true ak bola zmena úspešná, false inak
+  /// Vyhodí výnimku pri chybe
   Future<bool> changePassword({
     required String username,
     required String currentPassword,
     required String newPassword,
     required String confirmPassword,
   }) async {
-    // ValidĂˇcia pomocou modelu
+    // Validácia pomocou modelu
     final request = ChangePasswordRequest(
       username: username,
       currentPassword: currentPassword,
@@ -27,7 +27,7 @@ class ChangePasswordService {
       throw Exception(validationError);
     }
 
-    // SkĂşsime zmeniĹĄ heslo
+    // Skúsime zmeniť heslo
     final success = await _passwordService.changePassword(
       username,
       currentPassword,

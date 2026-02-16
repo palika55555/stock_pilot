@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login/login_page.dart';
 import 'screens/first_startup/first_startup_screen.dart';
+import 'screens/first_startup/create_first_user_screen.dart';
 import 'screens/Home/Home_screen.dart';
 import 'services/Database/database_service.dart';
 import 'models/user.dart';
@@ -38,12 +39,17 @@ void main() async {
   );
 
   User? initialUser;
+  bool hasNoUsers = false;
   if (!isFirstRun) {
     final db = DatabaseService();
     final rememberMe = await db.getRememberMe();
     final savedUsername = await db.getSavedUsername();
     if (rememberMe && savedUsername != null && savedUsername.isNotEmpty) {
       initialUser = await db.getUserByUsername(savedUsername);
+    }
+    // Ak žiadny používateľ nie je prihlásený, skontrolujeme či v DB vôbec sú používatelia
+    if (initialUser == null) {
+      hasNoUsers = !(await db.hasAnyUsers());
     }
   }
 
@@ -53,6 +59,7 @@ void main() async {
     isFirstRun: isFirstRun,
     themeProvider: themeProvider,
     initialUser: initialUser,
+    hasNoUsers: hasNoUsers,
     routeObserver: routeObserver,
   ));
 }
@@ -61,6 +68,7 @@ class MyApp extends StatelessWidget {
   final bool isFirstRun;
   final ThemeLocaleProvider themeProvider;
   final User? initialUser;
+  final bool hasNoUsers;
   final RouteObserver<ModalRoute<void>> routeObserver;
 
   const MyApp({
@@ -68,6 +76,7 @@ class MyApp extends StatelessWidget {
     required this.isFirstRun,
     required this.themeProvider,
     this.initialUser,
+    required this.hasNoUsers,
     required this.routeObserver,
   });
 
@@ -121,7 +130,9 @@ class MyApp extends StatelessWidget {
                 ? const FirstStartupScreen()
                 : (initialUser != null
                     ? HomeScreen(user: initialUser!, routeObserver: routeObserver)
-                    : const LoginPage()),
+                    : hasNoUsers
+                        ? CreateFirstUserScreen(routeObserver: routeObserver)
+                        : const LoginPage()),
           );
         },
       ),

@@ -225,10 +225,58 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
               );
             },
           ),
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 22),
+              tooltip: 'Vymazať produkt',
+              onPressed: () => _confirmDeleteProduct(product),
+              style: IconButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+              ),
+            ),
         ],
       ),
     ));
     return cells;
+  }
+
+  Future<void> _confirmDeleteProduct(Product product) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.delete),
+        content: Text(
+          'Naozaj chcete vymazať produkt "${product.name}" (${product.plu})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted && product.uniqueId != null) {
+      await _productService.deleteProduct(product.uniqueId!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Produkt "${product.name}" bol vymazaný'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _loadProducts();
+      }
+    }
   }
 
   DataCell _cellForColumn(String id, Product product, bool lowStock) {
@@ -849,7 +897,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                             color: Color(0xFF6366F1),
                           ),
                         )
-                      : WarehouseSuppliesCardView(
+                      :                       WarehouseSuppliesCardView(
                           products: _foundProducts,
                           isAdmin: isAdmin,
                           selectedIds: _selectedIds,
@@ -866,6 +914,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                 }
                               : null,
                           onEditProduct: _openEditProductModal,
+                          onDeleteProduct: isAdmin ? _confirmDeleteProduct : null,
                         )
                   : _isLoading
                   ? const Center(

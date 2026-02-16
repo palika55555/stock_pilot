@@ -1035,6 +1035,60 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'Inventúra bola uložená'**
   String get inventorySaved;
+
+  /// No description provided for @exportReport.
+  ///
+  /// In sk, this message translates to:
+  /// **'Exportovať report'**
+  String get exportReport;
+
+  /// No description provided for @exportFormat.
+  ///
+  /// In sk, this message translates to:
+  /// **'Formát reportu'**
+  String get exportFormat;
+
+  /// No description provided for @formatPdf.
+  ///
+  /// In sk, this message translates to:
+  /// **'PDF'**
+  String get formatPdf;
+
+  /// No description provided for @formatExcel.
+  ///
+  /// In sk, this message translates to:
+  /// **'Excel'**
+  String get formatExcel;
+
+  /// No description provided for @chooseWarehouse.
+  ///
+  /// In sk, this message translates to:
+  /// **'Vyberte sklad'**
+  String get chooseWarehouse;
+
+  /// No description provided for @reportGenerated.
+  ///
+  /// In sk, this message translates to:
+  /// **'Report bol vygenerovaný. Môžete ho zdieľať.'**
+  String get reportGenerated;
+
+  /// No description provided for @reportError.
+  ///
+  /// In sk, this message translates to:
+  /// **'Chyba pri generovaní reportu'**
+  String get reportError;
+
+  /// No description provided for @reportProduct.
+  ///
+  /// In sk, this message translates to:
+  /// **'Produkt'**
+  String get reportProduct;
+
+  /// No description provided for @reportQuantity.
+  ///
+  /// In sk, this message translates to:
+  /// **'Počet'**
+  String get reportQuantity;
 }
 
 class _AppLocalizationsDelegate

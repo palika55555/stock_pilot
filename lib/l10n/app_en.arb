@@ -169,5 +169,14 @@
   "actualStock": "Actual count",
   "inSystemKs": "In system:",
   "saveInventory": "Save inventory",
-  "inventorySaved": "Inventory has been saved"
+  "inventorySaved": "Inventory has been saved",
+  "exportReport": "Export report",
+  "exportFormat": "Report format",
+  "formatPdf": "PDF",
+  "formatExcel": "Excel",
+  "chooseWarehouse": "Choose warehouse",
+  "reportGenerated": "Report generated. You can share it.",
+  "reportError": "Error generating report",
+  "reportProduct": "Product",
+  "reportQuantity": "Quantity"
 }

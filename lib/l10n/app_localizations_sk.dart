@@ -490,4 +490,31 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get inventorySaved => 'Inventúra bola uložená';
+
+  @override
+  String get exportReport => 'Exportovať report';
+
+  @override
+  String get exportFormat => 'Formát reportu';
+
+  @override
+  String get formatPdf => 'PDF';
+
+  @override
+  String get formatExcel => 'Excel';
+
+  @override
+  String get chooseWarehouse => 'Vyberte sklad';
+
+  @override
+  String get reportGenerated => 'Report bol vygenerovaný. Môžete ho zdieľať.';
+
+  @override
+  String get reportError => 'Chyba pri generovaní reportu';
+
+  @override
+  String get reportProduct => 'Produkt';
+
+  @override
+  String get reportQuantity => 'Počet';
 }

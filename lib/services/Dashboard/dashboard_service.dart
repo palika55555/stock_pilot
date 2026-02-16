@@ -1,5 +1,5 @@
 import 'dart:async';
-import '../database/database_service.dart';
+import 'package:stock_pilot/services/Database/database_service.dart';
 
 class DashboardService {
   final DatabaseService _db = DatabaseService();

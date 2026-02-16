@@ -169,5 +169,14 @@
   "actualStock": "Skutečný stav",
   "inSystemKs": "V systému:",
   "saveInventory": "Uložit inventuru",
-  "inventorySaved": "Inventura byla uložena"
+  "inventorySaved": "Inventura byla uložena",
+  "exportReport": "Exportovat report",
+  "exportFormat": "Formát reportu",
+  "formatPdf": "PDF",
+  "formatExcel": "Excel",
+  "chooseWarehouse": "Vyberte sklad",
+  "reportGenerated": "Report byl vygenerován. Můžete ho sdílet.",
+  "reportError": "Chyba při generování reportu",
+  "reportProduct": "Produkt",
+  "reportQuantity": "Počet"
 }

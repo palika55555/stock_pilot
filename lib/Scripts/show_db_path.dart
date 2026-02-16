@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/database/database_service.dart';
+import '../services/Database/database_service.dart';
 
 /// Skript na zobrazenie cesty k databáze
 /// Spustiť cez: flutter run -t lib/Scripts/show_db_path.dart

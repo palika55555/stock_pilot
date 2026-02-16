@@ -27,14 +27,15 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
   bool _loading = true;
   int _statusFilter = 0; // 0 = všetci, 1 = aktívni, 2 = neaktívni
 
-  late final AnimationController _listController = AnimationController(
-    duration: const Duration(milliseconds: 800),
-    vsync: this,
-  )..forward();
+  late final AnimationController _listController;
 
   @override
   void initState() {
     super.initState();
+    _listController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..forward();
     _searchController.addListener(_onSearchChanged);
     _loadWarehouses();
   }

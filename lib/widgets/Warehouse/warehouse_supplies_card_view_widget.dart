@@ -10,6 +10,7 @@ class WarehouseSuppliesCardView extends StatelessWidget {
   final List<String> selectedIds;
   final ValueChanged<String?>? onSelectionChanged;
   final ValueChanged<Product>? onEditProduct;
+  final ValueChanged<Product>? onDeleteProduct;
 
   const WarehouseSuppliesCardView({
     super.key,
@@ -18,6 +19,7 @@ class WarehouseSuppliesCardView extends StatelessWidget {
     required this.selectedIds,
     this.onSelectionChanged,
     this.onEditProduct,
+    this.onDeleteProduct,
   });
 
   @override
@@ -88,6 +90,9 @@ class WarehouseSuppliesCardView extends StatelessWidget {
               onEditTap: onEditProduct != null
                   ? () => onEditProduct!(product)
                   : null,
+              onDeleteTap: onDeleteProduct != null
+                  ? () => onDeleteProduct!(product)
+                  : null,
               onHistoryTap: () {
                 showModalBottomSheet(
                   context: context,
@@ -112,6 +117,7 @@ class _ProductCard extends StatelessWidget {
   final bool isSelected;
   final VoidCallback? onSelectionChanged;
   final VoidCallback? onEditTap;
+  final VoidCallback? onDeleteTap;
   final VoidCallback onHistoryTap;
 
   const _ProductCard({
@@ -120,6 +126,7 @@ class _ProductCard extends StatelessWidget {
     required this.isSelected,
     this.onSelectionChanged,
     this.onEditTap,
+    this.onDeleteTap,
     required this.onHistoryTap,
   });
 
@@ -240,6 +247,27 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                   if (onEditTap != null) const SizedBox(width: 6),
+                  if (onDeleteTap != null)
+                    Tooltip(
+                      message: 'Vymazať produkt',
+                      child: Material(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          onTap: onDeleteTap,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              Icons.delete_outline,
+                              size: 22,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (onDeleteTap != null) const SizedBox(width: 6),
                   Tooltip(
                     message: 'História nákupných cien',
                     child: Material(

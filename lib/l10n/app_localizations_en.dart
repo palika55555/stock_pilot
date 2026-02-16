@@ -490,4 +490,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inventorySaved => 'Inventory has been saved';
+
+  @override
+  String get exportReport => 'Export report';
+
+  @override
+  String get exportFormat => 'Report format';
+
+  @override
+  String get formatPdf => 'PDF';
+
+  @override
+  String get formatExcel => 'Excel';
+
+  @override
+  String get chooseWarehouse => 'Choose warehouse';
+
+  @override
+  String get reportGenerated => 'Report generated. You can share it.';
+
+  @override
+  String get reportError => 'Error generating report';
+
+  @override
+  String get reportProduct => 'Product';
+
+  @override
+  String get reportQuantity => 'Quantity';
 }

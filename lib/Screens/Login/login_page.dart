@@ -4,8 +4,9 @@ import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
-import '../../widgets/common/change_password_dialog.dart';
+import '../../widgets/Common/change_password_dialog.dart';
 import '../../widgets/Common/glassmorphism_container.dart';
+import 'create_user_screen.dart';
 import '../../widgets/Common/glass_text_field.dart';
 import '../../widgets/Common/purple_button.dart';
 
@@ -203,6 +204,21 @@ class _LoginPageState extends State<LoginPage> {
                           text: "Login",
                           isLoading: _isLoading,
                           onPressed: _handleLogin,
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CreateUserScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            "Vytvoriť používateľa",
+                            style: TextStyle(color: Colors.white70, fontSize: 14),
+                          ),
                         ),
                       ],
                     ),
