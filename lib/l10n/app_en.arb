@@ -178,5 +178,26 @@
   "reportGenerated": "Report generated. You can share it.",
   "reportError": "Error generating report",
   "reportProduct": "Product",
-  "reportQuantity": "Quantity"
+  "reportQuantity": "Quantity",
+  "importFromExcel": "Import from Excel",
+  "bulkReceiptImport": "Bulk receipt import",
+  "importPreview": "Import preview",
+  "matchedRowsCount": "Matched with products: {count}",
+  "@matchedRowsCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unmatchedRowsCount": "Unmatched rows: {count}",
+  "@unmatchedRowsCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "createDraftReceipt": "Create draft receipt",
+  "importSuccess": "Receipt created. You can edit and approve it.",
+  "selectExcelFile": "Select Excel file (.xlsx)",
+  "excelFormatHint": "Columns: PLU (or Code), Quantity, Unit, Price. First row can be header.",
+  "noRowsMatched": "No rows matched products in the system.",
+  "importError": "Import error"
 }

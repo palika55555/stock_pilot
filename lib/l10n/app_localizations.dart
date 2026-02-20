@@ -1089,6 +1089,72 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'Počet'**
   String get reportQuantity;
+
+  /// No description provided for @importFromExcel.
+  ///
+  /// In sk, this message translates to:
+  /// **'Import z Excelu'**
+  String get importFromExcel;
+
+  /// No description provided for @bulkReceiptImport.
+  ///
+  /// In sk, this message translates to:
+  /// **'Hromadný príjem'**
+  String get bulkReceiptImport;
+
+  /// No description provided for @importPreview.
+  ///
+  /// In sk, this message translates to:
+  /// **'Náhľad importu'**
+  String get importPreview;
+
+  /// No description provided for @matchedRowsCount.
+  ///
+  /// In sk, this message translates to:
+  /// **'Zhodné s produktami: {count}'**
+  String matchedRowsCount(int count);
+
+  /// No description provided for @unmatchedRowsCount.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nezhodné riadky: {count}'**
+  String unmatchedRowsCount(int count);
+
+  /// No description provided for @createDraftReceipt.
+  ///
+  /// In sk, this message translates to:
+  /// **'Vytvoriť rozpracovanú príjemku'**
+  String get createDraftReceipt;
+
+  /// No description provided for @importSuccess.
+  ///
+  /// In sk, this message translates to:
+  /// **'Príjemka vytvorená. Môžete ju upraviť a schváliť.'**
+  String get importSuccess;
+
+  /// No description provided for @selectExcelFile.
+  ///
+  /// In sk, this message translates to:
+  /// **'Vyberte súbor Excel (.xlsx)'**
+  String get selectExcelFile;
+
+  /// No description provided for @excelFormatHint.
+  ///
+  /// In sk, this message translates to:
+  /// **'Stĺpce: PLU (alebo Kód), Množstvo, MJ, Cena. Prvý riadok môže byť hlavička.'**
+  String get excelFormatHint;
+
+  /// No description provided for @noRowsMatched.
+  ///
+  /// In sk, this message translates to:
+  /// **'Žiadny riadok sa nezhodoval s produktami v systéme.'**
+  String get noRowsMatched;
+
+  /// No description provided for @importError.
+  ///
+  /// In sk, this message translates to:
+  /// **'Chyba importu'**
+  String get importError;
 }
 
 class _AppLocalizationsDelegate

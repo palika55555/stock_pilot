@@ -213,5 +213,26 @@
   "reportGenerated": "Report bol vygenerovaný. Môžete ho zdieľať.",
   "reportError": "Chyba pri generovaní reportu",
   "reportProduct": "Produkt",
-  "reportQuantity": "Počet"
+  "reportQuantity": "Počet",
+  "importFromExcel": "Import z Excelu",
+  "bulkReceiptImport": "Hromadný príjem",
+  "importPreview": "Náhľad importu",
+  "matchedRowsCount": "Zhodné s produktami: {count}",
+  "@matchedRowsCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unmatchedRowsCount": "Nezhodné riadky: {count}",
+  "@unmatchedRowsCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "createDraftReceipt": "Vytvoriť rozpracovanú príjemku",
+  "importSuccess": "Príjemka vytvorená. Môžete ju upraviť a schváliť.",
+  "selectExcelFile": "Vyberte súbor Excel (.xlsx)",
+  "excelFormatHint": "Stĺpce: PLU (alebo Kód), Množstvo, MJ, Cena. Prvý riadok môže byť hlavička.",
+  "noRowsMatched": "Žiadny riadok sa nezhodoval s produktami v systéme.",
+  "importError": "Chyba importu"
 }

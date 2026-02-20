@@ -517,4 +517,44 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get reportQuantity => 'Počet';
+
+  @override
+  String get importFromExcel => 'Import z Excelu';
+
+  @override
+  String get bulkReceiptImport => 'Hromadný príjem';
+
+  @override
+  String get importPreview => 'Náhľad importu';
+
+  @override
+  String matchedRowsCount(int count) {
+    return 'Zhodné s produktami: $count';
+  }
+
+  @override
+  String unmatchedRowsCount(int count) {
+    return 'Nezhodné riadky: $count';
+  }
+
+  @override
+  String get createDraftReceipt => 'Vytvoriť rozpracovanú príjemku';
+
+  @override
+  String get importSuccess =>
+      'Príjemka vytvorená. Môžete ju upraviť a schváliť.';
+
+  @override
+  String get selectExcelFile => 'Vyberte súbor Excel (.xlsx)';
+
+  @override
+  String get excelFormatHint =>
+      'Stĺpce: PLU (alebo Kód), Množstvo, MJ, Cena. Prvý riadok môže byť hlavička.';
+
+  @override
+  String get noRowsMatched =>
+      'Žiadny riadok sa nezhodoval s produktami v systéme.';
+
+  @override
+  String get importError => 'Chyba importu';
 }

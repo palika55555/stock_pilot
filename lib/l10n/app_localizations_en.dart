@@ -517,4 +517,42 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reportQuantity => 'Quantity';
+
+  @override
+  String get importFromExcel => 'Import from Excel';
+
+  @override
+  String get bulkReceiptImport => 'Bulk receipt import';
+
+  @override
+  String get importPreview => 'Import preview';
+
+  @override
+  String matchedRowsCount(int count) {
+    return 'Matched with products: $count';
+  }
+
+  @override
+  String unmatchedRowsCount(int count) {
+    return 'Unmatched rows: $count';
+  }
+
+  @override
+  String get createDraftReceipt => 'Create draft receipt';
+
+  @override
+  String get importSuccess => 'Receipt created. You can edit and approve it.';
+
+  @override
+  String get selectExcelFile => 'Select Excel file (.xlsx)';
+
+  @override
+  String get excelFormatHint =>
+      'Columns: PLU (or Code), Quantity, Unit, Price. First row can be header.';
+
+  @override
+  String get noRowsMatched => 'No rows matched products in the system.';
+
+  @override
+  String get importError => 'Import error';
 }
