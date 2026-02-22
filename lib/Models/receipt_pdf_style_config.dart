@@ -63,11 +63,11 @@ class ReceiptPdfStyleConfig {
     this.showColQty = true,
     this.showColUnit = true,
     this.showColUnitPriceWithVat = true,
-    this.showColUnitPriceWithoutVat = false,
+    this.showColUnitPriceWithoutVat = true,
     this.showColTotal = true,
     this.showColLastPurchaseDate = false,
-    this.showColVatRate = false,
-    this.showColVatAmount = false,
+    this.showColVatRate = true,
+    this.showColVatAmount = true,
   });
 
   String get effectiveDocumentTitle =>
@@ -159,11 +159,11 @@ class ReceiptPdfStyleConfig {
       showColQty: prefs.getBool(_keyShowColQty) ?? true,
       showColUnit: prefs.getBool(_keyShowColUnit) ?? true,
       showColUnitPriceWithVat: prefs.getBool(_keyShowColUnitPriceWithVat) ?? true,
-      showColUnitPriceWithoutVat: prefs.getBool(_keyShowColUnitPriceWithoutVat) ?? false,
+      showColUnitPriceWithoutVat: prefs.getBool(_keyShowColUnitPriceWithoutVat) ?? true,
       showColTotal: prefs.getBool(_keyShowColTotal) ?? true,
       showColLastPurchaseDate: prefs.getBool(_keyShowColLastPurchaseDate) ?? false,
-      showColVatRate: prefs.getBool(_keyShowColVatRate) ?? false,
-      showColVatAmount: prefs.getBool(_keyShowColVatAmount) ?? false,
+      showColVatRate: prefs.getBool(_keyShowColVatRate) ?? true,
+      showColVatAmount: prefs.getBool(_keyShowColVatAmount) ?? true,
     );
   }
 }

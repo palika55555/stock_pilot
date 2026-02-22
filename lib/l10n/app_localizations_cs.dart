@@ -556,4 +556,74 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get importError => 'Chyba importu';
+
+  @override
+  String get downloadImportTemplate => 'Stáhnout šablonu importu';
+
+  @override
+  String get downloadImportTemplateSuccess =>
+      'Šablona připravena k uložení nebo sdílení.';
+
+  @override
+  String get importSummaryTitle => 'Kontrola a souhrn';
+
+  @override
+  String importTotalRowsInFile(int count) {
+    return 'Řádků v souboru: $count';
+  }
+
+  @override
+  String importSkippedRows(int count) {
+    return 'Řádků vynecháno: $count';
+  }
+
+  @override
+  String importTotalValue(String value) {
+    return 'Celková hodnota: $value';
+  }
+
+  @override
+  String get importWarnings => 'Varování';
+
+  @override
+  String get importExistingProducts => 'Existující produkty';
+
+  @override
+  String get importNewProducts => 'Nové produkty (budou vytvořeny)';
+
+  @override
+  String get importFullTable => 'Kompletní tabulka produktů';
+
+  @override
+  String get importStatusExisting => 'Existující';
+
+  @override
+  String get importStatusNew => 'Nový';
+
+  @override
+  String get importSupplierLabel => 'Dodavatel pro příjemku';
+
+  @override
+  String get importWarehouseLabel => 'Sklad pro nové produkty';
+
+  @override
+  String get importOptionalNone => '— Nevybrat';
+
+  @override
+  String get importPricePurchaseWithoutVat => 'Nákup bez DPH';
+
+  @override
+  String get importPricePurchaseWithVat => 'Nákup s DPH';
+
+  @override
+  String get importVatPurchase => 'DPH nákup %';
+
+  @override
+  String get importPriceSaleWithoutVat => 'Prodej bez DPH';
+
+  @override
+  String get importPriceSaleWithVat => 'Prodej s DPH';
+
+  @override
+  String get importVatSale => 'DPH prodej %';
 }

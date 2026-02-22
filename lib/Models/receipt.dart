@@ -117,6 +117,8 @@ class InboundReceiptItem {
   final int qty;
   final String unit;
   final double unitPrice;
+  /// DPH % pre túto položku; null = použiť DPH príjemky alebo produktu.
+  final int? vatPercent;
 
   InboundReceiptItem({
     this.id,
@@ -127,6 +129,7 @@ class InboundReceiptItem {
     required this.qty,
     required this.unit,
     required this.unitPrice,
+    this.vatPercent,
   });
 
   Map<String, dynamic> toMap() {
@@ -139,6 +142,7 @@ class InboundReceiptItem {
       'qty': qty,
       'unit': unit,
       'unit_price': _roundPrice(unitPrice),
+      'vat_percent': vatPercent,
     };
   }
 
@@ -156,6 +160,7 @@ class InboundReceiptItem {
       qty: map['qty'] as int,
       unit: map['unit'] as String,
       unitPrice: (map['unit_price'] as num).toDouble(),
+      vatPercent: map['vat_percent'] as int?,
     );
   }
 }

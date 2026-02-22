@@ -51,6 +51,7 @@ class ReceiptService {
         qty: item.qty,
         unit: item.unit,
         unitPrice: item.unitPrice,
+        vatPercent: item.vatPercent,
       );
       await _db.insertInboundReceiptItem(dbItem);
     }
@@ -79,6 +80,7 @@ class ReceiptService {
         qty: item.qty,
         unit: item.unit,
         unitPrice: item.unitPrice,
+        vatPercent: item.vatPercent,
       );
       await _db.insertInboundReceiptItem(dbItem);
     }
@@ -90,9 +92,9 @@ class ReceiptService {
     if (receipt == null) return;
     final items = await _db.getInboundReceiptItems(receiptId);
     final today = DateTime.now().toIso8601String().substring(0, 10);
-    final vatPercent = receipt.vatRate ?? 20;
 
     for (final item in items) {
+      final vatPercent = item.vatPercent ?? receipt.vatRate ?? 20;
       final product = await _db.getProductByUniqueId(item.productUniqueId);
       if (product != null) {
         final itemPriceWithVat = receipt.pricesIncludeVat

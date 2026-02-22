@@ -555,4 +555,74 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importError => 'Import error';
+
+  @override
+  String get downloadImportTemplate => 'Download import template';
+
+  @override
+  String get downloadImportTemplateSuccess =>
+      'Template ready to save or share.';
+
+  @override
+  String get importSummaryTitle => 'Check and summary';
+
+  @override
+  String importTotalRowsInFile(int count) {
+    return 'Rows in file: $count';
+  }
+
+  @override
+  String importSkippedRows(int count) {
+    return 'Rows skipped: $count';
+  }
+
+  @override
+  String importTotalValue(String value) {
+    return 'Total value: $value';
+  }
+
+  @override
+  String get importWarnings => 'Warnings';
+
+  @override
+  String get importExistingProducts => 'Existing products';
+
+  @override
+  String get importNewProducts => 'New products (will be created)';
+
+  @override
+  String get importFullTable => 'Full product table';
+
+  @override
+  String get importStatusExisting => 'Existing';
+
+  @override
+  String get importStatusNew => 'New';
+
+  @override
+  String get importSupplierLabel => 'Supplier for receipt';
+
+  @override
+  String get importWarehouseLabel => 'Warehouse for new products';
+
+  @override
+  String get importOptionalNone => '— Don\'t select';
+
+  @override
+  String get importPricePurchaseWithoutVat => 'Purchase without VAT';
+
+  @override
+  String get importPricePurchaseWithVat => 'Purchase with VAT';
+
+  @override
+  String get importVatPurchase => 'Purchase VAT %';
+
+  @override
+  String get importPriceSaleWithoutVat => 'Sale without VAT';
+
+  @override
+  String get importPriceSaleWithVat => 'Sale with VAT';
+
+  @override
+  String get importVatSale => 'Sale VAT %';
 }

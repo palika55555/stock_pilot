@@ -199,5 +199,41 @@
   "selectExcelFile": "Select Excel file (.xlsx)",
   "excelFormatHint": "Columns: PLU (or Code), Quantity, Unit, Price. First row can be header.",
   "noRowsMatched": "No rows matched products in the system.",
-  "importError": "Import error"
+  "importError": "Import error",
+  "downloadImportTemplate": "Download import template",
+  "downloadImportTemplateSuccess": "Template ready to save or share.",
+  "importSummaryTitle": "Check and summary",
+  "importTotalRowsInFile": "Rows in file: {count}",
+  "@importTotalRowsInFile": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "importSkippedRows": "Rows skipped: {count}",
+  "@importSkippedRows": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "importTotalValue": "Total value: {value}",
+  "@importTotalValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+  "importWarnings": "Warnings",
+  "importExistingProducts": "Existing products",
+  "importNewProducts": "New products (will be created)",
+  "importFullTable": "Full product table",
+  "importStatusExisting": "Existing",
+  "importStatusNew": "New",
+  "importSupplierLabel": "Supplier for receipt",
+  "importWarehouseLabel": "Warehouse for new products",
+  "importOptionalNone": "— Don't select",
+  "importPricePurchaseWithoutVat": "Purchase without VAT",
+  "importPricePurchaseWithVat": "Purchase with VAT",
+  "importVatPurchase": "Purchase VAT %",
+  "importPriceSaleWithoutVat": "Sale without VAT",
+  "importPriceSaleWithVat": "Sale with VAT",
+  "importVatSale": "Sale VAT %"
 }

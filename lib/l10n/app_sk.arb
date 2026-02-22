@@ -234,5 +234,41 @@
   "selectExcelFile": "Vyberte súbor Excel (.xlsx)",
   "excelFormatHint": "Stĺpce: PLU (alebo Kód), Množstvo, MJ, Cena. Prvý riadok môže byť hlavička.",
   "noRowsMatched": "Žiadny riadok sa nezhodoval s produktami v systéme.",
-  "importError": "Chyba importu"
+  "importError": "Chyba importu",
+  "downloadImportTemplate": "Stiahnuť šablónu importu",
+  "downloadImportTemplateSuccess": "Šablóna pripravená na uloženie alebo zdieľanie.",
+  "importSummaryTitle": "Kontrola a súhrn",
+  "importTotalRowsInFile": "Riadkov v súbore: {count}",
+  "@importTotalRowsInFile": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "importSkippedRows": "Riadkov vynechaných: {count}",
+  "@importSkippedRows": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "importTotalValue": "Celková hodnota: {value}",
+  "@importTotalValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+  "importWarnings": "Varovania",
+  "importExistingProducts": "Existujúce produkty",
+  "importNewProducts": "Nové produkty (budú vytvorené)",
+  "importFullTable": "Kompletná tabuľka produktov",
+  "importStatusExisting": "Existujúci",
+  "importStatusNew": "Nový",
+  "importSupplierLabel": "Dodávateľ pre príjemku",
+  "importWarehouseLabel": "Sklad pre nové produkty",
+  "importOptionalNone": "— Nevybrať",
+  "importPricePurchaseWithoutVat": "Nákup bez DPH",
+  "importPricePurchaseWithVat": "Nákup s DPH",
+  "importVatPurchase": "DPH nákup %",
+  "importPriceSaleWithoutVat": "Predaj bez DPH",
+  "importPriceSaleWithVat": "Predaj s DPH",
+  "importVatSale": "DPH predaj %"
 }

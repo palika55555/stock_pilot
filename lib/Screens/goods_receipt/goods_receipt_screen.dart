@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
@@ -12,7 +13,11 @@ import '../../models/receipt_pdf_style_config.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/Receipt/receipt_service.dart';
 import '../../services/Receipt/receipt_pdf_service.dart';
+import '../../models/supplier.dart';
+import '../../models/warehouse.dart';
 import '../../services/Receipt/bulk_receipt_import_service.dart';
+import '../../services/Supplier/supplier_service.dart';
+import '../../services/Warehouse/warehouse_service.dart';
 import '../../widgets/receipts/goods_receipt_list_widget.dart';
 import '../../widgets/receipts/goods_receipt_modal_widget.dart';
 
@@ -149,6 +154,41 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     }
   }
 
+  Future<void> _downloadImportTemplate() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final bytes = _importService.buildImportTemplate();
+      const filename = 'sablona_import_prijemky.xlsx';
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: l10n.downloadImportTemplate,
+        fileName: filename,
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        lockParentWindow: true,
+      );
+      if (!mounted) return;
+      if (path != null && path.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${l10n.downloadImportTemplateSuccess}\n$path'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${l10n.importError}: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _importFromExcel() async {
     final l10n = AppLocalizations.of(context)!;
     final result = await FilePicker.platform.pickFiles(
@@ -162,7 +202,20 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(l10n.importPreview)),
     );
-    final importResult = await _importService.importFromExcel(bytes);
+    BulkImportResult importResult;
+    try {
+      importResult = await _importService.importFromExcel(bytes);
+    } catch (e, st) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.importError}: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      debugPrintStack(stackTrace: st);
+      return;
+    }
     if (!mounted) return;
     if (importResult.hasError) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,7 +226,8 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
       );
       return;
     }
-    if (importResult.matchedCount == 0) {
+    final hasAnyItems = importResult.matchedCount > 0 || importResult.unmatchedCount > 0;
+    if (!hasAnyItems) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.noRowsMatched),
@@ -182,35 +236,62 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
       );
       return;
     }
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => _ImportPreviewDialog(
         l10n: l10n,
         importResult: importResult,
-        onCreateDraft: () async {
+        onCreateDraft: (supplierName, warehouseId) {
           Navigator.of(ctx).pop();
-          final receipt = InboundReceipt(
-            receiptNumber: '',
-            createdAt: DateTime.now(),
-            pricesIncludeVat: true,
-            vatAppliesToAll: true,
-            vatRate: 20,
-          );
-          await _receiptService.createReceipt(
-            receipt: receipt,
-            items: importResult.matchedItems,
-            isDraft: true,
-          );
-          if (mounted) {
-            _loadReceipts();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(l10n.importSuccess),
-                backgroundColor: Colors.green,
-              ),
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            _createDraftFromImportResult(
+              importResult,
+              l10n,
+              supplierName: supplierName,
+              warehouseId: warehouseId,
             );
-          }
+          });
         },
+      ),
+    );
+  }
+
+  /// Vytvorí draft príjemku z výsledku importu. Volané po zatvorení dialógu (addPostFrameCallback),
+  /// aby sa predišlo assertion chybám počas layoutu.
+  Future<void> _createDraftFromImportResult(
+    BulkImportResult importResult,
+    AppLocalizations l10n, {
+    String? supplierName,
+    int? warehouseId,
+  }) async {
+    List<InboundReceiptItem> allItems = List.from(importResult.matchedItems);
+    if (importResult.unmatchedRows.isNotEmpty) {
+      final newItems = await _importService.createProductsFromUnmatchedRows(
+        importResult.unmatchedRows,
+        warehouseId: warehouseId,
+      );
+      allItems.addAll(newItems);
+    }
+    final receipt = InboundReceipt(
+      receiptNumber: '',
+      createdAt: DateTime.now(),
+      supplierName: supplierName,
+      pricesIncludeVat: true,
+      vatAppliesToAll: true,
+      vatRate: 20,
+    );
+    await _receiptService.createReceipt(
+      receipt: receipt,
+      items: allItems,
+      isDraft: true,
+    );
+    if (!mounted) return;
+    _loadReceipts();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.importSuccess),
+        backgroundColor: Colors.green,
       ),
     );
   }
@@ -276,6 +357,11 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
               ),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.download_rounded, color: Colors.black87),
+                  tooltip: l10n.downloadImportTemplate,
+                  onPressed: _downloadImportTemplate,
+                ),
+                IconButton(
                   icon: const Icon(Icons.upload_file_rounded, color: Colors.black87),
                   tooltip: l10n.importFromExcel,
                   onPressed: _importFromExcel,
@@ -309,10 +395,29 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
   }
 }
 
-class _ImportPreviewDialog extends StatelessWidget {
+String _formatRowPrice(double? value) =>
+    value != null && value > 0 ? value.toStringAsFixed(2) : '-';
+String _formatRowVat(double? value) =>
+    value != null && value > 0 ? value.toStringAsFixed(0) : '-';
+
+Widget _importTableCell(String text, {bool isHeader = false, Color? color}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
+        color: color ?? (isHeader ? Colors.black87 : null),
+      ),
+    ),
+  );
+}
+
+class _ImportPreviewDialog extends StatefulWidget {
   final AppLocalizations l10n;
   final BulkImportResult importResult;
-  final VoidCallback onCreateDraft;
+  final void Function(String? supplierName, int? warehouseId) onCreateDraft;
 
   const _ImportPreviewDialog({
     required this.l10n,
@@ -321,53 +426,270 @@ class _ImportPreviewDialog extends StatelessWidget {
   });
 
   @override
+  State<_ImportPreviewDialog> createState() => _ImportPreviewDialogState();
+}
+
+class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
+  final SupplierService _supplierService = SupplierService();
+  final WarehouseService _warehouseService = WarehouseService();
+  List<Supplier> _suppliers = [];
+  List<Warehouse> _warehouses = [];
+  Supplier? _selectedSupplier;
+  Warehouse? _selectedWarehouse;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final suppliers = await _supplierService.getActiveSuppliers();
+    final warehouses = await _warehouseService.getAllWarehouses();
+    if (mounted) {
+      setState(() {
+        _suppliers = suppliers;
+        _warehouses = warehouses;
+        if (_warehouses.isNotEmpty && _selectedWarehouse == null) {
+          _selectedWarehouse = _warehouses.first;
+        }
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = widget.l10n;
+    final importResult = widget.importResult;
+    final totalValueStr = '${importResult.totalValue.toStringAsFixed(2)} €';
     return AlertDialog(
-      title: Text(l10n.importPreview),
+      title: Text(l10n.importSummaryTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n.matchedRowsCount(importResult.matchedCount),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              l10n.importPreview,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
+            Text(
+              l10n.importTotalRowsInFile(importResult.totalDataRows),
+              style: const TextStyle(fontSize: 13),
+            ),
+            if (importResult.skippedRows > 0)
+              Text(
+                l10n.importSkippedRows(importResult.skippedRows),
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.matchedRowsCount(importResult.matchedCount),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
             Text(
               l10n.unmatchedRowsCount(importResult.unmatchedCount),
               style: TextStyle(
+                fontSize: 13,
                 color: importResult.unmatchedCount > 0 ? Colors.orange : null,
               ),
             ),
-            if (importResult.unmatchedRows.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Nezhodné (PLU/Názov):',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                ),
-              ),
+            if (importResult.matchedCount + importResult.unmatchedCount > 0) ...[
               const SizedBox(height: 4),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 120),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: importResult.unmatchedRows.length,
-                  itemBuilder: (_, i) {
-                    final row = importResult.unmatchedRows[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '${row.plu.isNotEmpty ? row.plu : row.name ?? "?"} – ${row.qty} ${row.unit}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    );
-                  },
+              Text(
+                l10n.importTotalValue(totalValueStr),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
             ],
+            const SizedBox(height: 14),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else ...[
+              Text(
+                l10n.importSupplierLabel,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[800]),
+              ),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<Supplier?>(
+                value: _selectedSupplier,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                hint: Text(l10n.importOptionalNone),
+                items: [
+                  DropdownMenuItem<Supplier?>(value: null, child: Text(l10n.importOptionalNone)),
+                  ..._suppliers.map(
+                    (s) => DropdownMenuItem<Supplier?>(value: s, child: Text(s.name)),
+                  ),
+                ],
+                onChanged: (s) => setState(() => _selectedSupplier = s),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                l10n.importWarehouseLabel,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[800]),
+              ),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<Warehouse?>(
+                value: _selectedWarehouse,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  DropdownMenuItem<Warehouse?>(value: null, child: Text(l10n.importOptionalNone)),
+                  ..._warehouses.map(
+                    (w) => DropdownMenuItem<Warehouse?>(value: w, child: Text(w.name)),
+                  ),
+                ],
+                onChanged: (w) => setState(() => _selectedWarehouse = w),
+              ),
+            ],
+            const SizedBox(height: 14),
+            if (importResult.warnings.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                l10n.importWarnings,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange[800],
+                ),
+              ),
+              const SizedBox(height: 4),
+              ...importResult.warnings.map(
+                (w) => Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('• ', style: TextStyle(color: Colors.orange[700], fontSize: 12)),
+                      Expanded(child: Text(w, style: const TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text(
+              l10n.importFullTable,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 320,
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Table(
+                    columnWidths: const {
+                      0: IntrinsicColumnWidth(),
+                      1: IntrinsicColumnWidth(),
+                      2: IntrinsicColumnWidth(),
+                      3: IntrinsicColumnWidth(),
+                      4: IntrinsicColumnWidth(),
+                      5: IntrinsicColumnWidth(),
+                      6: IntrinsicColumnWidth(),
+                      7: IntrinsicColumnWidth(),
+                      8: IntrinsicColumnWidth(),
+                      9: IntrinsicColumnWidth(),
+                      10: IntrinsicColumnWidth(),
+                      11: IntrinsicColumnWidth(),
+                    },
+                    border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
+                    children: [
+                      TableRow(
+                        decoration: BoxDecoration(color: Colors.grey.shade200),
+                        children: [
+                          _importTableCell('PLU', isHeader: true),
+                          _importTableCell(l10n.reportProduct, isHeader: true),
+                          _importTableCell('Množstvo', isHeader: true),
+                          _importTableCell('MJ', isHeader: true),
+                          _importTableCell(l10n.importPricePurchaseWithoutVat, isHeader: true),
+                          _importTableCell(l10n.importPricePurchaseWithVat, isHeader: true),
+                          _importTableCell(l10n.importVatPurchase, isHeader: true),
+                          _importTableCell(l10n.importPriceSaleWithoutVat, isHeader: true),
+                          _importTableCell(l10n.importPriceSaleWithVat, isHeader: true),
+                          _importTableCell(l10n.importVatSale, isHeader: true),
+                          _importTableCell('Dodávateľ', isHeader: true),
+                          _importTableCell('Stav', isHeader: true),
+                        ],
+                      ),
+                      ...importResult.matchedItems.asMap().entries.map(
+                        (entry) {
+                          final i = entry.key;
+                          final item = entry.value;
+                          final row = i < importResult.matchedRows.length
+                              ? importResult.matchedRows[i]
+                              : null;
+                          final supplier = (i < importResult.matchedItemSupplierNames.length)
+                              ? (importResult.matchedItemSupplierNames[i] ?? '-')
+                              : '-';
+                          return TableRow(
+                            children: [
+                              _importTableCell(item.plu ?? ''),
+                              _importTableCell(item.productName ?? ''),
+                              _importTableCell('${item.qty}'),
+                              _importTableCell(item.unit),
+                              _importTableCell(_formatRowPrice(row?.purchasePriceWithoutVat)),
+                              _importTableCell(_formatRowPrice(row?.purchasePriceWithVat)),
+                              _importTableCell(_formatRowVat(row?.purchaseVatPercent)),
+                              _importTableCell(_formatRowPrice(row?.salePriceWithoutVat)),
+                              _importTableCell(_formatRowPrice(row?.salePriceWithVat)),
+                              _importTableCell(_formatRowVat(row?.saleVatPercent)),
+                              _importTableCell(supplier),
+                              _importTableCell(l10n.importStatusExisting, color: Colors.green.shade700),
+                            ],
+                          );
+                        },
+                      ),
+                      ...importResult.unmatchedRows.map(
+                        (row) => TableRow(
+                          children: [
+                            _importTableCell(row.plu.isNotEmpty ? row.plu : '-'),
+                            _importTableCell(row.name?.trim().isEmpty ?? true ? '-' : row.name!),
+                            _importTableCell('${row.qty}'),
+                            _importTableCell(row.unit),
+                            _importTableCell(_formatRowPrice(row.purchasePriceWithoutVat)),
+                            _importTableCell(_formatRowPrice(row.purchasePriceWithVat)),
+                            _importTableCell(_formatRowVat(row.purchaseVatPercent)),
+                            _importTableCell(_formatRowPrice(row.salePriceWithoutVat)),
+                            _importTableCell(_formatRowPrice(row.salePriceWithVat)),
+                            _importTableCell(_formatRowVat(row.saleVatPercent)),
+                            _importTableCell('-'),
+                            _importTableCell(l10n.importStatusNew, color: Colors.blue.shade700),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               l10n.excelFormatHint,
@@ -382,7 +704,10 @@ class _ImportPreviewDialog extends StatelessWidget {
           child: Text(l10n.cancel),
         ),
         FilledButton(
-          onPressed: onCreateDraft,
+          onPressed: () => widget.onCreateDraft(
+            _selectedSupplier?.name,
+            _selectedWarehouse?.id,
+          ),
           child: Text(l10n.createDraftReceipt),
         ),
       ],

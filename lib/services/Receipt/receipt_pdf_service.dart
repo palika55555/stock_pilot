@@ -48,6 +48,38 @@ class ReceiptPdfService {
     }
     total = (total * 100).round() / 100;
 
+    final defaultVat = receipt.vatRate ?? 20;
+    final vatBreakdown = <int, ({double sumWithVat, double sumWithoutVat, double vatAmount})>{};
+    for (final item in items) {
+      final vatRate = item.vatPercent ?? receipt.vatRate ?? defaultVat;
+      final lineTotalStored = (item.unitPrice * item.qty * 100).round() / 100;
+      double lineWithVat;
+      double lineWithoutVat;
+      if (receipt.pricesIncludeVat) {
+        lineWithVat = lineTotalStored;
+        lineWithoutVat = vatRate <= 0
+            ? lineTotalStored
+            : (lineTotalStored / (1 + vatRate / 100) * 100).round() / 100;
+      } else {
+        lineWithoutVat = lineTotalStored;
+        lineWithVat = vatRate <= 0
+            ? lineTotalStored
+            : (lineTotalStored * (1 + vatRate / 100) * 100).round() / 100;
+      }
+      final vatAmt = (lineWithVat - lineWithoutVat) * 100; final vatAmtR = (vatAmt.round()) / 100;
+      final cur = vatBreakdown[vatRate];
+      if (cur == null) {
+        vatBreakdown[vatRate] = (sumWithVat: lineWithVat, sumWithoutVat: lineWithoutVat, vatAmount: vatAmtR);
+      } else {
+        vatBreakdown[vatRate] = (
+          sumWithVat: ((cur.sumWithVat + lineWithVat) * 100).round() / 100,
+          sumWithoutVat: ((cur.sumWithoutVat + lineWithoutVat) * 100).round() / 100,
+          vatAmount: ((cur.vatAmount + vatAmtR) * 100).round() / 100,
+        );
+      }
+    }
+    final vatRatesSorted = vatBreakdown.keys.toList()..sort();
+
     final headerChildren = <pw.Widget>[
       pw.Text(
         c.effectiveDocumentTitle,
@@ -146,22 +178,11 @@ class ReceiptPdfService {
         lastPurchaseDateByProductId: lastPurchaseDateByProductId ?? {},
       ),
       pw.SizedBox(height: 16),
-      pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.end,
-        children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text(
-                'Spolu: ${_formatPrice(total)} €',
-                style: pw.TextStyle(
-                  fontSize: (c.bodyFontSize + 1).toDouble(),
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
+      _buildTotalAndVatSummary(
+        total: total,
+        vatBreakdown: vatBreakdown,
+        vatRatesSorted: vatRatesSorted,
+        bodyFontSize: c.bodyFontSize,
       ),
     ];
 
@@ -212,6 +233,14 @@ class ReceiptPdfService {
                     ),
                   ),
                   pw.SizedBox(height: 2),
+                  pw.Text(
+                    _formatDate(receipt.createdAt),
+                    style: pw.TextStyle(
+                      fontSize: c.bodyFontSize.toDouble(),
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
                   pw.Container(
                     width: double.infinity,
                     height: 1,
@@ -236,6 +265,81 @@ class ReceiptPdfService {
     return doc.save();
   }
 
+  static pw.Widget _buildTotalAndVatSummary({
+    required double total,
+    required Map<int, ({double sumWithVat, double sumWithoutVat, double vatAmount})> vatBreakdown,
+    required List<int> vatRatesSorted,
+    required int bodyFontSize,
+  }) {
+    final children = <pw.Widget>[
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.end,
+        children: [
+          pw.Text(
+            'Spolu: ${_formatPrice(total)} €',
+            style: pw.TextStyle(
+              fontSize: (bodyFontSize + 1).toDouble(),
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    ];
+    if (vatRatesSorted.length > 1) {
+      children.add(pw.SizedBox(height: 10));
+      children.add(
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(
+                'Rozpis podľa DPH:',
+                style: pw.TextStyle(
+                  fontSize: bodyFontSize.toDouble(),
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              ...vatRatesSorted.map((rate) {
+                final b = vatBreakdown[rate]!;
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Text(
+                    'DPH $rate%: základ ${_formatPrice(b.sumWithoutVat)} €, '
+                    'DPH ${_formatPrice(b.vatAmount)} €, spolu ${_formatPrice(b.sumWithVat)} €',
+                    style: pw.TextStyle(fontSize: bodyFontSize.toDouble()),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      );
+    } else if (vatRatesSorted.length == 1 && vatBreakdown[vatRatesSorted.single]!.vatAmount > 0) {
+      final b = vatBreakdown[vatRatesSorted.single]!;
+      children.add(pw.SizedBox(height: 4));
+      children.add(
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.end,
+          children: [
+            pw.Text(
+              'DPH ${vatRatesSorted.single}%: ${_formatPrice(b.vatAmount)} €',
+              style: pw.TextStyle(
+                fontSize: (bodyFontSize - 1).toDouble(),
+                color: PdfColors.grey700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+
   static pw.Widget _buildTable({
     required InboundReceipt receipt,
     required List<InboundReceiptItem> items,
@@ -243,8 +347,8 @@ class ReceiptPdfService {
     required PdfColor tableHeaderColor,
     required Map<String, String> lastPurchaseDateByProductId,
   }) {
-    final vatRate = receipt.vatRate ?? 0;
-    double unitPriceWithoutVat(double unitPrice) {
+    final defaultVatRate = receipt.vatRate ?? 0;
+    double unitPriceWithoutVat(double unitPrice, int vatRate) {
       if (!receipt.pricesIncludeVat || vatRate <= 0) return unitPrice;
       return (unitPrice / (1 + vatRate / 100) * 100).round() / 100;
     }
@@ -252,38 +356,35 @@ class ReceiptPdfService {
     final headerCells = <pw.Widget>[];
     final columnWidths = <int, pw.FlexColumnWidth>{};
     int colIndex = 0;
+    final showQtyUnit = c.showColQty || c.showColUnit;
 
     if (c.showColProductName) {
-      headerCells.add(ReceiptPdfService._cell('Položka', bold: true, fontSize: c.bodyFontSize));
+      headerCells.add(ReceiptPdfService._cell('Názov položky', bold: true, fontSize: c.bodyFontSize));
       columnWidths[colIndex++] = const pw.FlexColumnWidth(3);
     }
     if (c.showColPlu) {
-      headerCells.add(ReceiptPdfService._cell('PLU', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.8);
+      headerCells.add(ReceiptPdfService._cell('PLU / Kód', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.9);
     }
-    if (c.showColQty) {
-      headerCells.add(ReceiptPdfService._cell('Mn.', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.5);
-    }
-    if (c.showColUnit) {
-      headerCells.add(ReceiptPdfService._cell('MJ', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(0.5);
-    }
-    if (c.showColUnitPriceWithVat) {
-      headerCells.add(ReceiptPdfService._cell('Cena za MJ s DPH', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
+    if (showQtyUnit) {
+      headerCells.add(ReceiptPdfService._cell('Množstvo (Mn. + MJ)', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1.2);
     }
     if (c.showColUnitPriceWithoutVat) {
-      headerCells.add(ReceiptPdfService._cell('Cena za MJ bez DPH', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
-    }
-    if (c.showColTotal) {
-      headerCells.add(ReceiptPdfService._cell('Celkom', bold: true, fontSize: c.bodyFontSize));
-      columnWidths[colIndex++] = const pw.FlexColumnWidth(1);
+      headerCells.add(ReceiptPdfService._cell('Cena/MJ (bez DPH)', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1.2);
     }
     if (c.showColVatRate) {
       headerCells.add(ReceiptPdfService._cell('DPH %', bold: true, fontSize: c.bodyFontSize));
       columnWidths[colIndex++] = const pw.FlexColumnWidth(0.6);
+    }
+    if (c.showColUnitPriceWithVat) {
+      headerCells.add(ReceiptPdfService._cell('Cena/MJ (s DPH)', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1.2);
+    }
+    if (c.showColTotal) {
+      headerCells.add(ReceiptPdfService._cell('Celkom (s DPH)', bold: true, fontSize: c.bodyFontSize));
+      columnWidths[colIndex++] = const pw.FlexColumnWidth(1.2);
     }
     if (c.showColVatAmount) {
       headerCells.add(ReceiptPdfService._cell('DPH (€)', bold: true, fontSize: c.bodyFontSize));
@@ -295,7 +396,7 @@ class ReceiptPdfService {
     }
 
     if (headerCells.isEmpty) {
-      headerCells.add(ReceiptPdfService._cell('Položka', bold: true, fontSize: c.bodyFontSize));
+      headerCells.add(ReceiptPdfService._cell('Názov položky', bold: true, fontSize: c.bodyFontSize));
       columnWidths[0] = const pw.FlexColumnWidth(4);
     }
 
@@ -305,14 +406,15 @@ class ReceiptPdfService {
         children: headerCells,
       ),
       ...items.map((item) {
+        final itemVatRate = item.vatPercent ?? receipt.vatRate ?? 0;
         final lineTotal = (item.unitPrice * item.qty * 100).round() / 100;
         final name = item.productName ?? item.productUniqueId;
         final pluStr = item.plu ?? '';
-        final unitPriceNoVat = unitPriceWithoutVat(item.unitPrice);
+        final unitPriceNoVat = unitPriceWithoutVat(item.unitPrice, itemVatRate);
         final lineTotalNoVat = (unitPriceNoVat * item.qty * 100).round() / 100;
         final vatAmount = ((lineTotal - lineTotalNoVat) * 100).round() / 100;
         final lastPurchase = lastPurchaseDateByProductId[item.productUniqueId] ?? '–';
-        final vatRateStr = vatRate > 0 ? '$vatRate' : '0';
+        final vatRateStr = itemVatRate > 0 ? '$itemVatRate' : '0';
 
         final cells = <pw.Widget>[];
         if (c.showColProductName) {
@@ -321,23 +423,20 @@ class ReceiptPdfService {
         if (c.showColPlu) {
           cells.add(ReceiptPdfService._cell(pluStr, fontSize: c.bodyFontSize));
         }
-        if (c.showColQty) {
-          cells.add(ReceiptPdfService._cell('${item.qty}', fontSize: c.bodyFontSize));
-        }
-        if (c.showColUnit) {
-          cells.add(ReceiptPdfService._cell(item.unit, fontSize: c.bodyFontSize));
-        }
-        if (c.showColUnitPriceWithVat) {
-          cells.add(ReceiptPdfService._cell(_formatPrice(item.unitPrice), fontSize: c.bodyFontSize));
+        if (showQtyUnit) {
+          cells.add(ReceiptPdfService._cell('${item.qty} ${item.unit}', fontSize: c.bodyFontSize));
         }
         if (c.showColUnitPriceWithoutVat) {
-          cells.add(ReceiptPdfService._cell(_formatPrice(unitPriceNoVat), fontSize: c.bodyFontSize));
-        }
-        if (c.showColTotal) {
-          cells.add(ReceiptPdfService._cell(_formatPrice(lineTotal), fontSize: c.bodyFontSize));
+          cells.add(ReceiptPdfService._cell('${_formatPrice(unitPriceNoVat)} €', fontSize: c.bodyFontSize));
         }
         if (c.showColVatRate) {
-          cells.add(ReceiptPdfService._cell(vatRateStr, fontSize: c.bodyFontSize));
+          cells.add(ReceiptPdfService._cell('$vatRateStr%', fontSize: c.bodyFontSize));
+        }
+        if (c.showColUnitPriceWithVat) {
+          cells.add(ReceiptPdfService._cell('${_formatPrice(item.unitPrice)} €', fontSize: c.bodyFontSize));
+        }
+        if (c.showColTotal) {
+          cells.add(ReceiptPdfService._cell('${_formatPrice(lineTotal)} €', fontSize: c.bodyFontSize));
         }
         if (c.showColVatAmount) {
           cells.add(ReceiptPdfService._cell(_formatPrice(vatAmount), fontSize: c.bodyFontSize));

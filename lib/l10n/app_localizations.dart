@@ -1155,6 +1155,132 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'Chyba importu'**
   String get importError;
+
+  /// No description provided for @downloadImportTemplate.
+  ///
+  /// In sk, this message translates to:
+  /// **'Stiahnuť šablónu importu'**
+  String get downloadImportTemplate;
+
+  /// No description provided for @downloadImportTemplateSuccess.
+  ///
+  /// In sk, this message translates to:
+  /// **'Šablóna pripravená na uloženie alebo zdieľanie.'**
+  String get downloadImportTemplateSuccess;
+
+  /// No description provided for @importSummaryTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Kontrola a súhrn'**
+  String get importSummaryTitle;
+
+  /// No description provided for @importTotalRowsInFile.
+  ///
+  /// In sk, this message translates to:
+  /// **'Riadkov v súbore: {count}'**
+  String importTotalRowsInFile(int count);
+
+  /// No description provided for @importSkippedRows.
+  ///
+  /// In sk, this message translates to:
+  /// **'Riadkov vynechaných: {count}'**
+  String importSkippedRows(int count);
+
+  /// No description provided for @importTotalValue.
+  ///
+  /// In sk, this message translates to:
+  /// **'Celková hodnota: {value}'**
+  String importTotalValue(String value);
+
+  /// No description provided for @importWarnings.
+  ///
+  /// In sk, this message translates to:
+  /// **'Varovania'**
+  String get importWarnings;
+
+  /// No description provided for @importExistingProducts.
+  ///
+  /// In sk, this message translates to:
+  /// **'Existujúce produkty'**
+  String get importExistingProducts;
+
+  /// No description provided for @importNewProducts.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nové produkty (budú vytvorené)'**
+  String get importNewProducts;
+
+  /// No description provided for @importFullTable.
+  ///
+  /// In sk, this message translates to:
+  /// **'Kompletná tabuľka produktov'**
+  String get importFullTable;
+
+  /// No description provided for @importStatusExisting.
+  ///
+  /// In sk, this message translates to:
+  /// **'Existujúci'**
+  String get importStatusExisting;
+
+  /// No description provided for @importStatusNew.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nový'**
+  String get importStatusNew;
+
+  /// No description provided for @importSupplierLabel.
+  ///
+  /// In sk, this message translates to:
+  /// **'Dodávateľ pre príjemku'**
+  String get importSupplierLabel;
+
+  /// No description provided for @importWarehouseLabel.
+  ///
+  /// In sk, this message translates to:
+  /// **'Sklad pre nové produkty'**
+  String get importWarehouseLabel;
+
+  /// No description provided for @importOptionalNone.
+  ///
+  /// In sk, this message translates to:
+  /// **'— Nevybrať'**
+  String get importOptionalNone;
+
+  /// No description provided for @importPricePurchaseWithoutVat.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nákup bez DPH'**
+  String get importPricePurchaseWithoutVat;
+
+  /// No description provided for @importPricePurchaseWithVat.
+  ///
+  /// In sk, this message translates to:
+  /// **'Nákup s DPH'**
+  String get importPricePurchaseWithVat;
+
+  /// No description provided for @importVatPurchase.
+  ///
+  /// In sk, this message translates to:
+  /// **'DPH nákup %'**
+  String get importVatPurchase;
+
+  /// No description provided for @importPriceSaleWithoutVat.
+  ///
+  /// In sk, this message translates to:
+  /// **'Predaj bez DPH'**
+  String get importPriceSaleWithoutVat;
+
+  /// No description provided for @importPriceSaleWithVat.
+  ///
+  /// In sk, this message translates to:
+  /// **'Predaj s DPH'**
+  String get importPriceSaleWithVat;
+
+  /// No description provided for @importVatSale.
+  ///
+  /// In sk, this message translates to:
+  /// **'DPH predaj %'**
+  String get importVatSale;
 }
 
 class _AppLocalizationsDelegate

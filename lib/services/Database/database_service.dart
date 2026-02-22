@@ -53,7 +53,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 18,
+      version: 19,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -695,6 +695,12 @@ class DatabaseService {
         await db.execute('ALTER TABLE products ADD COLUMN last_purchase_price_without_vat REAL DEFAULT 0.0');
       }
     }
+    if (oldVersion < 19) {
+      final itemInfo = await db.rawQuery('PRAGMA table_info(inbound_receipt_items)');
+      if (!itemInfo.any((c) => c['name'] == 'vat_percent')) {
+        await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN vat_percent INTEGER');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -869,6 +875,7 @@ class DatabaseService {
         qty INTEGER NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
+        vat_percent INTEGER,
         FOREIGN KEY (receipt_id) REFERENCES inbound_receipts(id),
         FOREIGN KEY (product_unique_id) REFERENCES products(unique_id)
       )

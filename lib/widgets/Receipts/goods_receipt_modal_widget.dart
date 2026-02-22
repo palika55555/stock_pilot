@@ -35,6 +35,8 @@ class _ReceiptItemRow {
       TextEditingController();
   final TextEditingController unitPriceWithVatController =
       TextEditingController();
+  /// DPH % pre túto položku; prázdne = použiť spoločné DPH alebo DPH produktu.
+  final TextEditingController vatPercentController = TextEditingController();
   String get unit => product?.unit ?? 'ks';
 }
 
@@ -163,23 +165,35 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         row.product = product;
         row.qtyController.text = item.qty.toString();
 
+        double unitPriceForRow = item.unitPrice;
+        if (unitPriceForRow <= 0 && product != null && product.purchasePrice > 0) {
+          unitPriceForRow = product.purchasePrice;
+        }
+
         double priceWithoutVat;
         if (_pricesIncludeVat) {
-          final vat = _vatAppliesToAll
-              ? (int.tryParse(_vatRateController.text) ?? 20)
-              : (product?.purchaseVat ?? 20);
+          final vat = item.vatPercent ??
+              (_vatAppliesToAll
+                  ? int.tryParse(_vatRateController.text)
+                  : product?.purchaseVat) ??
+              20;
           priceWithoutVat = _receiptService.calculateWithoutVat(
-            item.unitPrice,
+            unitPriceForRow,
             vat,
           );
         } else {
-          priceWithoutVat = item.unitPrice;
+          priceWithoutVat = unitPriceForRow;
         }
 
         row.unitPriceWithoutVatController.text = priceWithoutVat
             .toStringAsFixed(5)
             .replaceAll(RegExp(r'0+$'), '')
             .replaceAll(RegExp(r'\.$'), '');
+        if (item.vatPercent != null) {
+          row.vatPercentController.text = item.vatPercent.toString();
+        }
+        row.unitPriceWithoutVatController.addListener(() => _updateRowWithVat(row));
+        row.vatPercentController.addListener(() => _updateRowWithVat(row));
         _updateRowWithVat(row);
         _rows.add(row);
       }
@@ -198,9 +212,17 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     }
   }
 
+  int _effectiveVatForRow(_ReceiptItemRow row) {
+    final rowVat = int.tryParse(row.vatPercentController.text.trim());
+    if (rowVat != null && rowVat >= 0 && rowVat <= 100) return rowVat;
+    if (_vatAppliesToAll) return int.tryParse(_vatRateController.text) ?? 20;
+    return row.product?.purchaseVat ?? 20;
+  }
+
   void _addRow() {
     final row = _ReceiptItemRow();
     row.unitPriceWithoutVatController.addListener(() => _updateRowWithVat(row));
+    row.vatPercentController.addListener(() => _updateRowWithVat(row));
     setState(() => _rows.add(row));
   }
 
@@ -210,9 +232,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           row.unitPriceWithoutVatController.text.replaceAll(',', '.'),
         ) ??
         0.0;
-    final vat = _vatAppliesToAll
-        ? (int.tryParse(_vatRateController.text) ?? 20)
-        : (row.product?.purchaseVat ?? 20);
+    final vat = _effectiveVatForRow(row);
     final priceWithVat = _receiptService.calculateWithVat(priceWithoutVat, vat);
     row.unitPriceWithVatController.text = priceWithVat.toStringAsFixed(2);
   }
@@ -229,6 +249,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       _rows[index].qtyController.dispose();
       _rows[index].unitPriceWithoutVatController.dispose();
       _rows[index].unitPriceWithVatController.dispose();
+      _rows[index].vatPercentController.dispose();
       _rows.removeAt(index);
     });
   }
@@ -311,9 +332,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         continue;
       }
 
-      final vat = _vatAppliesToAll
-          ? (int.tryParse(_vatRateController.text) ?? 20)
-          : (row.product?.purchaseVat ?? 20);
+      final vat = _effectiveVatForRow(row);
       final priceWithVat = _receiptService.calculateWithVat(
         priceWithoutVat,
         vat,
@@ -321,9 +340,6 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       final unitPriceToStore = _pricesIncludeVat
           ? priceWithVat
           : priceWithoutVat;
-
-      // Nákupná cena produktu (vážený priemer) sa mení len pri schválení príjemky, nie pri ukladaní.
-      // Tu len pripravíme položky príjemky.
 
       items.add(
         InboundReceiptItem(
@@ -334,6 +350,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           qty: qty,
           unit: row.unit,
           unitPrice: _roundPrice(unitPriceToStore),
+          vatPercent: vat,
         ),
       );
     }
@@ -513,6 +530,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       row.qtyController.dispose();
       row.unitPriceWithoutVatController.dispose();
       row.unitPriceWithVatController.dispose();
+      row.vatPercentController.dispose();
     }
     super.dispose();
   }
@@ -897,6 +915,21 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       filled: true,
                       fillColor: Colors.grey[100],
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 64,
+                  child: TextFormField(
+                    controller: row.vatPercentController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'DPH %',
+                      hintText: _vatAppliesToAll ? null : 'vlast.',
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   ),
                 ),
               ],
