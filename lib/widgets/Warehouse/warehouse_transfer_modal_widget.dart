@@ -46,14 +46,38 @@ class _WarehouseTransferModalState extends State<WarehouseTransferModal> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final wh = await _warehouseService.getActiveWarehouses();
-    final pr = await _productService.getAllProducts();
     if (mounted) {
       setState(() {
         _warehouses = wh;
+        _products = [];
+        _filteredProducts = [];
+        _loading = false;
+      });
+    }
+  }
+
+  /// Načíta produkty len zo zdrojového skladu (pri zmene skladu alebo prvom výbere).
+  Future<void> _loadProductsFromSourceWarehouse() async {
+    if (_fromWarehouse?.id == null) {
+      setState(() {
+        _products = [];
+        _filteredProducts = [];
+        _product = null;
+      });
+      return;
+    }
+    setState(() => _loading = true);
+    final pr = await _productService.getProductsByWarehouseId(_fromWarehouse!.id!);
+    if (mounted) {
+      setState(() {
         _products = pr;
         _filteredProducts = pr;
         _loading = false;
+        if (_product != null && !pr.any((p) => p.uniqueId == _product!.uniqueId)) {
+          _product = null;
+        }
       });
+      _filterProducts();
     }
   }
 
@@ -65,7 +89,7 @@ class _WarehouseTransferModalState extends State<WarehouseTransferModal> {
           : _products
               .where((p) =>
                   p.name.toLowerCase().contains(q) ||
-                  p.plu.toLowerCase().contains(q))
+                  (p.plu).toLowerCase().contains(q))
               .toList();
     });
   }
@@ -100,24 +124,36 @@ class _WarehouseTransferModalState extends State<WarehouseTransferModal> {
       return;
     }
     setState(() => _saving = true);
-    final transfer = WarehouseTransfer(
-      fromWarehouseId: _fromWarehouse!.id!,
-      toWarehouseId: _toWarehouse!.id!,
-      productUniqueId: _product!.uniqueId!,
-      productName: _product!.name,
-      productPlu: _product!.plu,
-      quantity: qty,
-      unit: _product!.unit,
-      createdAt: DateTime.now(),
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-    );
-    await _warehouseService.createWarehouseTransfer(transfer);
-    if (mounted) {
-      setState(() => _saving = false);
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Presun bol zaznamenaný')),
+    try {
+      final transfer = WarehouseTransfer(
+        fromWarehouseId: _fromWarehouse!.id!,
+        toWarehouseId: _toWarehouse!.id!,
+        productUniqueId: _product!.uniqueId!,
+        productName: _product!.name,
+        productPlu: _product!.plu,
+        quantity: qty,
+        unit: _product!.unit,
+        createdAt: DateTime.now(),
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       );
+      await _warehouseService.createWarehouseTransfer(transfer);
+      if (mounted) {
+        setState(() => _saving = false);
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Presun bol zaznamenaný a zásoby upravené')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Chyba: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -178,7 +214,10 @@ class _WarehouseTransferModalState extends State<WarehouseTransferModal> {
                                         child: Text('${w.name} (${w.code})'),
                                       ))
                                   .toList(),
-                              onChanged: (w) => setState(() => _fromWarehouse = w),
+                              onChanged: (w) {
+                                setState(() => _fromWarehouse = w);
+                                _loadProductsFromSourceWarehouse();
+                              },
                             ),
                             const SizedBox(height: 16),
                             const Text('Do skladu', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -199,7 +238,12 @@ class _WarehouseTransferModalState extends State<WarehouseTransferModal> {
                               onChanged: (w) => setState(() => _toWarehouse = w),
                             ),
                             const SizedBox(height: 16),
-                            const Text('Tovar', style: TextStyle(fontWeight: FontWeight.w600)),
+                            Text(
+                              _fromWarehouse == null
+                                  ? 'Najprv vyberte zdrojový sklad – potom sa načíta tovar'
+                                  : 'Tovar (zo skladu ${_fromWarehouse!.name})',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
                             const SizedBox(height: 6),
                             TextField(
                               controller: _productSearchController,

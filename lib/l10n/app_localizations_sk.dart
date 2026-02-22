@@ -507,6 +507,9 @@ class AppLocalizationsSk extends AppLocalizations {
   String get chooseWarehouse => 'Vyberte sklad';
 
   @override
+  String get warehouseFilterAll => 'Všetky sklady';
+
+  @override
   String get reportGenerated => 'Report bol vygenerovaný. Môžete ho zdieľať.';
 
   @override

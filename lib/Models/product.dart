@@ -22,6 +22,28 @@ class Product {
   final String? supplierName; // Dodávateľ (z poslednej schválenej príjemky)
   final int? kindId;
   final int? warehouseId;
+  /// Číslo viazanej položky (napr. fľaša k nápoju) – pri výdaji sa pridá s rovnakým množstvom.
+  final String? linkedProductUniqueId;
+
+  // --- Skladová karta (podľa OBERON plánu) ---
+  /// Minimálne množstvo – pri zobrazení zostatku pod touto hranicou sa množstvo zobrazí tučne.
+  final int minQuantity;
+  /// Umožniť pracovať s položkou na pokladnici.
+  final bool allowAtCashRegister;
+  /// Uvádzať v tlačovom výstupe Cenník.
+  final bool showInPriceList;
+  /// Neaktívna karta sa zobrazí prečiarknutá.
+  final bool isActive;
+  /// Dočasne nedostupná (prepína sa napr. cez F6) – zobrazí sa sivou.
+  final bool temporarilyUnavailable;
+  /// Skladová skupina – 1 karta = max. 1 skupina (logické delenie, číslovanie).
+  final String? stockGroup;
+  /// Typ karty: jednoduchá, služba, vratný obal, sada, výrobok, receptúra.
+  final String cardType;
+  /// Na kartu sa vzťahuje pravidlo rozšírenej cenotvorby – zobrazí sa fialovou.
+  final bool hasExtendedPricing;
+  /// Iba celé množstvá – pri predaji/výdaji musí byť množstvo celé číslo.
+  final bool ibaCeleMnozstva;
 
   /// Marža v % z predajnej ceny: (predajná - nákupná) / predajná × 100.
   /// Null ak predajná cena je 0 (nelze počítať).
@@ -52,6 +74,16 @@ class Product {
     this.supplierName,
     this.kindId,
     this.warehouseId,
+    this.linkedProductUniqueId,
+    this.minQuantity = 0,
+    this.allowAtCashRegister = true,
+    this.showInPriceList = true,
+    this.isActive = true,
+    this.temporarilyUnavailable = false,
+    this.stockGroup,
+    this.cardType = 'jednoduchá',
+    this.hasExtendedPricing = false,
+    this.ibaCeleMnozstva = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -79,6 +111,16 @@ class Product {
       'supplier_name': supplierName,
       'kind_id': kindId,
       'warehouse_id': warehouseId,
+      'linked_product_unique_id': linkedProductUniqueId,
+      'min_quantity': minQuantity,
+      'allow_at_cash_register': allowAtCashRegister ? 1 : 0,
+      'show_in_price_list': showInPriceList ? 1 : 0,
+      'is_active': isActive ? 1 : 0,
+      'temporarily_unavailable': temporarilyUnavailable ? 1 : 0,
+      'stock_group': stockGroup,
+      'card_type': cardType,
+      'has_extended_pricing': hasExtendedPricing ? 1 : 0,
+      'iba_cele_mnozstva': ibaCeleMnozstva ? 1 : 0,
     };
   }
 
@@ -110,6 +152,16 @@ class Product {
       supplierName: map['supplier_name'] as String?,
       kindId: map['kind_id'] as int?,
       warehouseId: map['warehouse_id'] as int?,
+      linkedProductUniqueId: map['linked_product_unique_id'] as String?,
+      minQuantity: (map['min_quantity'] as num?)?.toInt() ?? 0,
+      allowAtCashRegister: (map['allow_at_cash_register'] as num?)?.toInt() != 0,
+      showInPriceList: (map['show_in_price_list'] as num?)?.toInt() != 0,
+      isActive: (map['is_active'] as num?)?.toInt() != 0,
+      temporarilyUnavailable: (map['temporarily_unavailable'] as num?)?.toInt() == 1,
+      stockGroup: map['stock_group'] as String?,
+      cardType: map['card_type'] as String? ?? 'jednoduchá',
+      hasExtendedPricing: (map['has_extended_pricing'] as num?)?.toInt() == 1,
+      ibaCeleMnozstva: (map['iba_cele_mnozstva'] as num?)?.toInt() == 1,
     );
   }
 }

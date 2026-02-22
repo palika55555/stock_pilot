@@ -175,6 +175,7 @@
   "formatPdf": "PDF",
   "formatExcel": "Excel",
   "chooseWarehouse": "Vyberte sklad",
+  "warehouseFilterAll": "Všechny sklady",
   "reportGenerated": "Report byl vygenerován. Můžete ho sdílet.",
   "reportError": "Chyba při generování reportu",
   "reportProduct": "Produkt",

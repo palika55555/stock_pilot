@@ -175,6 +175,7 @@
   "formatPdf": "PDF",
   "formatExcel": "Excel",
   "chooseWarehouse": "Choose warehouse",
+  "warehouseFilterAll": "All warehouses",
   "reportGenerated": "Report generated. You can share it.",
   "reportError": "Error generating report",
   "reportProduct": "Product",

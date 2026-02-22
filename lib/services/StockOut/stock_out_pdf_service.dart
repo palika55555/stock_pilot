@@ -11,11 +11,16 @@ class StockOutPdfService {
   static String _formatPrice(double v) =>
       v.toStringAsFixed(2).replaceAll('.', ',');
 
-  /// Vráti PDF ako bajty. [issuedBy] = meno prihláseného používateľa (vystavil); ak null, použije sa stockOut.username.
+  /// Vráti PDF ako bajty.
+  /// [issuedBy] = meno prihláseného používateľa (vystavil); ak null, použije sa stockOut.username.
+  /// [documentTitle] = nadpis: 'Výdajka' alebo 'Dodací list' (rovnaké dáta).
+  /// [hidePrices] = true pre verziu bez cien (napr. pre kuriéra).
   static Future<Uint8List> buildPdf({
     required StockOut stockOut,
     required List<StockOutItem> items,
     String? issuedBy,
+    String documentTitle = 'VÝDAJKA TOVARU',
+    bool hidePrices = false,
   }) async {
     final baseFont = await PdfGoogleFonts.openSansRegular();
     final boldFont = await PdfGoogleFonts.openSansBold();
@@ -37,7 +42,7 @@ class StockOutPdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'VÝDAJKA TOVARU',
+                documentTitle.toUpperCase(),
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
@@ -127,63 +132,97 @@ class StockOutPdfService {
             ],
           ),
           pw.SizedBox(height: 20),
-          pw.Table(
-            border: pw.TableBorder.all(width: 0.5),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(3),
-              1: const pw.FlexColumnWidth(0.6),
-              2: const pw.FlexColumnWidth(0.5),
-              3: const pw.FlexColumnWidth(1),
-              4: const pw.FlexColumnWidth(1),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                children: [
-                  StockOutPdfService._cell('Položka / PLU', bold: true),
-                  StockOutPdfService._cell('Mn.', bold: true),
-                  StockOutPdfService._cell('MJ', bold: true),
-                  StockOutPdfService._cell('Cena za MJ', bold: true),
-                  StockOutPdfService._cell('Celkom', bold: true),
-                ],
-              ),
-              ...items.map((item) {
-                final lineTotal =
-                    (item.unitPrice * item.qty * 100).round() / 100;
-                final name = item.productName ?? item.productUniqueId;
-                final plu = item.plu != null && item.plu!.isNotEmpty
-                    ? ' (${item.plu})'
-                    : '';
-                return pw.TableRow(
+          hidePrices
+              ? pw.Table(
+                  border: pw.TableBorder.all(width: 0.5),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(3),
+                    1: pw.FlexColumnWidth(0.6),
+                    2: pw.FlexColumnWidth(0.5),
+                  },
                   children: [
-                    StockOutPdfService._cell('$name$plu'),
-                    StockOutPdfService._cell('${item.qty}'),
-                    StockOutPdfService._cell(item.unit),
-                    StockOutPdfService._cell(_formatPrice(item.unitPrice)),
-                    StockOutPdfService._cell(_formatPrice(lineTotal)),
-                  ],
-                );
-              }),
-            ],
-          ),
-          pw.SizedBox(height: 16),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    'Spolu: ${_formatPrice(total)} €',
-                    style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                      children: [
+                        StockOutPdfService._cell('Položka / PLU', bold: true),
+                        StockOutPdfService._cell('Mn.', bold: true),
+                        StockOutPdfService._cell('MJ', bold: true),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                    ...items.map((item) {
+                      final name = item.productName ?? item.productUniqueId;
+                      final plu = item.plu != null && item.plu!.isNotEmpty
+                          ? ' (${item.plu})'
+                          : '';
+                      return pw.TableRow(
+                        children: [
+                          StockOutPdfService._cell('$name$plu'),
+                          StockOutPdfService._cell('${item.qty}'),
+                          StockOutPdfService._cell(item.unit),
+                        ],
+                      );
+                    }),
+                  ],
+                )
+              : pw.Table(
+                  border: pw.TableBorder.all(width: 0.5),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(3),
+                    1: pw.FlexColumnWidth(0.6),
+                    2: pw.FlexColumnWidth(0.5),
+                    3: pw.FlexColumnWidth(1),
+                    4: pw.FlexColumnWidth(1),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                      children: [
+                        StockOutPdfService._cell('Položka / PLU', bold: true),
+                        StockOutPdfService._cell('Mn.', bold: true),
+                        StockOutPdfService._cell('MJ', bold: true),
+                        StockOutPdfService._cell('Cena za MJ', bold: true),
+                        StockOutPdfService._cell('Celkom', bold: true),
+                      ],
+                    ),
+                    ...items.map((item) {
+                      final lineTotal =
+                          (item.unitPrice * item.qty * 100).round() / 100;
+                      final name = item.productName ?? item.productUniqueId;
+                      final plu = item.plu != null && item.plu!.isNotEmpty
+                          ? ' (${item.plu})'
+                          : '';
+                      return pw.TableRow(
+                        children: [
+                          StockOutPdfService._cell('$name$plu'),
+                          StockOutPdfService._cell('${item.qty}'),
+                          StockOutPdfService._cell(item.unit),
+                          StockOutPdfService._cell(_formatPrice(item.unitPrice)),
+                          StockOutPdfService._cell(_formatPrice(lineTotal)),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+          if (!hidePrices) ...[
+            pw.SizedBox(height: 16),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Spolu: ${_formatPrice(total)} €',
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
           pw.SizedBox(height: 28),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

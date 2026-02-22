@@ -32,6 +32,7 @@ const List<({String id, String label})> _warehouseSupplyTableColumns = [
   (id: 'mena', label: 'Mena'),
   (id: 'typ', label: 'Typ'),
   (id: 'lokacia', label: 'Lokácia'),
+  (id: 'sklad', label: 'Sklad'),
 ];
 
 const String _prefsColumnVisibilityKey = 'warehouse_supplies_visible_columns';
@@ -152,6 +153,17 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                 (p) => p.supplierName ?? '', i, a),
           ));
           break;
+        case 'sklad':
+          cols.add(DataColumn(
+            label: const Text('Sklad'),
+            onSort: (i, a) => _sort((p) {
+              final wh = p.warehouseId != null
+                  ? _warehouses.where((w) => w.id == p.warehouseId).firstOrNull
+                  : null;
+              return wh?.name ?? '';
+            }, i, a),
+          ));
+          break;
         default:
           cols.add(DataColumn(
             label: Text(c.label),
@@ -183,26 +195,35 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     return -1;
   }
 
+  /// Vizuálne stavy skladovej karty (OBERON): neaktívna = prečiarknuté, nedostupná = sivá, rozšírená cenotvorba = fialová.
+  TextStyle? _rowStyleForProduct(Product product) {
+    if (!product.isActive) {
+      return TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey[700]);
+    }
+    if (product.temporarilyUnavailable) {
+      return TextStyle(color: Colors.grey[600]);
+    }
+    if (product.hasExtendedPricing) {
+      return const TextStyle(color: Color(0xFF6A1B9A));
+    }
+    return null;
+  }
+
   List<DataCell> _buildRowCells(
     Product product,
     int index,
     bool lowStock,
     bool isAdmin,
   ) {
+    final rowStyle = _rowStyleForProduct(product);
     final cells = <DataCell>[
-      DataCell(Text(
-        '${index + 1}.',
-        style: const TextStyle(color: Colors.grey),
-      )),
-      DataCell(Text(
-        product.plu,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      )),
-      DataCell(Text(product.name)),
+      DataCell(Text('${index + 1}.', style: rowStyle ?? const TextStyle(color: Colors.grey))),
+      DataCell(Text(product.plu, style: (rowStyle ?? const TextStyle()).copyWith(fontWeight: FontWeight.bold))),
+      DataCell(Text(product.name, style: rowStyle ?? const TextStyle())),
     ];
     for (final c in _warehouseSupplyTableColumns) {
       if (_columnVisibility[c.id] != true) continue;
-      cells.add(_cellForColumn(c.id, product, lowStock));
+      cells.add(_cellForColumn(c.id, product, lowStock, rowStyle));
     }
     cells.add(DataCell(
       Row(
@@ -279,22 +300,20 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     }
   }
 
-  DataCell _cellForColumn(String id, Product product, bool lowStock) {
+  DataCell _cellForColumn(String id, Product product, bool lowStock, TextStyle? rowStyle) {
+    TextStyle merge(TextStyle base) => rowStyle != null ? base.merge(rowStyle) : base;
     switch (id) {
       case 'predaj_bez_dph':
-        return DataCell(Text(
-            '${product.withoutVat.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.withoutVat.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'predaj_s_dph':
-        return DataCell(Text('${product.price.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.price.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'marza':
         final m = product.marginPercent;
-        return DataCell(Text(
-            m != null ? '${m.toStringAsFixed(1)} %' : '–'));
+        return DataCell(Text(m != null ? '${m.toStringAsFixed(1)} %' : '–', style: merge(const TextStyle())));
       case 'dph':
-        return DataCell(Text('${product.vat} %'));
+        return DataCell(Text('${product.vat} %', style: merge(const TextStyle())));
       case 'dph_eur':
-        return DataCell(Text(
-            '${(product.price - product.withoutVat).toStringAsFixed(2)} €'));
+        return DataCell(Text('${(product.price - product.withoutVat).toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'mnozstvo':
         return DataCell(
           Container(
@@ -305,39 +324,47 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
             ),
             child: Text(
               '${product.qty} ${product.unit}',
-              style: TextStyle(
+              style: merge(TextStyle(
                 color: lowStock ? Colors.red[700]! : Colors.green[700]!,
                 fontWeight: FontWeight.bold,
-              ),
+              )),
             ),
           ),
         );
       case 'zlava':
-        return DataCell(Text('${product.discount} %'));
+        return DataCell(Text('${product.discount} %', style: merge(const TextStyle())));
       case 'nakup_bez_dph':
-        return DataCell(Text(
-            '${product.purchasePriceWithoutVat.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.purchasePriceWithoutVat.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'nakup_s_dph':
-        return DataCell(Text(
-            '${product.purchasePrice.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.purchasePrice.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'nakup_dph':
-        return DataCell(Text('${product.purchaseVat} %'));
+        return DataCell(Text('${product.purchaseVat} %', style: merge(const TextStyle())));
       case 'recykl':
-        return DataCell(Text(
-            '${product.recyclingFee.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.recyclingFee.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'posl_datum':
-        return DataCell(Text(product.lastPurchaseDate));
+        return DataCell(Text(product.lastPurchaseDate, style: merge(const TextStyle())));
       case 'posl_nakup_bez_dph':
-        return DataCell(Text(
-            '${product.lastPurchasePriceWithoutVat.toStringAsFixed(2)} €'));
+        return DataCell(Text('${product.lastPurchasePriceWithoutVat.toStringAsFixed(2)} €', style: merge(const TextStyle())));
       case 'dodavatel':
-        return DataCell(Text(product.supplierName ?? '–'));
+        return DataCell(Text(product.supplierName ?? '–', style: merge(const TextStyle())));
       case 'mena':
-        return DataCell(Text(product.currency));
+        return DataCell(Text(product.currency, style: merge(const TextStyle())));
       case 'typ':
-        return DataCell(Text(product.productType));
+        return DataCell(Text(product.productType, style: merge(const TextStyle())));
       case 'lokacia':
-        return DataCell(Text(product.location));
+        return DataCell(Text(product.location.isEmpty ? '–' : product.location, style: merge(const TextStyle())));
+      case 'sklad': {
+        Warehouse? wh;
+        if (product.warehouseId != null) {
+          try {
+            wh = _warehouses.firstWhere((w) => w.id == product.warehouseId);
+          } catch (_) {
+            wh = null;
+          }
+        }
+        final skladName = wh?.name ?? '–';
+        return DataCell(Text(skladName, style: merge(const TextStyle())));
+      }
       default:
         return const DataCell(Text(''));
     }
@@ -651,7 +678,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       List<Product> base = _selectedWarehouse == null
           ? List.from(_allProducts)
           : _allProducts
-              .where((p) => p.productType == _selectedWarehouse!.warehouseType)
+              .where((p) => p.warehouseId == _selectedWarehouse!.id)
               .toList();
       final query = _searchController.text.trim();
       if (query.isEmpty) {
@@ -713,6 +740,19 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     });
   }
 
+  void _openAddRecipeModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => AddProductModal(initialCardType: 'receptúra'),
+    ).then((result) {
+      if (result != null) _loadProducts();
+    });
+  }
+
   void _openEditProductModal(Product product) {
     showModalBottomSheet(
       context: context,
@@ -761,6 +801,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   isAdmin: isAdmin,
                   onFilterTap: _showWarehouseFilter,
                   onColumnsTap: _showColumnSelector,
+                  onAddRecipeTap: _openAddRecipeModal,
                   selectedWarehouseName: _selectedWarehouse?.name,
                 ),
                 WarehouseQuickStats(
@@ -769,7 +810,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                     0,
                     (sum, p) => sum + (p.price * p.qty),
                   ),
-                  lowStockCount: _foundProducts.where((p) => p.qty < 10).length,
+                  lowStockCount: _foundProducts.where((p) => p.minQuantity > 0 && p.qty < p.minQuantity).length,
                   onLowStockTap: _showLowStockModal,
                 ),
                 Expanded(
@@ -798,7 +839,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   }
 
   void _showLowStockModal() {
-    final lowStockProducts = _foundProducts.where((p) => p.qty < 10).toList();
+    final lowStockProducts = _foundProducts.where((p) => p.minQuantity > 0 && p.qty < p.minQuantity).toList();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -971,7 +1012,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                 ) {
                                   final index = entry.key;
                                   final product = entry.value;
-                                  final lowStock = product.qty < 10;
+                                  final lowStock = product.minQuantity > 0 && product.qty < product.minQuantity;
                                   return DataRow(
                                     selected: _selectedIds.contains(
                                       product.uniqueId,

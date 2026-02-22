@@ -1,4 +1,5 @@
 import '../../models/warehouse.dart';
+import '../../models/warehouse_movement_record.dart';
 import '../../models/warehouse_transfer.dart';
 import '../Database/database_service.dart';
 
@@ -42,7 +43,13 @@ class WarehouseService {
     return await _db.getWarehouseTransfers();
   }
 
+  /// Vytvorí presun a aktualizuje zásoby (zdroj −qty, cieľ +qty alebo nová karta).
   Future<int> createWarehouseTransfer(WarehouseTransfer transfer) async {
-    return await _db.insertWarehouseTransfer(transfer);
+    return await _db.executeWarehouseTransfer(transfer);
+  }
+
+  /// Záznamy knihy skladových pohybov (príjmy, výdaje, presuny). Ak [warehouseId] je zadané, len pohyby daného skladu.
+  Future<List<WarehouseMovementRecord>> getWarehouseMovementRecords({int? warehouseId}) async {
+    return await _db.getAllWarehouseMovementRecords(warehouseId: warehouseId);
   }
 }

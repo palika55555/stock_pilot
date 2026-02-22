@@ -8,6 +8,7 @@ import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/screens/customers/customers_page.dart';
 import 'package:stock_pilot/screens/suppliers/suppliers_page.dart';
 import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
+import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 
@@ -261,6 +262,20 @@ class _MenuItemsList extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => WarehouseMovementsScreen(userRole: userRole),
+              ),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
+          delay: 350,
+          icon: Icons.output_rounded,
+          title: l10n.outboundReceipts,
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StockOutScreen(userRole: userRole),
               ),
             );
           },

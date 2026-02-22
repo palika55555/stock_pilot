@@ -14,6 +14,28 @@ enum InboundReceiptStatus {
   }
 }
 
+/// Druh pohybu príjemky (bežná príjemka, prevodka, s obstarávacími nákladmi...).
+class ReceiptMovementType {
+  final int? id;
+  final String code;
+  final String name;
+
+  ReceiptMovementType({this.id, required this.code, required this.name});
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'code': code,
+        'name': name,
+      };
+
+  factory ReceiptMovementType.fromMap(Map<String, dynamic> map) =>
+      ReceiptMovementType(
+        id: map['id'] as int?,
+        code: map['code'] as String? ?? 'STANDARD',
+        name: map['name'] as String? ?? 'Bežná príjemka',
+      );
+}
+
 /// Inbound receipt (príjemka) header.
 class InboundReceipt {
   final int? id;
@@ -27,6 +49,12 @@ class InboundReceipt {
   final bool vatAppliesToAll;
   final int? vatRate;
   final InboundReceiptStatus status;
+  /// Sklad, do ktorého sa tovar prijíma (povinné).
+  final int? warehouseId;
+  /// Druh pohybu (kód z číselníka receipt_movement_types).
+  final String movementTypeCode;
+  /// Vysporiadaná = ku príjemke bol zaevidovaný daňový doklad alebo sa neočakáva žiadny.
+  final bool isSettled;
 
   InboundReceipt({
     this.id,
@@ -40,6 +68,9 @@ class InboundReceipt {
     this.vatAppliesToAll = false,
     this.vatRate,
     this.status = InboundReceiptStatus.vykazana,
+    this.warehouseId,
+    this.movementTypeCode = 'STANDARD',
+    this.isSettled = false,
   });
 
   bool get isEditable => status != InboundReceiptStatus.schvalena;
@@ -59,6 +90,9 @@ class InboundReceipt {
       'vat_applies_to_all': vatAppliesToAll ? 1 : 0,
       'vat_rate': vatRate,
       'status': status.value,
+      'warehouse_id': warehouseId,
+      'movement_type_code': movementTypeCode,
+      'je_vysporiadana': isSettled ? 1 : 0,
     };
   }
 
@@ -75,6 +109,9 @@ class InboundReceipt {
       vatAppliesToAll: (map['vat_applies_to_all'] as int?) == 1,
       vatRate: map['vat_rate'] as int?,
       status: InboundReceiptStatus.fromString(map['status'] as String?),
+      warehouseId: map['warehouse_id'] as int?,
+      movementTypeCode: map['movement_type_code'] as String? ?? 'STANDARD',
+      isSettled: (map['je_vysporiadana'] as int?) == 1,
     );
   }
 
@@ -90,6 +127,9 @@ class InboundReceipt {
     bool? vatAppliesToAll,
     int? vatRate,
     InboundReceiptStatus? status,
+    int? warehouseId,
+    String? movementTypeCode,
+    bool? isSettled,
   }) {
     return InboundReceipt(
       id: id ?? this.id,
@@ -103,6 +143,9 @@ class InboundReceipt {
       vatAppliesToAll: vatAppliesToAll ?? this.vatAppliesToAll,
       vatRate: vatRate ?? this.vatRate,
       status: status ?? this.status,
+      warehouseId: warehouseId ?? this.warehouseId,
+      movementTypeCode: movementTypeCode ?? this.movementTypeCode,
+      isSettled: isSettled ?? this.isSettled,
     );
   }
 }

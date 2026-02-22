@@ -7,8 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/stock_out.dart';
+import '../../models/warehouse.dart';
 import '../../services/StockOut/stock_out_pdf_service.dart';
 import '../../services/StockOut/stock_out_service.dart';
+import '../../services/Warehouse/warehouse_service.dart';
 import '../../widgets/Receipts/stock_out_list_widget.dart';
 import '../../widgets/Receipts/stock_out_modal_widget.dart';
 
@@ -24,7 +26,10 @@ class StockOutScreen extends StatefulWidget {
 
 class _StockOutScreenState extends State<StockOutScreen> {
   final StockOutService _stockOutService = StockOutService();
+  final WarehouseService _warehouseService = WarehouseService();
   List<StockOut> _stockOuts = [];
+  List<Warehouse> _warehouses = [];
+  int? _selectedWarehouseId; // null = všetky sklady
   bool _isLoading = true;
   StockOutIssueType? _issueTypeFilter; // null = všetky typy
   DateTime _selectedDate = DateTime.now();
@@ -36,7 +41,13 @@ class _StockOutScreenState extends State<StockOutScreen> {
   @override
   void initState() {
     super.initState();
+    _loadWarehouses();
     _loadStockOuts();
+  }
+
+  Future<void> _loadWarehouses() async {
+    final list = await _warehouseService.getAllWarehouses();
+    if (mounted) setState(() => _warehouses = list);
   }
 
   List<StockOut> get _filteredStockOuts {
@@ -65,7 +76,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
 
   Future<void> _loadStockOuts() async {
     setState(() => _isLoading = true);
-    final list = await _stockOutService.getAllStockOuts();
+    final list = await _stockOutService.getStockOutsByWarehouseId(_selectedWarehouseId);
     if (mounted) {
       setState(() {
         _stockOuts = list;
@@ -74,33 +85,75 @@ class _StockOutScreenState extends State<StockOutScreen> {
     }
   }
 
-  Widget _buildFilters() {
-    const tabColor = Color(0xFFDC2626);
+  /// Filtre Sklad + Druh pohybu v spodnej časti AppBar.
+  Widget _buildAppBarFilters() {
     return Container(
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
+        ),
+      ),
+      child: Row(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-            child: Row(
-              children: [
-                _buildTab('Všetky', _issueTypeFilter == null, () => setState(() => _issueTypeFilter = null), tabColor),
+          Icon(Icons.warehouse_rounded, size: 20, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonFormField<int?>(
+              value: _selectedWarehouseId,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                filled: true,
+                fillColor: Colors.grey.withOpacity(0.08),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('Všetky sklady')),
+                ..._warehouses.map(
+                  (w) => DropdownMenuItem<int?>(value: w.id, child: Text(w.name)),
+                ),
+              ],
+              onChanged: (id) {
+                setState(() {
+                  _selectedWarehouseId = id;
+                  _loadStockOuts();
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(Icons.category_rounded, size: 20, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonFormField<StockOutIssueType?>(
+              value: _issueTypeFilter,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                filled: true,
+                fillColor: Colors.grey.withOpacity(0.08),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<StockOutIssueType?>(value: null, child: Text('Všetky')),
                 ...StockOutIssueType.values.map(
-                  (t) => _buildTab(
-                    t.label,
-                    _issueTypeFilter == t,
-                    () => setState(() => _issueTypeFilter = t),
-                    tabColor,
+                  (t) => DropdownMenuItem<StockOutIssueType?>(
+                    value: t,
+                    child: Text(t.label),
                   ),
                 ),
               ],
+              onChanged: (t) => setState(() => _issueTypeFilter = t),
             ),
-          ),
-          Container(
-            height: 1,
-            color: const Color(0xFFE5E7EB),
           ),
         ],
       ),
@@ -169,34 +222,6 @@ class _StockOutScreenState extends State<StockOutScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, bool selected, VoidCallback onTap, Color accentColor) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? accentColor : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected ? accentColor : const Color(0xFF64748B),
-            ),
-          ),
         ),
       ),
     );
@@ -282,6 +307,27 @@ class _StockOutScreenState extends State<StockOutScreen> {
 
   Future<void> _exportStockOutPdf(StockOut stockOut) async {
     if (stockOut.id == null) return;
+    final choice = await showDialog<({String title, bool hidePrices})>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Tlač výdajky'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, (title: 'VÝDAJKA TOVARU', hidePrices: false)),
+            child: const Text('Výdajka (s cenami)'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, (title: 'DODACÍ LIST', hidePrices: false)),
+            child: const Text('Dodací list (s cenami)'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, (title: 'DODACÍ LIST', hidePrices: true)),
+            child: const Text('Dodací list bez cien (pre kuriéra)'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
     final items = await _stockOutService.getStockOutItems(stockOut.id!);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -299,6 +345,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
         stockOut: stockOut,
         items: items,
         issuedBy: issuedBy,
+        documentTitle: choice.title,
+        hidePrices: choice.hidePrices,
       );
       final filename =
           'vydajka_${stockOut.documentNumber.replaceAll(RegExp(r'[^\w\-.]'), '_')}.pdf';
@@ -356,18 +404,21 @@ class _StockOutScreenState extends State<StockOutScreen> {
     }
   }
 
+  static const double _appBarHeight = 70;
+  static const double _appBarFilterHeight = 56;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
+        preferredSize: const Size.fromHeight(_appBarHeight + _appBarFilterHeight),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.white.withOpacity(0.85),
               elevation: 0,
               centerTitle: false,
               leading: IconButton(
@@ -379,31 +430,37 @@ class _StockOutScreenState extends State<StockOutScreen> {
                 style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.w900,
-                  fontSize: 26,
+                  fontSize: 22,
                 ),
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(_appBarFilterHeight),
+                child: _buildAppBarFilters(),
               ),
             ),
           ),
         ),
       ),
-      body: Column(
-        children: [
-          _buildFilters(),
-          _buildDateBar(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
-                : StockOutList(
-                    stockOuts: _filteredStockOuts,
-                    canEditApproved: widget.userRole == 'admin',
-                    onAddTap: _openNewModal,
-                    onApprove: _approveStockOut,
-                    onEdit: _openEditModal,
-                    onStorno: _stornoStockOut,
-                    onExportPdf: _exportStockOutPdf,
-                  ),
-          ),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.only(top: _appBarHeight + _appBarFilterHeight),
+        child: Column(
+          children: [
+            _buildDateBar(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
+                  : StockOutList(
+                      stockOuts: _filteredStockOuts,
+                      canEditApproved: widget.userRole == 'admin',
+                      onAddTap: _openNewModal,
+                      onApprove: _approveStockOut,
+                      onEdit: _openEditModal,
+                      onStorno: _stornoStockOut,
+                      onExportPdf: _exportStockOutPdf,
+                    ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openNewModal,

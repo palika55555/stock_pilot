@@ -8,11 +8,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/product.dart';
 import '../../models/receipt.dart';
 import '../../models/receipt_pdf_style_config.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/Receipt/receipt_service.dart';
-import '../../services/Receipt/receipt_pdf_service.dart';
+import '../../services/Receipt/prijemka_pdf_generator.dart';
 import '../../models/supplier.dart';
 import '../../models/warehouse.dart';
 import '../../services/Receipt/bulk_receipt_import_service.dart';
@@ -32,18 +33,42 @@ class GoodsReceiptScreen extends StatefulWidget {
 class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
   final ReceiptService _receiptService = ReceiptService();
   final BulkReceiptImportService _importService = BulkReceiptImportService();
+  final WarehouseService _warehouseService = WarehouseService();
   List<InboundReceipt> _receipts = [];
+  List<Warehouse> _warehouses = [];
+  Map<String, String> _movementTypeNames = {};
+  int? _filterWarehouseId;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadWarehouses();
+    _loadMovementTypes();
     _loadReceipts();
+  }
+
+  Future<void> _loadWarehouses() async {
+    final list = await _warehouseService.getActiveWarehouses();
+    if (mounted) setState(() => _warehouses = list);
+  }
+
+  Future<void> _loadMovementTypes() async {
+    final list = await _receiptService.getReceiptMovementTypes();
+    if (mounted) {
+      setState(() {
+        _movementTypeNames = {
+          for (final t in list) t.code: t.name,
+        };
+      });
+    }
   }
 
   Future<void> _loadReceipts() async {
     setState(() => _isLoading = true);
-    final list = await _receiptService.getAllReceipts();
+    final list = await _receiptService.getAllReceipts(
+      warehouseId: _filterWarehouseId,
+    );
     if (mounted) {
       setState(() {
         _receipts = list;
@@ -56,10 +81,14 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.82,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => GoodsReceiptModal(),
+      builder: (context) => const GoodsReceiptModal(),
     ).then((saved) {
       if (saved == true) _loadReceipts();
     });
@@ -70,6 +99,10 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.82,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -93,14 +126,63 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     }
   }
 
+  /// Zobrazí výber typu tlače (účtovná, s predajnými cenami, slepá, so stavmi) a spustí generovanie.
   Future<void> _printReceiptPdf(InboundReceipt receipt) async {
+    if (receipt.id == null) return;
+    final type = await showModalBottomSheet<PrintType>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Typ tlačového výstupu',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...PrintType.values.map((t) => ListTile(
+                    leading: Icon(
+                      t == PrintType.standard
+                          ? Icons.description_outlined
+                          : t == PrintType.retail
+                              ? Icons.storefront_outlined
+                              : t == PrintType.warehouse
+                                  ? Icons.inventory_2_outlined
+                                  : Icons.analytics_outlined,
+                      color: const Color(0xFF10B981),
+                    ),
+                    title: Text(t.label),
+                    onTap: () => Navigator.pop(context, t),
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (type == null || !mounted) return;
+    await _printReceiptPdfWithType(receipt, type);
+  }
+
+  Future<void> _printReceiptPdfWithType(InboundReceipt receipt, PrintType type) async {
     if (receipt.id == null) return;
     final items = await _receiptService.getReceiptItems(receipt.id!);
     if (items.isEmpty && !mounted) return;
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Pripravujem PDF...')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pripravujem PDF...')),
+      );
     }
     try {
       String? issuedBy;
@@ -110,9 +192,27 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
             prefs.getString('current_user_username');
       } catch (_) {}
       final styleConfig = await ReceiptPdfStyleConfig.load();
+      final db = DatabaseService();
+
+      String? warehouseName;
+      if (receipt.warehouseId != null) {
+        final wh = await db.getWarehouseById(receipt.warehouseId!);
+        warehouseName = wh?.name;
+      }
+
       Map<String, String> lastPurchaseByProduct = {};
-      if (styleConfig.showColLastPurchaseDate) {
-        final db = DatabaseService();
+      Map<String, Product> productsByUniqueId = {};
+      if (type == PrintType.retail || type == PrintType.stocks) {
+        for (final item in items) {
+          final product = await db.getProductByUniqueId(item.productUniqueId);
+          if (product != null) {
+            productsByUniqueId[item.productUniqueId] = product;
+            if (product.lastPurchaseDate.isNotEmpty) {
+              lastPurchaseByProduct[item.productUniqueId] = product.lastPurchaseDate;
+            }
+          }
+        }
+      } else if (styleConfig.showColLastPurchaseDate) {
         for (final item in items) {
           final product = await db.getProductByUniqueId(item.productUniqueId);
           if (product != null && product.lastPurchaseDate.isNotEmpty) {
@@ -120,15 +220,26 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
           }
         }
       }
-      final pdfBytes = await ReceiptPdfService.buildPdf(
+
+      final pdfContext = PrijemkaPdfContext(
+        issuedBy: issuedBy,
+        warehouseName: warehouseName,
+        warehouseId: receipt.warehouseId,
+        lastPurchaseDateByProductId: lastPurchaseByProduct,
+        productsByUniqueId: productsByUniqueId,
+        styleConfig: styleConfig,
+      );
+
+      final pdfBytes = await PrijemkaPdfGenerator.generatePdf(
         receipt: receipt,
         items: items,
-        issuedBy: issuedBy,
-        styleConfig: styleConfig,
-        lastPurchaseDateByProductId: lastPurchaseByProduct,
+        type: type,
+        context: pdfContext,
       );
+
+      final suffix = type.name.toLowerCase();
       final filename =
-          'prijemka_${receipt.receiptNumber.replaceAll(RegExp(r'[^\w\-.]'), '_')}.pdf';
+          'prijemka_${receipt.receiptNumber.replaceAll(RegExp(r'[^\w\-.]'), '_')}_$suffix.pdf';
       try {
         await Printing.sharePdf(bytes: pdfBytes, filename: filename);
         if (mounted) {
@@ -280,6 +391,8 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
       pricesIncludeVat: true,
       vatAppliesToAll: true,
       vatRate: 20,
+      warehouseId: warehouseId,
+      movementTypeCode: 'STANDARD',
     );
     await _receiptService.createReceipt(
       receipt: receipt,
@@ -356,6 +469,41 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
                 ),
               ),
               actions: [
+                SizedBox(
+                  width: 180,
+                  child: DropdownButtonFormField<int?>(
+                    isExpanded: true,
+                    value: _filterWarehouseId,
+                    decoration: const InputDecoration(
+                      labelText: 'Sklad',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Všetky sklady'),
+                      ),
+                      ..._warehouses.map(
+                        (w) => DropdownMenuItem(
+                          value: w.id,
+                          child: Text(
+                            w.name,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (id) {
+                      setState(() {
+                        _filterWarehouseId = id;
+                        _loadReceipts();
+                      });
+                    },
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.download_rounded, color: Colors.black87),
                   tooltip: l10n.downloadImportTemplate,
@@ -371,15 +519,27 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : GoodsReceiptList(
-              receipts: _receipts,
-              onAddTap: _openNewReceiptModal,
-              onApprove: _approveReceipt,
-              onEdit: _openEditModal,
-              onPrintPdf: _printReceiptPdf,
+      body: Padding(
+        padding: const EdgeInsets.only(top: kToolbarHeight + 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : GoodsReceiptList(
+                    receipts: _receipts,
+                    warehouses: _warehouses,
+                    movementTypeNames: _movementTypeNames,
+                    onAddTap: _openNewReceiptModal,
+                    onApprove: _approveReceipt,
+                    onEdit: _openEditModal,
+                    onPrintPdf: _printReceiptPdf,
+                  ),
             ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openNewReceiptModal,
         backgroundColor: const Color(0xFF10B981),
@@ -528,6 +688,7 @@ class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
               ),
               const SizedBox(height: 4),
               DropdownButtonFormField<Supplier?>(
+                isExpanded: true,
                 value: _selectedSupplier,
                 decoration: const InputDecoration(
                   isDense: true,
@@ -538,7 +699,20 @@ class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
                 items: [
                   DropdownMenuItem<Supplier?>(value: null, child: Text(l10n.importOptionalNone)),
                   ..._suppliers.map(
-                    (s) => DropdownMenuItem<Supplier?>(value: s, child: Text(s.name)),
+                    (s) => DropdownMenuItem<Supplier?>(
+                      value: s,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              s.name,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
                 onChanged: (s) => setState(() => _selectedSupplier = s),
@@ -550,6 +724,7 @@ class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
               ),
               const SizedBox(height: 4),
               DropdownButtonFormField<Warehouse?>(
+                isExpanded: true,
                 value: _selectedWarehouse,
                 decoration: const InputDecoration(
                   isDense: true,
@@ -559,7 +734,20 @@ class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
                 items: [
                   DropdownMenuItem<Warehouse?>(value: null, child: Text(l10n.importOptionalNone)),
                   ..._warehouses.map(
-                    (w) => DropdownMenuItem<Warehouse?>(value: w, child: Text(w.name)),
+                    (w) => DropdownMenuItem<Warehouse?>(
+                      value: w,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              w.name,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
                 onChanged: (w) => setState(() => _selectedWarehouse = w),

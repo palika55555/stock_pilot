@@ -11,8 +11,12 @@ import '../../models/user.dart';
 import '../../models/warehouse.dart';
 import '../../models/warehouse_transfer.dart';
 import '../../models/stock_out.dart';
+import '../../models/movement_type.dart';
+import '../../models/stock_movement.dart';
+import '../../models/warehouse_movement_record.dart';
 import '../../models/transport.dart';
 import '../../models/product_kind.dart';
+import '../../models/receptura_polozka.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -53,7 +57,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 19,
+      version: 21,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -87,7 +91,16 @@ class DatabaseService {
         product_type TEXT DEFAULT 'Sklad',
         supplier_name TEXT,
         kind_id INTEGER,
-        warehouse_id INTEGER
+        warehouse_id INTEGER,
+        min_quantity INTEGER NOT NULL DEFAULT 0,
+        allow_at_cash_register INTEGER NOT NULL DEFAULT 1,
+        show_in_price_list INTEGER NOT NULL DEFAULT 1,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        temporarily_unavailable INTEGER NOT NULL DEFAULT 0,
+        stock_group TEXT,
+        card_type TEXT NOT NULL DEFAULT 'jednoduchá',
+        has_extended_pricing INTEGER NOT NULL DEFAULT 0,
+        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -244,6 +257,8 @@ class DatabaseService {
         notes TEXT,
         username TEXT,
         status TEXT NOT NULL DEFAULT 'vykazana',
+        warehouse_id INTEGER,
+        je_vysporiadana INTEGER NOT NULL DEFAULT 0,
         vat_rate INTEGER,
         issue_type TEXT NOT NULL DEFAULT 'SALE',
         write_off_reason TEXT
@@ -259,6 +274,35 @@ class DatabaseService {
         qty INTEGER NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
+        FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS movement_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL
+      )
+    ''');
+    final mtCountResult = await db.rawQuery('SELECT COUNT(*) as c FROM movement_types');
+    if (((mtCountResult.first['c'] as int?) ?? 0) == 0) {
+      await db.insert('movement_types', {'code': 'SALE', 'name': 'Bežná výdajka'});
+      await db.insert('movement_types', {'code': 'TRAN', 'name': 'Prevodka'});
+      await db.insert('movement_types', {'code': 'CONS', 'name': 'Výdaj do spotreby'});
+      await db.insert('movement_types', {'code': 'SCRP', 'name': 'Odpis / Likvidácia'});
+    }
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        stock_out_id INTEGER NOT NULL,
+        document_number TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        product_unique_id TEXT NOT NULL,
+        product_name TEXT,
+        plu TEXT,
+        qty INTEGER NOT NULL,
+        unit TEXT NOT NULL,
+        direction TEXT NOT NULL DEFAULT 'OUT',
         FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
       )
     ''');
@@ -314,6 +358,47 @@ class DatabaseService {
     if (!productInfo.any((c) => c['name'] == 'warehouse_id')) {
       await db.execute('ALTER TABLE products ADD COLUMN warehouse_id INTEGER');
     }
+    if (!productInfo.any((c) => c['name'] == 'linked_product_unique_id')) {
+      await db.execute('ALTER TABLE products ADD COLUMN linked_product_unique_id TEXT');
+    }
+    // Skladová karta (OBERON): min množstvo, pokladnica, cenník, aktívna, nedostupná, skupina, typ karty, rozšírená cenotvorba
+    if (!productInfo.any((c) => c['name'] == 'min_quantity')) {
+      await db.execute('ALTER TABLE products ADD COLUMN min_quantity INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!productInfo.any((c) => c['name'] == 'allow_at_cash_register')) {
+      await db.execute('ALTER TABLE products ADD COLUMN allow_at_cash_register INTEGER NOT NULL DEFAULT 1');
+    }
+    if (!productInfo.any((c) => c['name'] == 'show_in_price_list')) {
+      await db.execute('ALTER TABLE products ADD COLUMN show_in_price_list INTEGER NOT NULL DEFAULT 1');
+    }
+    if (!productInfo.any((c) => c['name'] == 'is_active')) {
+      await db.execute('ALTER TABLE products ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+    }
+    if (!productInfo.any((c) => c['name'] == 'temporarily_unavailable')) {
+      await db.execute('ALTER TABLE products ADD COLUMN temporarily_unavailable INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!productInfo.any((c) => c['name'] == 'stock_group')) {
+      await db.execute('ALTER TABLE products ADD COLUMN stock_group TEXT');
+    }
+    if (!productInfo.any((c) => c['name'] == 'card_type')) {
+      await db.execute("ALTER TABLE products ADD COLUMN card_type TEXT NOT NULL DEFAULT 'jednoduchá'");
+    }
+    if (!productInfo.any((c) => c['name'] == 'has_extended_pricing')) {
+      await db.execute('ALTER TABLE products ADD COLUMN has_extended_pricing INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!productInfo.any((c) => c['name'] == 'iba_cele_mnozstva')) {
+      await db.execute('ALTER TABLE products ADD COLUMN iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0');
+    }
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS receptura_polozky (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receptura_karta_id TEXT NOT NULL,
+        id_suroviny TEXT NOT NULL,
+        mnozstvo REAL NOT NULL,
+        FOREIGN KEY (receptura_karta_id) REFERENCES products(unique_id),
+        FOREIGN KEY (id_suroviny) REFERENCES products(unique_id)
+      )
+    ''');
     final whInfo = await db.rawQuery('PRAGMA table_info(warehouses)');
     if (!whInfo.any((c) => c['name'] == 'warehouse_type')) {
       await db.execute("ALTER TABLE warehouses ADD COLUMN warehouse_type TEXT DEFAULT 'Predaj'");
@@ -701,6 +786,73 @@ class DatabaseService {
         await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN vat_percent INTEGER');
       }
     }
+    if (oldVersion < 20) {
+      final soInfo = await db.rawQuery('PRAGMA table_info(stock_outs)');
+      if (!soInfo.any((c) => c['name'] == 'warehouse_id')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN warehouse_id INTEGER');
+      }
+      if (!soInfo.any((c) => c['name'] == 'je_vysporiadana')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN je_vysporiadana INTEGER NOT NULL DEFAULT 0');
+      }
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS movement_types (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL,
+          name TEXT NOT NULL
+        )
+      ''');
+      final mtCount = await db.rawQuery('SELECT COUNT(*) as c FROM movement_types');
+      if (((mtCount.first['c'] as int?) ?? 0) == 0) {
+        await db.insert('movement_types', {'code': 'SALE', 'name': 'Bežná výdajka'});
+        await db.insert('movement_types', {'code': 'TRAN', 'name': 'Prevodka'});
+        await db.insert('movement_types', {'code': 'CONS', 'name': 'Výdaj do spotreby'});
+        await db.insert('movement_types', {'code': 'SCRP', 'name': 'Odpis / Likvidácia'});
+      }
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS stock_movements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          stock_out_id INTEGER NOT NULL,
+          document_number TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          product_unique_id TEXT NOT NULL,
+          product_name TEXT,
+          plu TEXT,
+          qty INTEGER NOT NULL,
+          unit TEXT NOT NULL,
+          direction TEXT NOT NULL DEFAULT 'OUT',
+          FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
+        )
+      ''');
+      final pInfo = await db.rawQuery('PRAGMA table_info(products)');
+      if (!pInfo.any((c) => c['name'] == 'linked_product_unique_id')) {
+        await db.execute('ALTER TABLE products ADD COLUMN linked_product_unique_id TEXT');
+      }
+    }
+    if (oldVersion < 21) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS receipt_movement_types (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL,
+          name TEXT NOT NULL
+        )
+      ''');
+      final rmtCount = await db.rawQuery('SELECT COUNT(*) as c FROM receipt_movement_types');
+      if (((rmtCount.first['c'] as int?) ?? 0) == 0) {
+        await db.insert('receipt_movement_types', {'code': 'STANDARD', 'name': 'Bežná príjemka'});
+        await db.insert('receipt_movement_types', {'code': 'TRANSFER', 'name': 'Prevodka'});
+        await db.insert('receipt_movement_types', {'code': 'WITH_COSTS', 'name': 'Príjemka s obstarávacími nákladmi'});
+      }
+      final irInfo = await db.rawQuery('PRAGMA table_info(inbound_receipts)');
+      if (!irInfo.any((c) => c['name'] == 'warehouse_id')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN warehouse_id INTEGER');
+      }
+      if (!irInfo.any((c) => c['name'] == 'movement_type_code')) {
+        await db.execute("ALTER TABLE inbound_receipts ADD COLUMN movement_type_code TEXT NOT NULL DEFAULT 'STANDARD'");
+      }
+      if (!irInfo.any((c) => c['name'] == 'je_vysporiadana')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN je_vysporiadana INTEGER NOT NULL DEFAULT 0');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -728,7 +880,16 @@ class DatabaseService {
         product_type TEXT DEFAULT 'Sklad',
         supplier_name TEXT,
         kind_id INTEGER,
-        warehouse_id INTEGER
+        warehouse_id INTEGER,
+        min_quantity INTEGER NOT NULL DEFAULT 0,
+        allow_at_cash_register INTEGER NOT NULL DEFAULT 1,
+        show_in_price_list INTEGER NOT NULL DEFAULT 1,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        temporarily_unavailable INTEGER NOT NULL DEFAULT 0,
+        stock_group TEXT,
+        card_type TEXT NOT NULL DEFAULT 'jednoduchá',
+        has_extended_pricing INTEGER NOT NULL DEFAULT 0,
+        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -851,6 +1012,16 @@ class DatabaseService {
     ''');
 
     await db.execute('''
+      CREATE TABLE IF NOT EXISTS receipt_movement_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL
+      )
+    ''');
+    await db.insert('receipt_movement_types', {'code': 'STANDARD', 'name': 'Bežná príjemka'});
+    await db.insert('receipt_movement_types', {'code': 'TRANSFER', 'name': 'Prevodka'});
+    await db.insert('receipt_movement_types', {'code': 'WITH_COSTS', 'name': 'Príjemka s obstarávacími nákladmi'});
+    await db.execute('''
       CREATE TABLE IF NOT EXISTS inbound_receipts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         receipt_number TEXT UNIQUE NOT NULL,
@@ -862,7 +1033,10 @@ class DatabaseService {
         vat_applies_to_all INTEGER NOT NULL DEFAULT 0,
         vat_rate INTEGER,
         status TEXT NOT NULL DEFAULT 'vykazana',
-        invoice_number TEXT
+        invoice_number TEXT,
+        warehouse_id INTEGER,
+        movement_type_code TEXT NOT NULL DEFAULT 'STANDARD',
+        je_vysporiadana INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -979,19 +1153,64 @@ class DatabaseService {
     return await db.delete('products', where: 'unique_id = ?', whereArgs: [id]);
   }
 
+  // Receptúra – zložky (suroviny) receptúry
+  Future<List<RecepturaPolozka>> getRecepturaPolozky(String recepturaKartaId) async {
+    Database db = await database;
+    final maps = await db.query(
+      'receptura_polozky',
+      where: 'receptura_karta_id = ?',
+      whereArgs: [recepturaKartaId],
+    );
+    return maps.map((m) => RecepturaPolozka.fromMap(m)).toList();
+  }
+
+  Future<int> insertRecepturaPolozka(RecepturaPolozka polozka, String recepturaKartaId) async {
+    Database db = await database;
+    return await db.insert(
+      'receptura_polozky',
+      polozka.toMap(recepturaKartaId: recepturaKartaId),
+    );
+  }
+
+  Future<int> deleteRecepturaPolozkyByRecepturaKartaId(String recepturaKartaId) async {
+    Database db = await database;
+    return await db.delete(
+      'receptura_polozky',
+      where: 'receptura_karta_id = ?',
+      whereArgs: [recepturaKartaId],
+    );
+  }
+
   // Inbound receipts
   Future<int> insertInboundReceipt(InboundReceipt receipt) async {
     Database db = await database;
     return await db.insert('inbound_receipts', receipt.toMap());
   }
 
-  Future<List<InboundReceipt>> getInboundReceipts() async {
+  /// Príjemky zoradené od najnovších. Ak [warehouseId] je zadané, len príjemky daného skladu.
+  Future<List<InboundReceipt>> getInboundReceipts({int? warehouseId}) async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'inbound_receipts',
-      orderBy: 'created_at DESC',
-    );
+    final List<Map<String, dynamic>> maps = warehouseId != null
+        ? await db.query(
+            'inbound_receipts',
+            where: 'warehouse_id = ?',
+            whereArgs: [warehouseId],
+            orderBy: 'created_at DESC',
+          )
+        : await db.query(
+            'inbound_receipts',
+            orderBy: 'created_at DESC',
+          );
     return maps.map((m) => InboundReceipt.fromMap(m)).toList();
+  }
+
+  Future<List<ReceiptMovementType>> getReceiptMovementTypes() async {
+    Database db = await database;
+    final maps = await db.query(
+      'receipt_movement_types',
+      orderBy: 'code ASC',
+    );
+    return maps.map((m) => ReceiptMovementType.fromMap(m)).toList();
   }
 
   Future<InboundReceipt?> getInboundReceiptById(int id) async {
@@ -1048,6 +1267,23 @@ class DatabaseService {
     return await db.delete(
       'inbound_receipt_items',
       where: 'receipt_id = ?',
+      whereArgs: [receiptId],
+    );
+  }
+
+  /// Vymaže príjemku a jej položky. Len neschválené príjemky.
+  Future<int> deleteInboundReceipt(int receiptId) async {
+    Database db = await database;
+    final receipt = await getInboundReceiptById(receiptId);
+    if (receipt == null || receipt.isApproved) return 0;
+    await db.delete(
+      'inbound_receipt_items',
+      where: 'receipt_id = ?',
+      whereArgs: [receiptId],
+    );
+    return await db.delete(
+      'inbound_receipts',
+      where: 'id = ?',
       whereArgs: [receiptId],
     );
   }
@@ -1319,6 +1555,168 @@ class DatabaseService {
     return await db.insert('warehouse_transfers', transfer.toMap());
   }
 
+  /// Vykoná presun medzi skladmi: zníži zásobu v zdrojovom sklade, zvýši (alebo vytvorí kartu) v cieľovom, zapíše presun.
+  /// Pri chybe validácie alebo DB vyhodí výnimku.
+  Future<int> executeWarehouseTransfer(WarehouseTransfer transfer) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final sourceMaps = await txn.query(
+        'products',
+        where: 'unique_id = ?',
+        whereArgs: [transfer.productUniqueId],
+      );
+      if (sourceMaps.isEmpty) {
+        throw Exception('Produkt nebol nájdený');
+      }
+      final source = Product.fromMap(sourceMaps.first);
+      if (source.warehouseId != transfer.fromWarehouseId) {
+        throw Exception('Produkt nie je v zdrojovom sklade');
+      }
+      if (source.qty < transfer.quantity) {
+        throw Exception(
+            'Nedostatočné množstvo. Na sklade je ${source.qty} ${transfer.unit}.');
+      }
+      final newSourceQty = source.qty - transfer.quantity;
+      final updatedSource = Product(
+        uniqueId: source.uniqueId,
+        name: source.name,
+        plu: source.plu,
+        category: source.category,
+        qty: newSourceQty,
+        unit: source.unit,
+        price: source.price,
+        withoutVat: source.withoutVat,
+        vat: source.vat,
+        discount: source.discount,
+        lastPurchasePrice: source.lastPurchasePrice,
+        lastPurchasePriceWithoutVat: source.lastPurchasePriceWithoutVat,
+        lastPurchaseDate: source.lastPurchaseDate,
+        currency: source.currency,
+        location: source.location,
+        purchasePrice: source.purchasePrice,
+        purchasePriceWithoutVat: source.purchasePriceWithoutVat,
+        purchaseVat: source.purchaseVat,
+        recyclingFee: source.recyclingFee,
+        productType: source.productType,
+        supplierName: source.supplierName,
+        kindId: source.kindId,
+        warehouseId: source.warehouseId,
+        linkedProductUniqueId: source.linkedProductUniqueId,
+        minQuantity: source.minQuantity,
+        allowAtCashRegister: source.allowAtCashRegister,
+        showInPriceList: source.showInPriceList,
+        isActive: source.isActive,
+        temporarilyUnavailable: source.temporarilyUnavailable,
+        stockGroup: source.stockGroup,
+        cardType: source.cardType,
+        hasExtendedPricing: source.hasExtendedPricing,
+        ibaCeleMnozstva: source.ibaCeleMnozstva,
+      );
+      await txn.update(
+        'products',
+        updatedSource.toMap(),
+        where: 'unique_id = ?',
+        whereArgs: [source.uniqueId],
+      );
+      final targetMaps = await txn.query(
+        'products',
+        where: 'warehouse_id = ?',
+        whereArgs: [transfer.toWarehouseId],
+      );
+      Product? target;
+      try {
+        target = targetMaps
+            .map((m) => Product.fromMap(m))
+            .firstWhere((p) =>
+                p.plu == transfer.productPlu && p.name == transfer.productName);
+      } catch (_) {
+        target = null;
+      }
+      if (target != null) {
+        final updatedTarget = Product(
+          uniqueId: target.uniqueId,
+          name: target.name,
+          plu: target.plu,
+          category: target.category,
+          qty: target.qty + transfer.quantity,
+          unit: target.unit,
+          price: target.price,
+          withoutVat: target.withoutVat,
+          vat: target.vat,
+          discount: target.discount,
+          lastPurchasePrice: target.lastPurchasePrice,
+          lastPurchasePriceWithoutVat: target.lastPurchasePriceWithoutVat,
+          lastPurchaseDate: target.lastPurchaseDate,
+          currency: target.currency,
+          location: target.location,
+          purchasePrice: target.purchasePrice,
+          purchasePriceWithoutVat: target.purchasePriceWithoutVat,
+          purchaseVat: target.purchaseVat,
+          recyclingFee: target.recyclingFee,
+          productType: target.productType,
+          supplierName: target.supplierName,
+          kindId: target.kindId,
+          warehouseId: target.warehouseId,
+          linkedProductUniqueId: target.linkedProductUniqueId,
+          minQuantity: target.minQuantity,
+          allowAtCashRegister: target.allowAtCashRegister,
+          showInPriceList: target.showInPriceList,
+          isActive: target.isActive,
+          temporarilyUnavailable: target.temporarilyUnavailable,
+          stockGroup: target.stockGroup,
+          cardType: target.cardType,
+          hasExtendedPricing: target.hasExtendedPricing,
+          ibaCeleMnozstva: target.ibaCeleMnozstva,
+        );
+        await txn.update(
+          'products',
+          updatedTarget.toMap(),
+          where: 'unique_id = ?',
+          whereArgs: [target.uniqueId],
+        );
+      } else {
+        final newUniqueId = 'W${transfer.toWarehouseId}-${source.uniqueId}';
+        final newProduct = Product(
+          uniqueId: newUniqueId,
+          name: transfer.productName,
+          plu: transfer.productPlu,
+          category: source.category,
+          qty: transfer.quantity,
+          unit: transfer.unit,
+          price: source.price,
+          withoutVat: source.withoutVat,
+          vat: source.vat,
+          discount: source.discount,
+          lastPurchasePrice: source.lastPurchasePrice,
+          lastPurchasePriceWithoutVat: source.lastPurchasePriceWithoutVat,
+          lastPurchaseDate: source.lastPurchaseDate,
+          currency: source.currency,
+          location: source.location,
+          purchasePrice: source.purchasePrice,
+          purchasePriceWithoutVat: source.purchasePriceWithoutVat,
+          purchaseVat: source.purchaseVat,
+          recyclingFee: source.recyclingFee,
+          productType: source.productType,
+          supplierName: source.supplierName,
+          kindId: source.kindId,
+          warehouseId: transfer.toWarehouseId,
+          linkedProductUniqueId: source.linkedProductUniqueId,
+          minQuantity: source.minQuantity,
+          allowAtCashRegister: source.allowAtCashRegister,
+          showInPriceList: source.showInPriceList,
+          isActive: source.isActive,
+          temporarilyUnavailable: source.temporarilyUnavailable,
+          stockGroup: source.stockGroup,
+          cardType: source.cardType,
+          hasExtendedPricing: source.hasExtendedPricing,
+          ibaCeleMnozstva: source.ibaCeleMnozstva,
+        );
+        await txn.insert('products', newProduct.toMap());
+      }
+      return await txn.insert('warehouse_transfers', transfer.toMap());
+    });
+  }
+
   Future<List<Warehouse>> getActiveWarehouses() async {
     Database db = await database;
     final maps = await db.query(
@@ -1453,6 +1851,7 @@ class DatabaseService {
     await db.delete('inbound_receipts');
     await db.delete('quote_items');
     await db.delete('quotes');
+    await db.delete('receptura_polozky');
     await db.delete('products');
     await db.delete('customers');
     await db.delete('suppliers');
@@ -1514,6 +1913,20 @@ class DatabaseService {
     return maps.map((m) => StockOut.fromMap(m)).toList();
   }
 
+  /// Výdajky pre daný sklad; ak [warehouseId] je null, vráti všetky.
+  Future<List<StockOut>> getStockOutsByWarehouseId(int? warehouseId) async {
+    Database db = await database;
+    final maps = warehouseId == null
+        ? await db.query('stock_outs', orderBy: 'created_at DESC')
+        : await db.query(
+            'stock_outs',
+            where: 'warehouse_id = ?',
+            whereArgs: [warehouseId],
+            orderBy: 'created_at DESC',
+          );
+    return maps.map((m) => StockOut.fromMap(m)).toList();
+  }
+
   Future<StockOut?> getStockOutById(int id) async {
     Database db = await database;
     final maps = await db.query('stock_outs', where: 'id = ?', whereArgs: [id]);
@@ -1562,6 +1975,152 @@ class DatabaseService {
   Future<void> updateStockOutStatus(int stockOutId, StockOutStatus status) async {
     Database db = await database;
     await db.update('stock_outs', {'status': status.value}, where: 'id = ?', whereArgs: [stockOutId]);
+  }
+
+  Future<List<MovementType>> getMovementTypes() async {
+    Database db = await database;
+    final maps = await db.query('movement_types', orderBy: 'code ASC');
+    return maps.map((m) => MovementType.fromMap(m)).toList();
+  }
+
+  Future<int> insertMovementType(MovementType mt) async {
+    Database db = await database;
+    return await db.insert('movement_types', mt.toMap());
+  }
+
+  Future<List<StockMovement>> getStockMovementsByStockOutId(int stockOutId) async {
+    Database db = await database;
+    final maps = await db.query(
+      'stock_movements',
+      where: 'stock_out_id = ?',
+      whereArgs: [stockOutId],
+    );
+    return maps.map((m) => StockMovement.fromMap(m)).toList();
+  }
+
+  Future<int> insertStockMovement(StockMovement sm) async {
+    Database db = await database;
+    return await db.insert('stock_movements', sm.toMap());
+  }
+
+  Future<void> deleteStockMovementsByStockOutId(int stockOutId) async {
+    Database db = await database;
+    await db.delete('stock_movements', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
+  }
+
+  /// Výdajové pohyby (z výdajok) s warehouse_id; ak [warehouseId] je zadané, len daný sklad.
+  Future<List<WarehouseMovementRecord>> getStockMovementRecordsOut({int? warehouseId}) async {
+    Database db = await database;
+    final sql = '''
+      SELECT sm.id, sm.document_number, sm.created_at, sm.product_unique_id, sm.product_name, sm.plu, sm.qty, sm.unit, sm.direction, so.warehouse_id
+      FROM stock_movements sm
+      JOIN stock_outs so ON sm.stock_out_id = so.id
+      ${warehouseId != null ? 'WHERE so.warehouse_id = ?' : ''}
+      ORDER BY sm.created_at DESC
+    ''';
+    final maps = warehouseId != null
+        ? await db.rawQuery(sql, [warehouseId])
+        : await db.rawQuery(sql);
+    return maps.map((m) => WarehouseMovementRecord(
+      createdAt: DateTime.parse(m['created_at'] as String),
+      documentNumber: m['document_number'] as String? ?? '',
+      productUniqueId: m['product_unique_id'] as String,
+      productName: m['product_name'] as String?,
+      plu: m['plu'] as String?,
+      qty: m['qty'] as int,
+      unit: m['unit'] as String,
+      direction: m['direction'] as String? ?? 'OUT',
+      warehouseId: m['warehouse_id'] as int?,
+      sourceType: 'stock_out',
+      relatedId: m['id'] as int?,
+    )).toList();
+  }
+
+  /// Príjmové pohyby (z príjemiek); ak [warehouseId] je zadané, len daný sklad.
+  Future<List<WarehouseMovementRecord>> getReceiptMovementRecordsIn({int? warehouseId}) async {
+    Database db = await database;
+    final sql = '''
+      SELECT i.id, r.receipt_number AS document_number, r.created_at, i.product_unique_id, i.product_name, i.plu, i.qty, i.unit, r.warehouse_id
+      FROM inbound_receipt_items i
+      JOIN inbound_receipts r ON i.receipt_id = r.id
+      ${warehouseId != null ? 'WHERE r.warehouse_id = ?' : ''}
+      ORDER BY r.created_at DESC
+    ''';
+    final maps = warehouseId != null
+        ? await db.rawQuery(sql, [warehouseId])
+        : await db.rawQuery(sql);
+    return maps.map((m) => WarehouseMovementRecord(
+      createdAt: DateTime.parse(m['created_at'] as String),
+      documentNumber: m['document_number'] as String? ?? '',
+      productUniqueId: m['product_unique_id'] as String,
+      productName: m['product_name'] as String?,
+      plu: m['plu'] as String?,
+      qty: m['qty'] as int,
+      unit: m['unit'] as String,
+      direction: 'IN',
+      warehouseId: m['warehouse_id'] as int?,
+      sourceType: 'receipt',
+      relatedId: m['id'] as int?,
+    )).toList();
+  }
+
+  /// Presuny medzi skladmi: pre každý presun dva záznamy (OUT z from, IN do to). Ak [warehouseId] je zadané, len záznamy týkajúce sa daného skladu.
+  Future<List<WarehouseMovementRecord>> getTransferMovementRecords({int? warehouseId}) async {
+    Database db = await database;
+    final sql = warehouseId != null
+        ? 'SELECT * FROM warehouse_transfers WHERE from_warehouse_id = ? OR to_warehouse_id = ? ORDER BY created_at DESC'
+        : 'SELECT * FROM warehouse_transfers ORDER BY created_at DESC';
+    final maps = warehouseId != null
+        ? await db.rawQuery(sql, [warehouseId, warehouseId])
+        : await db.rawQuery(sql);
+    final list = <WarehouseMovementRecord>[];
+    for (final m in maps) {
+      final fromId = m['from_warehouse_id'] as int?;
+      final toId = m['to_warehouse_id'] as int?;
+      final createdAt = DateTime.parse(m['created_at'] as String);
+      final docNum = 'Presun #${m['id']}';
+      if (warehouseId == null || fromId == warehouseId) {
+        list.add(WarehouseMovementRecord(
+          createdAt: createdAt,
+          documentNumber: docNum,
+          productUniqueId: m['product_unique_id'] as String,
+          productName: m['product_name'] as String?,
+          plu: m['product_plu'] as String?,
+          qty: m['quantity'] as int,
+          unit: m['unit'] as String? ?? 'ks',
+          direction: 'OUT',
+          warehouseId: fromId,
+          sourceType: 'transfer',
+          relatedId: m['id'] as int?,
+        ));
+      }
+      if (warehouseId == null || toId == warehouseId) {
+        list.add(WarehouseMovementRecord(
+          createdAt: createdAt,
+          documentNumber: docNum,
+          productUniqueId: m['product_unique_id'] as String,
+          productName: m['product_name'] as String?,
+          plu: m['product_plu'] as String?,
+          qty: m['quantity'] as int,
+          unit: m['unit'] as String? ?? 'ks',
+          direction: 'IN',
+          warehouseId: toId,
+          sourceType: 'transfer',
+          relatedId: m['id'] as int?,
+        ));
+      }
+    }
+    return list;
+  }
+
+  /// Všetky záznamy knihy skladových pohybov (príjmy + výdaje + presuny), zoradené od najnovších. Ak [warehouseId] je zadané, len pohyby daného skladu.
+  Future<List<WarehouseMovementRecord>> getAllWarehouseMovementRecords({int? warehouseId}) async {
+    final out = await getStockMovementRecordsOut(warehouseId: warehouseId);
+    final inn = await getReceiptMovementRecordsIn(warehouseId: warehouseId);
+    final trans = await getTransferMovementRecords(warehouseId: warehouseId);
+    final combined = [...out, ...inn, ...trans];
+    combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return combined;
   }
 
   Future<List<ProductKind>> getProductKinds() async {

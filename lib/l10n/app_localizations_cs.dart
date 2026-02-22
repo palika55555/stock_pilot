@@ -507,6 +507,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get chooseWarehouse => 'Vyberte sklad';
 
   @override
+  String get warehouseFilterAll => 'Všechny sklady';
+
+  @override
   String get reportGenerated => 'Report byl vygenerován. Můžete ho sdílet.';
 
   @override

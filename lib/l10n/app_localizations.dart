@@ -1066,6 +1066,12 @@ abstract class AppLocalizations {
   /// **'Vyberte sklad'**
   String get chooseWarehouse;
 
+  /// No description provided for @warehouseFilterAll.
+  ///
+  /// In sk, this message translates to:
+  /// **'Všetky sklady'**
+  String get warehouseFilterAll;
+
   /// No description provided for @reportGenerated.
   ///
   /// In sk, this message translates to:

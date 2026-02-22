@@ -41,7 +41,7 @@ enum StockOutIssueType {
   bool get requiresWriteOffReason => this == StockOutIssueType.writeOff;
 }
 
-/// Hlavička výdajky (Stock Out / Issue Note).
+/// Hlavička výdajky (Stock Out / Issue Note) – OBERON: Vydajka (CisloDokladu, IDSkladu, Datum, DruhPohybu, JeVysporiadana, Odberatel).
 class StockOut {
   final int? id;
   final String documentNumber;
@@ -50,6 +50,10 @@ class StockOut {
   final String? notes;
   final String? username;
   final StockOutStatus status;
+  /// Sklad, z ktorého sa vydáva (výdajka je vždy z jedného skladu).
+  final int? warehouseId;
+  /// Ak true (naviazaná faktúra), doklad je v UI uzamknutý (ReadOnly).
+  final bool jeVysporiadana;
   /// 0 = výdaj za 0 % DPH, null = štandardná sadzba
   final int? vatRate;
   /// Typ výdaja: predaj, spotreba, výroba, odpis, reklamácia, prevod
@@ -65,6 +69,8 @@ class StockOut {
     this.notes,
     this.username,
     this.status = StockOutStatus.vykazana,
+    this.warehouseId,
+    this.jeVysporiadana = false,
     this.vatRate,
     this.issueType = StockOutIssueType.sale,
     this.writeOffReason,
@@ -73,7 +79,11 @@ class StockOut {
   bool get isZeroVat => vatRate == 0;
   bool get isWriteOff => issueType == StockOutIssueType.writeOff;
 
-  bool get isEditable => status != StockOutStatus.schvalena && status != StockOutStatus.stornovana;
+  /// Vysporiadanú výdajku nie je možné upravovať (ReadOnly).
+  bool get isEditable =>
+      !jeVysporiadana &&
+      status != StockOutStatus.schvalena &&
+      status != StockOutStatus.stornovana;
   bool get isApproved => status == StockOutStatus.schvalena;
   bool get isDraft => status == StockOutStatus.rozpracovany;
   bool get isStorned => status == StockOutStatus.stornovana;
@@ -87,6 +97,8 @@ class StockOut {
       'notes': notes,
       'username': username,
       'status': status.value,
+      'warehouse_id': warehouseId,
+      'je_vysporiadana': jeVysporiadana ? 1 : 0,
       'vat_rate': vatRate,
       'issue_type': issueType.value,
       'write_off_reason': writeOffReason,
@@ -102,6 +114,8 @@ class StockOut {
       notes: map['notes'] as String?,
       username: map['username'] as String?,
       status: StockOutStatus.fromString(map['status'] as String?),
+      warehouseId: map['warehouse_id'] as int?,
+      jeVysporiadana: (map['je_vysporiadana'] as int?) == 1,
       vatRate: map['vat_rate'] as int?,
       issueType: StockOutIssueType.fromString(map['issue_type'] as String?),
       writeOffReason: map['write_off_reason'] as String?,
@@ -116,6 +130,8 @@ class StockOut {
     String? notes,
     String? username,
     StockOutStatus? status,
+    int? warehouseId,
+    bool? jeVysporiadana,
     int? vatRate,
     StockOutIssueType? issueType,
     String? writeOffReason,
@@ -128,6 +144,8 @@ class StockOut {
       notes: notes ?? this.notes,
       username: username ?? this.username,
       status: status ?? this.status,
+      warehouseId: warehouseId ?? this.warehouseId,
+      jeVysporiadana: jeVysporiadana ?? this.jeVysporiadana,
       vatRate: vatRate ?? this.vatRate,
       issueType: issueType ?? this.issueType,
       writeOffReason: writeOffReason ?? this.writeOffReason,

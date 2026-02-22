@@ -3,19 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/product.dart';
 import '../../models/product_kind.dart';
+import '../../models/receptura_polozka.dart';
 import '../../models/warehouse.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/Product/product_kind_service.dart';
+import '../../services/Receptura/receptura_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
 
 class AddProductModal extends StatefulWidget {
   final String? initialPlu;
   final Product? productToEdit;
+  /// Pri vytvorení nového produktu predvyberie typ karty (napr. 'receptúra').
+  final String? initialCardType;
 
   const AddProductModal({
     super.key,
     this.initialPlu,
     this.productToEdit,
+    this.initialCardType,
   });
 
   @override
@@ -27,11 +32,14 @@ class _AddProductModalState extends State<AddProductModal> {
   final ProductService _productService = ProductService();
   final ProductKindService _kindService = ProductKindService();
   final WarehouseService _warehouseService = WarehouseService();
+  final RecepturaService _recepturaService = RecepturaService();
   bool _isLoading = false;
   List<ProductKind> _kinds = [];
   List<Warehouse> _warehouses = [];
+  List<Product> _allProducts = [];
   int? _selectedKindId;
   int? _selectedWarehouseId;
+  List<RecepturaPolozka> _recepturaZlozky = [];
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _pluController = TextEditingController();
@@ -58,19 +66,39 @@ class _AddProductModalState extends State<AddProductModal> {
     text: '0.0',
   );
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _minQuantityController = TextEditingController(text: '0');
+  final TextEditingController _stockGroupController = TextEditingController();
 
   String _selectedUnit = 'ks';
   String _selectedCategory = WarehouseType.sklad;
+  String _selectedCardType = 'jednoduchá';
+  bool _allowAtCashRegister = true;
+  bool _showInPriceList = true;
+  bool _isActive = true;
+  bool _temporarilyUnavailable = false;
+  bool _hasExtendedPricing = false;
+
+  static const List<String> _cardTypes = [
+    'jednoduchá',
+    'služba',
+    'vratný obal',
+    'sada',
+    'výrobok',
+    'receptúra',
+  ];
 
   final List<String> _units = ['ks', 'l', 'm2', 'm3', 'kg', 'bm', 'bal'];
 
   bool get _isEditMode => widget.productToEdit != null;
+
+  bool get _isReceptura => _selectedCardType == 'receptúra';
 
   @override
   void initState() {
     super.initState();
     _loadKinds();
     _loadWarehouses();
+    _loadAllProducts();
     if (widget.productToEdit != null) {
       final p = widget.productToEdit!;
       _nameController.text = p.name;
@@ -91,8 +119,25 @@ class _AddProductModalState extends State<AddProductModal> {
           p.purchasePrice.toStringAsFixed(2);
       _recyclingFeeController.text = p.recyclingFee.toStringAsFixed(2);
       _locationController.text = p.location;
-    } else if (widget.initialPlu != null) {
-      _pluController.text = widget.initialPlu!;
+      _minQuantityController.text = p.minQuantity.toString();
+      _stockGroupController.text = p.stockGroup ?? '';
+      _selectedCardType = _cardTypes.contains(p.cardType) ? p.cardType : 'jednoduchá';
+      _allowAtCashRegister = p.allowAtCashRegister;
+      _showInPriceList = p.showInPriceList;
+      _isActive = p.isActive;
+      _temporarilyUnavailable = p.temporarilyUnavailable;
+      _hasExtendedPricing = p.hasExtendedPricing;
+      if (p.cardType == 'receptúra') {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecepturaZlozky());
+      }
+    } else {
+      if (widget.initialCardType != null &&
+          _cardTypes.contains(widget.initialCardType)) {
+        _selectedCardType = widget.initialCardType!;
+      }
+      if (widget.initialPlu != null) {
+        _pluController.text = widget.initialPlu!;
+      }
     }
 
     // Listeners for auto-calculation
@@ -112,6 +157,122 @@ class _AddProductModalState extends State<AddProductModal> {
   Future<void> _loadWarehouses() async {
     final list = await _warehouseService.getActiveWarehouses();
     if (mounted) setState(() => _warehouses = list);
+  }
+
+  Future<void> _loadAllProducts() async {
+    final list = await _productService.getAllProducts();
+    if (mounted) setState(() => _allProducts = list);
+  }
+
+  Future<void> _loadRecepturaZlozky() async {
+    final id = widget.productToEdit?.uniqueId;
+    if (id == null) return;
+    final karta = await _recepturaService.getSkladovaKarta(id);
+    if (mounted && karta != null) {
+      setState(() => _recepturaZlozky = List.from(karta.zlozky));
+    }
+  }
+
+  Future<void> _showAddRecepturaZlozkaDialog() async {
+    final currentId = widget.productToEdit?.uniqueId;
+    final available = _allProducts.where((p) => p.uniqueId != currentId).toList();
+    if (available.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Žiadne produkty na výber. Najprv vytvorte suroviny.')),
+        );
+      }
+      return;
+    }
+    Product? selectedProduct = available.first;
+    final qtyController = TextEditingController(text: '1');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Pridať surovinu'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<Product>(
+                      value: selectedProduct,
+                      decoration: InputDecoration(
+                        labelText: 'Produkt (surovina)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      items: available
+                          .map((p) => DropdownMenuItem(
+                                value: p,
+                                child: Text('${p.plu} – ${p.name}', overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (p) => setDialogState(() => selectedProduct = p),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: qtyController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Množstvo',
+                        suffixText: selectedProduct?.unit ?? 'ks',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Zrušiť'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final qty = double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 0;
+                    if (qty <= 0) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Zadajte kladné množstvo')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  child: const Text('Pridať'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (result != true || !mounted || selectedProduct?.uniqueId == null) return;
+    final qty = double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 0;
+    if (qty <= 0) return;
+    setState(() {
+      _recepturaZlozky.add(RecepturaPolozka(
+        idSuroviny: selectedProduct!.uniqueId!,
+        mnozstvo: (qty * 1000).round() / 1000,
+      ));
+    });
+  }
+
+  void _removeRecepturaZlozka(int index) {
+    setState(() => _recepturaZlozky.removeAt(index));
+  }
+
+  String _productNameForId(String idSuroviny) {
+    try {
+      final p = _allProducts.firstWhere((p) => p.uniqueId == idSuroviny);
+      return '${p.plu} – ${p.name}';
+    } catch (_) {
+      return idSuroviny;
+    }
   }
 
   Future<void> _showAddKindDialog() async {
@@ -278,30 +439,33 @@ class _AddProductModalState extends State<AddProductModal> {
         supplierName: existing?.supplierName,
         kindId: _selectedKindId,
         warehouseId: _selectedWarehouseId,
+        minQuantity: int.tryParse(_minQuantityController.text.trim()) ?? 0,
+        allowAtCashRegister: _allowAtCashRegister,
+        showInPriceList: _showInPriceList,
+        isActive: _isActive,
+        temporarilyUnavailable: _temporarilyUnavailable,
+        stockGroup: _stockGroupController.text.trim().isEmpty ? null : _stockGroupController.text.trim(),
+        cardType: _selectedCardType,
+        hasExtendedPricing: _hasExtendedPricing,
+        ibaCeleMnozstva: existing?.ibaCeleMnozstva ?? false,
       );
 
       if (_isEditMode) {
         await _productService.updateProduct(product);
-        if (mounted) {
-          Navigator.pop(context, product);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Produkt bol upravený'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
       } else {
         await _productService.createProduct(product);
-        if (mounted) {
-          Navigator.pop(context, product);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Produkt bol vytvorený'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+      }
+      if (_selectedCardType == 'receptúra' && product.uniqueId != null) {
+        await _recepturaService.saveRecepturaZlozky(product.uniqueId!, _recepturaZlozky);
+      }
+      if (mounted) {
+        Navigator.pop(context, product);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode ? 'Produkt bol upravený' : 'Produkt bol vytvorený'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -674,6 +838,129 @@ class _AddProductModalState extends State<AddProductModal> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 12),
+                          _section(
+                            'Skladová karta (doplňkové)',
+                            [
+                              DropdownButtonFormField<String>(
+                                value: _selectedCardType,
+                                decoration: _inputDecoration('Typ karty'),
+                                dropdownColor: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                items: _cardTypes
+                                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                    .toList(),
+                                onChanged: (v) => setState(() => _selectedCardType = v ?? 'jednoduchá'),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _minQuantityController,
+                                      keyboardType: TextInputType.number,
+                                      decoration: _inputDecoration('Min. množstvo (tučné ak pod)'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _stockGroupController,
+                                      decoration: _inputDecoration('Skladová skupina'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              CheckboxListTile(
+                                value: _allowAtCashRegister,
+                                onChanged: (v) => setState(() => _allowAtCashRegister = v ?? true),
+                                title: const Text('Umožniť pracovať s položkou na pokladnici'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              CheckboxListTile(
+                                value: _showInPriceList,
+                                onChanged: (v) => setState(() => _showInPriceList = v ?? true),
+                                title: const Text('Uvádzať v tlačovom výstupe Cenník'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              CheckboxListTile(
+                                value: _isActive,
+                                onChanged: (v) => setState(() => _isActive = v ?? true),
+                                title: const Text('Aktívna karta'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              CheckboxListTile(
+                                value: _temporarilyUnavailable,
+                                onChanged: (v) => setState(() => _temporarilyUnavailable = v ?? false),
+                                title: const Text('Dočasne nedostupná (sivá)'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              CheckboxListTile(
+                                value: _hasExtendedPricing,
+                                onChanged: (v) => setState(() => _hasExtendedPricing = v ?? false),
+                                title: const Text('Rozšírená cenotvorba (fialová)'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ],
+                          ),
+                          if (_isReceptura) ...[
+                            const SizedBox(height: 12),
+                            _section(
+                              'Zložky receptúry',
+                              [
+                                Text(
+                                  'Receptúra sa skladá z nasledujúcich surovín (produktov). Pri výdaji sa z každého odpočíta potrebné množstvo.',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                                ),
+                                const SizedBox(height: 10),
+                                ...List.generate(_recepturaZlozky.length, (i) {
+                                  final z = _recepturaZlozky[i];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _productNameForId(z.idSuroviny),
+                                            style: const TextStyle(fontSize: 14),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: 72,
+                                          child: Text(
+                                            '${z.mnozstvo}',
+                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 22),
+                                          onPressed: () => _removeRecepturaZlozka(i),
+                                          tooltip: 'Odstrániť',
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _showAddRecepturaZlozkaDialog,
+                                  icon: const Icon(Icons.add_rounded, size: 20),
+                                  label: const Text('Pridať surovinu'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: _accent,
+                                    side: BorderSide(color: _accent.withValues(alpha: 0.7)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 20),
                           SizedBox(
                             width: double.infinity,

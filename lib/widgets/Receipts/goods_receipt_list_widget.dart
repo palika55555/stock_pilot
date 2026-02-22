@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/receipt.dart';
+import '../../models/warehouse.dart';
 
 /// Widget zobrazujúci zoznam príjemok alebo prázdny stav.
 class GoodsReceiptList extends StatelessWidget {
   final List<InboundReceipt> receipts;
+  final List<Warehouse> warehouses;
+  final Map<String, String> movementTypeNames;
   final VoidCallback onAddTap;
   final void Function(InboundReceipt receipt)? onApprove;
   final void Function(InboundReceipt receipt)? onEdit;
@@ -12,6 +15,8 @@ class GoodsReceiptList extends StatelessWidget {
   const GoodsReceiptList({
     super.key,
     required this.receipts,
+    this.warehouses = const [],
+    this.movementTypeNames = const {},
     required this.onAddTap,
     this.onApprove,
     this.onEdit,
@@ -27,7 +32,7 @@ class GoodsReceiptList extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
-          const SizedBox(height: kToolbarHeight + 12),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: ListView.separated(
@@ -37,6 +42,8 @@ class GoodsReceiptList extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 6),
               itemBuilder: (context, index) => GoodsReceiptCard(
                 receipt: receipts[index],
+                warehouses: warehouses,
+                movementTypeNames: movementTypeNames,
                 onApprove: onApprove,
                 onEdit: onEdit,
                 onPrintPdf: onPrintPdf,
@@ -58,11 +65,13 @@ class _GoodsReceiptEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Align(
+      alignment: Alignment.topCenter,
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Icon(Icons.inbox_rounded, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
@@ -100,6 +109,8 @@ class _GoodsReceiptEmptyState extends StatelessWidget {
 /// Karta jednej príjemky v zozname. Stav vykázaná = editovateľná, schválená = uzamknutá.
 class GoodsReceiptCard extends StatelessWidget {
   final InboundReceipt receipt;
+  final List<Warehouse> warehouses;
+  final Map<String, String> movementTypeNames;
   final void Function(InboundReceipt receipt)? onApprove;
   final void Function(InboundReceipt receipt)? onEdit;
   final void Function(InboundReceipt receipt)? onPrintPdf;
@@ -107,6 +118,8 @@ class GoodsReceiptCard extends StatelessWidget {
   const GoodsReceiptCard({
     super.key,
     required this.receipt,
+    this.warehouses = const [],
+    this.movementTypeNames = const {},
     this.onApprove,
     this.onEdit,
     this.onPrintPdf,
@@ -180,6 +193,28 @@ class GoodsReceiptCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    if (receipt.warehouseId != null) ...[
+                      Builder(
+                        builder: (context) {
+                          String name = 'Sklad #${receipt.warehouseId}';
+                          for (final w in warehouses) {
+                            if (w.id == receipt.warehouseId) {
+                              name = w.name;
+                              break;
+                            }
+                          }
+                          return Text(
+                            name,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 10,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -211,6 +246,15 @@ class GoodsReceiptCard extends StatelessWidget {
                     ? Colors.orange
                     : (receipt.isApproved ? Colors.teal : Colors.blue),
               ),
+              if (movementTypeNames.isNotEmpty &&
+                  receipt.movementTypeCode.isNotEmpty)
+                _buildChip(
+                  movementTypeNames[receipt.movementTypeCode] ??
+                      receipt.movementTypeCode,
+                  Colors.purple,
+                ),
+              if (receipt.isSettled)
+                _buildChip('Vysporiadané', Colors.brown),
             ],
           ),
           if ((isVykazana && (onApprove != null || onEdit != null)) ||

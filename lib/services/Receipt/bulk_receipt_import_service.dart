@@ -560,6 +560,7 @@ class BulkReceiptImportService {
         purchasePriceWithoutVat: withoutVat,
         purchaseVat: purchaseVatPct.round(),
         warehouseId: targetWarehouseId,
+        ibaCeleMnozstva: false,
       );
       await productService.createProduct(product);
       items.add(InboundReceiptItem(

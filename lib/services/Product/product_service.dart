@@ -9,6 +9,10 @@ class ProductService {
     return await _db.getProducts();
   }
 
+  Future<List<Product>> getProductsByWarehouseId(int warehouseId) async {
+    return await _db.getProductsByWarehouseId(warehouseId);
+  }
+
   Future<Product?> getProductById(String uniqueId) async {
     return await _db.getProductByUniqueId(uniqueId);
   }

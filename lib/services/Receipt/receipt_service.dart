@@ -6,14 +6,25 @@ import '../database/database_service.dart';
 class ReceiptService {
   final DatabaseService _db = DatabaseService();
 
+  Future<List<ReceiptMovementType>> getReceiptMovementTypes() async {
+    return await _db.getReceiptMovementTypes();
+  }
+
   static double _roundPrice(double v) => (v * 100000).round() / 100000;
 
-  Future<List<InboundReceipt>> getAllReceipts() async {
-    return await _db.getInboundReceipts();
+  /// Ak [warehouseId] je zadané, vráti len príjemky daného skladu.
+  Future<List<InboundReceipt>> getAllReceipts({int? warehouseId}) async {
+    return await _db.getInboundReceipts(warehouseId: warehouseId);
   }
 
   Future<InboundReceipt?> getReceiptById(int id) async {
     return await _db.getInboundReceiptById(id);
+  }
+
+  /// Vymaže neschválenú príjemku a jej položky.
+  Future<bool> deleteReceipt(int receiptId) async {
+    final n = await _db.deleteInboundReceipt(receiptId);
+    return n > 0;
   }
 
   Future<List<InboundReceiptItem>> getReceiptItems(int receiptId) async {
@@ -137,7 +148,17 @@ class ReceiptService {
               ? receipt.supplierName
               : product.supplierName,
           kindId: product.kindId,
-          warehouseId: product.warehouseId,
+          warehouseId: receipt.warehouseId ?? product.warehouseId,
+          linkedProductUniqueId: product.linkedProductUniqueId,
+          minQuantity: product.minQuantity,
+          allowAtCashRegister: product.allowAtCashRegister,
+          showInPriceList: product.showInPriceList,
+          isActive: product.isActive,
+          temporarilyUnavailable: product.temporarilyUnavailable,
+          stockGroup: product.stockGroup,
+          cardType: product.cardType,
+          hasExtendedPricing: product.hasExtendedPricing,
+          ibaCeleMnozstva: product.ibaCeleMnozstva,
         );
         await _db.updateProduct(updated);
       }

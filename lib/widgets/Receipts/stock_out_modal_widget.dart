@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/product.dart';
 import '../../models/stock_out.dart';
+import '../../models/warehouse.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/StockOut/stock_out_service.dart';
+import '../../services/Warehouse/warehouse_service.dart';
 
 class _StockOutItemRow {
   Product? product;
@@ -25,6 +27,7 @@ class _StockOutModalState extends State<StockOutModal> {
   final _formKey = GlobalKey<FormState>();
   final DatabaseService _db = DatabaseService();
   final StockOutService _stockOutService = StockOutService();
+  final WarehouseService _warehouseService = WarehouseService();
 
   final TextEditingController _documentNumberController = TextEditingController();
   final TextEditingController _recipientController = TextEditingController();
@@ -36,11 +39,14 @@ class _StockOutModalState extends State<StockOutModal> {
   StockOutIssueType _issueType = StockOutIssueType.sale;
   final List<_StockOutItemRow> _rows = [];
   List<Product> _products = [];
+  List<Warehouse> _warehouses = [];
+  int? _selectedWarehouseId;
   bool _productsLoaded = false;
   bool _isSaving = false;
   StockOut? _editStockOut;
 
   bool get _isEditMode => widget.stockOutId != null;
+  bool get _isReadOnly => _editStockOut?.jeVysporiadana == true;
 
   @override
   void initState() {
@@ -65,11 +71,16 @@ class _StockOutModalState extends State<StockOutModal> {
     final id = widget.stockOutId!;
     final stockOut = await _db.getStockOutById(id);
     final items = await _db.getStockOutItems(id);
-    final products = await _db.getProducts();
+    final warehouses = await _warehouseService.getAllWarehouses();
+    final products = stockOut?.warehouseId != null
+        ? await _db.getProductsByWarehouseId(stockOut!.warehouseId!)
+        : await _db.getProducts();
     if (!mounted) return;
     setState(() {
+      _warehouses = warehouses;
       _products = products;
       _editStockOut = stockOut;
+      _selectedWarehouseId = stockOut?.warehouseId;
       if (stockOut != null) {
         _documentNumberController.text = stockOut.documentNumber;
         _recipientController.text = stockOut.recipientName ?? '';
@@ -100,10 +111,14 @@ class _StockOutModalState extends State<StockOutModal> {
   }
 
   Future<void> _loadProducts() async {
-    final list = await _db.getProducts();
+    final warehouses = await _warehouseService.getAllWarehouses();
+    final products = _selectedWarehouseId != null
+        ? await _db.getProductsByWarehouseId(_selectedWarehouseId!)
+        : await _db.getProducts();
     if (mounted) {
       setState(() {
-        _products = list;
+        _warehouses = warehouses;
+        _products = products;
         _productsLoaded = true;
       });
     }
@@ -207,8 +222,31 @@ class _StockOutModalState extends State<StockOutModal> {
           _rows[rowIndex].priceController.text =
               product.price.toStringAsFixed(2);
         }
+        if (product.linkedProductUniqueId != null &&
+            product.linkedProductUniqueId!.trim().isNotEmpty) {
+          final linkedList = _products
+              .where((p) => p.uniqueId == product.linkedProductUniqueId)
+              .toList();
+          if (linkedList.isNotEmpty) {
+            final linked = linkedList.first;
+            final qty = _rows[rowIndex].qtyController.text.trim();
+            final nextRow = _StockOutItemRow();
+            nextRow.product = linked;
+            nextRow.qtyController.text = qty.isEmpty ? '1' : qty;
+            nextRow.priceController.text = linked.price.toStringAsFixed(2);
+            _rows.insert(rowIndex + 1, nextRow);
+          }
+        }
       }
     });
+  }
+
+  Future<void> _onWarehouseChanged(int? warehouseId) async {
+    setState(() => _selectedWarehouseId = warehouseId);
+    final products = warehouseId != null
+        ? await _db.getProductsByWarehouseId(warehouseId)
+        : await _db.getProducts();
+    if (mounted) setState(() => _products = products);
   }
 
   Future<List<StockOutItem>?> _collectItems({bool allowEmpty = false}) async {
@@ -281,6 +319,15 @@ class _StockOutModalState extends State<StockOutModal> {
   Future<void> _saveDraft() async {
     final items = await _collectItems(allowEmpty: true);
     if (items == null) return;
+    if (!_isEditMode && _selectedWarehouseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vyberte sklad pre výdajku'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       var docNumber = _documentNumberController.text.trim();
@@ -301,6 +348,7 @@ class _StockOutModalState extends State<StockOutModal> {
           recipientName: recipient,
           notes: notes,
           status: StockOutStatus.rozpracovany,
+          warehouseId: _selectedWarehouseId,
           vatRate: _zeroVat ? 0 : null,
           issueType: _issueType,
           writeOffReason: _issueType == StockOutIssueType.writeOff
@@ -314,6 +362,7 @@ class _StockOutModalState extends State<StockOutModal> {
           createdAt: DateTime.now(),
           recipientName: recipient,
           notes: notes,
+          warehouseId: _selectedWarehouseId,
           vatRate: _zeroVat ? 0 : null,
           issueType: _issueType,
           writeOffReason: _issueType == StockOutIssueType.writeOff
@@ -382,6 +431,7 @@ class _StockOutModalState extends State<StockOutModal> {
           recipientName: recipient,
           notes: notes,
           status: status,
+          warehouseId: _selectedWarehouseId,
           vatRate: _zeroVat ? 0 : null,
           issueType: _issueType,
           writeOffReason: _issueType == StockOutIssueType.writeOff
@@ -403,11 +453,22 @@ class _StockOutModalState extends State<StockOutModal> {
           );
         }
       } else {
+        if (_selectedWarehouseId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Vyberte sklad pre výdajku'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isSaving = false);
+          return;
+        }
         final so = StockOut(
           documentNumber: docNumber,
           createdAt: DateTime.now(),
           recipientName: recipient,
           notes: notes,
+          warehouseId: _selectedWarehouseId,
           vatRate: _zeroVat ? 0 : null,
           issueType: _issueType,
           writeOffReason: _issueType == StockOutIssueType.writeOff
@@ -490,9 +551,17 @@ class _StockOutModalState extends State<StockOutModal> {
                 ],
               ),
               const SizedBox(height: 20),
+              if (_isReadOnly)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Vysporiadaná výdajka – len na prezeranie',
+                    style: TextStyle(fontSize: 13, color: Colors.orange[800]),
+                  ),
+                ),
               TextFormField(
                 controller: _documentNumberController,
-                readOnly: !_manualDocumentNumber && !_isEditMode,
+                readOnly: _isReadOnly || (!_manualDocumentNumber && !_isEditMode),
                 decoration: _styledInputDecoration('Číslo výdajky',
                         prefixIcon: const Icon(Icons.tag, size: 22, color: Color(0xFF64748B)))
                     .copyWith(
@@ -518,8 +587,22 @@ class _StockOutModalState extends State<StockOutModal> {
                 ),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                value: _selectedWarehouseId,
+                decoration: _styledInputDecoration('Sklad *',
+                    prefixIcon: const Icon(Icons.warehouse_outlined, size: 22, color: Color(0xFF64748B))),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('— Vyberte sklad —')),
+                  ..._warehouses.map(
+                    (w) => DropdownMenuItem<int?>(value: w.id, child: Text(w.name)),
+                  ),
+                ],
+                onChanged: _isReadOnly ? null : (id) => _onWarehouseChanged(id),
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _recipientController,
+                readOnly: _isReadOnly,
                 decoration: _styledInputDecoration('Odberateľ / účel',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 22, color: Color(0xFF64748B))),
               ),
@@ -534,7 +617,7 @@ class _StockOutModalState extends State<StockOutModal> {
                           child: Text(t.label),
                         ))
                     .toList(),
-                onChanged: (t) => setState(() => _issueType = t ?? StockOutIssueType.sale),
+                onChanged: _isReadOnly ? null : (t) => setState(() => _issueType = t ?? StockOutIssueType.sale),
                 borderRadius: BorderRadius.circular(_radius),
               ),
               if (_issueType == StockOutIssueType.writeOff) ...[
@@ -578,17 +661,18 @@ class _StockOutModalState extends State<StockOutModal> {
                           color: const Color(0xFF1E293B),
                         ),
                   ),
-                  FilledButton.icon(
-                    onPressed: _addRow,
-                    icon: const Icon(Icons.add_rounded, size: 20),
-                    label: const Text('Pridať položku'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _primaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+                  if (!_isReadOnly)
+                    FilledButton.icon(
+                      onPressed: _addRow,
+                      icon: const Icon(Icons.add_rounded, size: 20),
+                      label: const Text('Pridať položku'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -602,11 +686,12 @@ class _StockOutModalState extends State<StockOutModal> {
               const SizedBox(height: 20),
               _buildSummaryCard(),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: _isSaving ? null : _submit,
+              if (!_isReadOnly)
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _isSaving ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: _primaryBlue,
                     foregroundColor: Colors.white,
@@ -624,10 +709,10 @@ class _StockOutModalState extends State<StockOutModal> {
                               ? 'Vykázať výdaj'
                               : (_isEditMode ? 'Uložiť zmeny' : 'Uložiť výdajku'),
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
+                          ),
+                  ),
                 ),
-              ),
-              if (!_isEditMode || _editStockOut?.isDraft == true) ...[
+              if (!_isReadOnly && (!_isEditMode || _editStockOut?.isDraft == true)) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -752,7 +837,7 @@ class _StockOutModalState extends State<StockOutModal> {
               const DropdownMenuItem(value: null, child: Text('— Vyberte tovar —', style: TextStyle(fontSize: 13))),
               ..._products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${p.plu})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
             ],
-            onChanged: (p) => _onProductSelected(index, p),
+            onChanged: _isReadOnly ? null : (p) => _onProductSelected(index, p),
           ),
         ),
         Padding(
@@ -763,6 +848,7 @@ class _StockOutModalState extends State<StockOutModal> {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: TextFormField(
             controller: row.qtyController,
+            readOnly: _isReadOnly,
             keyboardType: TextInputType.number,
             onChanged: (_) => setState(() {}),
             textAlign: TextAlign.center,
@@ -780,6 +866,7 @@ class _StockOutModalState extends State<StockOutModal> {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: TextFormField(
             controller: row.priceController,
+            readOnly: _isReadOnly,
             keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
             onChanged: (_) => setState(() {}),
             textAlign: TextAlign.center,
@@ -802,7 +889,7 @@ class _StockOutModalState extends State<StockOutModal> {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 22, color: Color(0xFF94A3B8)),
-            onPressed: _rows.length > 1 ? () => _removeRow(index) : null,
+            onPressed: _isReadOnly ? null : (_rows.length > 1 ? () => _removeRow(index) : null),
             tooltip: 'Odstrániť',
           ),
         ),

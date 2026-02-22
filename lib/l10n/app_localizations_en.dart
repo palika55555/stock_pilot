@@ -507,6 +507,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseWarehouse => 'Choose warehouse';
 
   @override
+  String get warehouseFilterAll => 'All warehouses';
+
+  @override
   String get reportGenerated => 'Report generated. You can share it.';
 
   @override

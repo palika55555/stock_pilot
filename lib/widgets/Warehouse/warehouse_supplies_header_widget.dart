@@ -4,6 +4,7 @@ class WarehouseSuppliesHeader extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onFilterTap;
   final VoidCallback? onColumnsTap;
+  final VoidCallback? onAddRecipeTap;
   final String? selectedWarehouseName;
 
   const WarehouseSuppliesHeader({
@@ -11,6 +12,7 @@ class WarehouseSuppliesHeader extends StatelessWidget {
     required this.isAdmin,
     required this.onFilterTap,
     this.onColumnsTap,
+    this.onAddRecipeTap,
     this.selectedWarehouseName,
   });
 
@@ -51,6 +53,16 @@ class WarehouseSuppliesHeader extends StatelessWidget {
               ),
               onPressed: onColumnsTap,
               tooltip: 'Zobrazenie stĺpcov',
+            ),
+          if (onAddRecipeTap != null)
+            IconButton(
+              icon: const Icon(
+                Icons.restaurant_menu_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+              onPressed: onAddRecipeTap,
+              tooltip: 'Vytvoriť receptúru',
             ),
           IconButton(
             icon: Stack(
