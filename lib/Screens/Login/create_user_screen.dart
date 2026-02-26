@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
 import '../../screens/Home/Home_screen.dart';
 import '../../widgets/Common/standard_text_field.dart';
@@ -119,6 +120,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
           return;
         }
         await dbService.insertUser(user);
+        syncUserToBackend(user);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

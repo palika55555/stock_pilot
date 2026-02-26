@@ -52,12 +52,12 @@ function App() {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="field-label">
-            <span>Username</span>
+            <span>Používateľské meno</span>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your Username"
+              placeholder="Zadajte používateľské meno"
               autoComplete="username"
               required
               className="input"

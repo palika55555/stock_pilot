@@ -143,6 +143,54 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// --- Sync používateľa z Flutter (SQLite) do PostgreSQL – rovnaké heslo na web ---
+app.post('/api/auth/sync-user', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const {
+    username,
+    password,
+    full_name,
+    role,
+    email,
+    phone,
+    department,
+    avatar_url,
+  } = req.body || {};
+  if (!username || username.toString().trim() === '') {
+    return res.status(400).json({ success: false, error: 'username je povinný' });
+  }
+  const u = username.toString().trim();
+  const p = password != null ? String(password) : '';
+  const fn = full_name != null ? String(full_name).trim() : u;
+  const r = role != null ? String(role).trim() : 'user';
+  const e = email != null ? String(email).trim() : '';
+  const ph = phone != null ? String(phone).trim() : '';
+  const d = department != null ? String(department).trim() : '';
+  const av = avatar_url != null ? String(avatar_url).trim() : '';
+  try {
+    await pool.query(
+      `INSERT INTO users (username, password, full_name, role, email, phone, department, avatar_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (username) DO UPDATE SET
+         password = EXCLUDED.password,
+         full_name = EXCLUDED.full_name,
+         role = EXCLUDED.role,
+         email = EXCLUDED.email,
+         phone = EXCLUDED.phone,
+         department = EXCLUDED.department,
+         avatar_url = EXCLUDED.avatar_url`,
+      [u, p, fn, r, e, ph, d, av]
+    );
+    console.log('[auth] Sync user OK:', u);
+    res.status(200).json({ success: true, message: 'Používateľ zosynchronizovaný' });
+  } catch (err) {
+    console.error('[auth] Sync-user error:', err.message);
+    res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
 // --- API: Stocks (PostgreSQL) ---
 app.get('/api/stocks', async (req, res) => {
   if (!pool || !poolReady) {

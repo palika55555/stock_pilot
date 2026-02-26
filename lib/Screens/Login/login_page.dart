@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/Common/change_password_dialog.dart';
@@ -64,6 +65,8 @@ class _LoginPageState extends State<LoginPage> {
           } else {
             await _dbService.clearSavedLogin();
           }
+          // Sync používateľa do PostgreSQL – rovnaké heslo bude fungovať na stockpilot.sk
+          syncUserToBackend(user);
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(
