@@ -8,11 +8,27 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// PostgreSQL pool (DATABASE_URL napr. postgresql://user:pass@host:5432/dbname)
-const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL })
-  : null;
-let poolReady = false; // true až po úspešnom init (tabuľka stocks)
+// PostgreSQL – URL nastav v Coolify ako DATABASE_URL (postgresql://user:pass@host:5432/dbname)
+const databaseUrl = process.env.DATABASE_URL;
+let pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
+let poolReady = false;
+
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('[pool] Database pool error (server beží ďalej):', err.message);
+  });
+}
+
+function getDbHostname() {
+  if (!databaseUrl) return null;
+  try {
+    return new URL(databaseUrl).hostname;
+  } catch {
+    return null;
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
@@ -72,6 +88,7 @@ app.get('/health', async (req, res) => {
     uptimeSeconds: getUptimeSeconds(),
     uptimeFormatted: formatUptime(getUptimeSeconds()),
     database,
+    internal_hostname: getDbHostname(),
   });
 });
 
@@ -184,21 +201,26 @@ async function initDatabase() {
     console.log('[init] Table stocks ready');
   } catch (err) {
     console.error('[init] Failed to create table stocks:', err.message);
-    console.warn('[init] Server will start without DB. Set database host (e.g. stockpilot-db) on same Docker network and restart.');
     poolReady = false;
-    // Nepadneme – server naštartuje, /health vráti database: "error", /api/stocks 503
   }
 }
 
 async function start() {
-  await initDatabase();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`API beží na http://0.0.0.0:${PORT}`);
     console.log(`CORS: ${allowedOrigins.join(', ')}`);
   });
+
+  if (!pool) return;
+
+  for (;;) {
+    await initDatabase();
+    if (poolReady) break;
+    console.error('[init] Retry za 5 s...');
+    await sleep(5000);
+  }
 }
 
 start().catch((err) => {
-  console.error('Startup failed:', err);
-  process.exit(1);
+  console.error('Startup error (server beží):', err);
 });
