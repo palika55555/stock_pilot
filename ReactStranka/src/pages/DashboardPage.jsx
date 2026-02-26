@@ -105,7 +105,13 @@ export default function DashboardPage() {
                 <span className="dashboard-kpi-title">Objednávky</span>
                 <span className="dashboard-kpi-value">{stats.orders}</span>
               </div>
-              <div className="dashboard-kpi-card">
+              <div
+                className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/dashboard/customers')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/dashboard/customers') } }}
+              >
                 <span className="dashboard-kpi-title">Zákazníci</span>
                 <span className="dashboard-kpi-value">{stats.customers}</span>
               </div>

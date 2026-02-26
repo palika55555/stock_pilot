@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
+import CustomersPage from './pages/CustomersPage'
+import CustomerDetailPage from './pages/CustomerDetailPage'
 import './App.css'
 
 function PrivateRoute({ children }) {
@@ -19,6 +21,22 @@ function App() {
           element={
             <PrivateRoute>
               <DashboardPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/customers"
+          element={
+            <PrivateRoute>
+              <CustomersPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/customers/:id"
+          element={
+            <PrivateRoute>
+              <CustomerDetailPage />
             </PrivateRoute>
           }
         />

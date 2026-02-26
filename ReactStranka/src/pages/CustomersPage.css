@@ -1,0 +1,85 @@
+.dashboard-loading .btn-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 193, 61, 0.3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: dashboard-spin 0.7s linear infinite;
+}
+
+.dashboard-back {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.5rem;
+  line-height: 1;
+}
+
+.dashboard-back:hover {
+  color: var(--text);
+}
+
+.customers-main {
+  max-width: 800px;
+}
+
+.customers-error,
+.customers-empty {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.customers-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.customers-list li {
+  margin-bottom: 0.5rem;
+}
+
+.customers-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.customers-list-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 193, 61, 0.2);
+}
+
+.customers-list-name {
+  display: block;
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.customers-list-ico,
+.customers-list-city {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.customers-list-inactive {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}

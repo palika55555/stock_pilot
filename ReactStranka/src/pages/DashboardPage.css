@@ -143,6 +143,10 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
+.dashboard-kpi-card--clickable {
+  cursor: pointer;
+}
+
 .dashboard-kpi-title {
   font-size: 0.9rem;
   font-weight: 600;

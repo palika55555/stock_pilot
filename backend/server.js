@@ -222,6 +222,47 @@ app.post('/api/sync/customers', async (req, res) => {
   res.status(200).json({ success: true, count: result.count });
 });
 
+// --- API: Zákazníci (zoznam a detail) ---
+app.get('/api/customers', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
+       FROM customers ORDER BY name ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/customers]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+app.get('/api/customers/:id', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: 'Neplatné id' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
+       FROM customers WHERE id = $1`,
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Zákazník nebol nájdený' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /api/customers/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 // --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---
 app.get('/api/dashboard/stats', async (req, res) => {
   if (!pool || !poolReady) {
