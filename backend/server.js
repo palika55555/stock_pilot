@@ -2,10 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// PostgreSQL pool (DATABASE_URL napr. postgresql://user:pass@host:5432/dbname)
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL })
+  : null;
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
@@ -47,12 +53,24 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let database = 'error';
+  if (pool) {
+    try {
+      await pool.query('SELECT NOW()');
+      database = 'connected';
+    } catch (err) {
+      console.error('[health] DB check failed:', err.message);
+    }
+  } else {
+    console.warn('[health] DATABASE_URL not set, skipping DB check');
+  }
   res.json({
     status: 'ok',
     service: 'stock-pilot-api',
     uptimeSeconds: getUptimeSeconds(),
     uptimeFormatted: formatUptime(getUptimeSeconds()),
+    database,
   });
 });
 
@@ -73,9 +91,54 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// --- API routes (pripravené miesta) ---
-// app.use('/api/stocks', stocksRouter);
-// app.use('/api/...', ...);
+// --- API: Stocks (PostgreSQL) ---
+app.get('/api/stocks', async (req, res) => {
+  if (!pool) {
+    console.error('[GET /api/stocks] DATABASE_URL not set');
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, symbol, price, created_at FROM stocks ORDER BY created_at DESC'
+    );
+    console.log('[GET /api/stocks] returned', rows.length, 'rows');
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/stocks]', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/stocks', async (req, res) => {
+  if (!pool) {
+    console.error('[POST /api/stocks] DATABASE_URL not set');
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  const { symbol, price } = req.body || {};
+  if (symbol == null || symbol.toString().trim() === '' || price == null) {
+    console.warn('[POST /api/stocks] invalid body:', { symbol, price });
+    return res.status(400).json({
+      error: 'symbol (non-empty) and price (number) are required',
+    });
+  }
+  const priceNum = Number(price);
+  if (Number.isNaN(priceNum)) {
+    return res.status(400).json({ error: 'price must be a number' });
+  }
+  try {
+    const {
+      rows: [row],
+    } = await pool.query(
+      'INSERT INTO stocks (symbol, price) VALUES ($1, $2) RETURNING id, symbol, price, created_at',
+      [symbol.toString().trim(), priceNum]
+    );
+    console.log('[POST /api/stocks] created id=', row?.id, 'symbol=', row?.symbol);
+    res.status(201).json(row);
+  } catch (err) {
+    console.error('[POST /api/stocks]', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
 
 // 404
 app.use((req, res) => {
@@ -102,7 +165,36 @@ function formatUptime(seconds) {
   return parts.join(' ');
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`API beží na http://0.0.0.0:${PORT}`);
-  console.log(`CORS: ${allowedOrigins.join(', ')}`);
+async function initDatabase() {
+  if (!pool) {
+    console.warn('[init] DATABASE_URL not set, skipping table creation');
+    return;
+  }
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS stocks (
+        id SERIAL PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        price NUMERIC NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('[init] Table stocks ready');
+  } catch (err) {
+    console.error('[init] Failed to create table stocks:', err.message);
+    throw err;
+  }
+}
+
+async function start() {
+  await initDatabase();
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`API beží na http://0.0.0.0:${PORT}`);
+    console.log(`CORS: ${allowedOrigins.join(', ')}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('Startup failed:', err);
+  process.exit(1);
 });
