@@ -1,0 +1,16 @@
+{
+  "name": "stock-pilot-api",
+  "version": "1.0.0",
+  "description": "Backend API pre Stock Pilot (Raspberry Pi)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
