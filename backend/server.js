@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const { Pool } = require('pg');
 const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
+const { syncCustomers } = require('./DBsync/sync/customerSync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -208,16 +209,34 @@ app.post('/api/stocks', async (req, res) => {
   }
 });
 
-// --- API: Dashboard štatistiky (rovnaká štruktúra ako Flutter home – zatiaľ stub, neskôr sync) ---
+// --- Sync zákazníkov z Flutter do PostgreSQL (DBsync/sync) ---
+app.post('/api/sync/customers', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncCustomers(pool, req.body);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  console.log('[sync] Customers OK:', result.count);
+  res.status(200).json({ success: true, count: result.count });
+});
+
+// --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---
 app.get('/api/dashboard/stats', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
   try {
+    let customers = 0;
+    try {
+      const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers');
+      customers = r.rows[0]?.count ?? 0;
+    } catch (_) {}
     const stats = {
       products: 0,
       orders: 0,
-      customers: 0,
+      customers,
       revenue: 0,
       inboundCount: 0,
       outboundCount: 0,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:stock_pilot/models/customer.dart';
 import 'package:stock_pilot/screens/price_quote/price_quote_screen.dart';
 import 'package:stock_pilot/services/customer/customer_service.dart';
+import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/widgets/customers/add_customer_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 
@@ -78,6 +79,11 @@ class _CustomersPageState extends State<CustomersPage>
     }
   }
 
+  Future<void> _loadCustomersAndSync() async {
+    await _loadCustomers();
+    if (mounted) syncCustomersToBackend(await _customerService.getAllCustomers());
+  }
+
   void _addCustomer() {
     showModalBottomSheet(
       context: context,
@@ -86,7 +92,7 @@ class _CustomersPageState extends State<CustomersPage>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => const AddCustomerModal(),
-    ).then((_) => _loadCustomers());
+    ).then((_) => _loadCustomersAndSync());
   }
 
   void _editCustomer(Customer c) {
@@ -97,7 +103,7 @@ class _CustomersPageState extends State<CustomersPage>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => AddCustomerModal(customer: c),
-    ).then((_) => _loadCustomers());
+    ).then((_) => _loadCustomersAndSync());
   }
 
   void _createPriceQuote(Customer c) {
@@ -131,7 +137,7 @@ class _CustomersPageState extends State<CustomersPage>
     if (confirm == true && mounted) {
       await _customerService.deleteCustomer(c.id!);
       if (mounted) {
-        _loadCustomers();
+        await _loadCustomersAndSync();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.customerDeleted),

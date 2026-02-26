@@ -65,8 +65,10 @@ class _LoginPageState extends State<LoginPage> {
           } else {
             await _dbService.clearSavedLogin();
           }
-          // Sync používateľa do PostgreSQL – rovnaké heslo bude fungovať na stockpilot.sk
+          // Sync používateľa a zákazníkov do PostgreSQL – web dashboard má rovnaké dáta
           syncUserToBackend(user);
+          final customers = await _dbService.getCustomers();
+          syncCustomersToBackend(customers);
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(
