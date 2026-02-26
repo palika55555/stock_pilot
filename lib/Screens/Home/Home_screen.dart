@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/common/app_drawer_widget.dart';
 import '../../widgets/Header/home_app_bar_widget.dart';
 import '../../widgets/Home/home_overview_widget.dart';
 import '../../models/user.dart';
+import '../../services/Database/database_service.dart';
+import '../../services/api_sync_service.dart';
+import '../../services/sync_check_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final User user;
@@ -15,16 +19,82 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final DatabaseService _db = DatabaseService();
   late String _currentRole;
+  StreamSubscription<void>? _syncSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Pri štarte aplikácie vždy východisková rola 'user' (admin si môže prepnúť)
     _currentRole = 'user';
     _persistCurrentUser();
+    WidgetsBinding.instance.addObserver(this);
+    SyncCheckService.instance.start();
+    _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
+      if (!mounted) return;
+      _showSyncNeededSnackBar();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _syncSubscription?.cancel();
+    SyncCheckService.instance.stop();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      SyncCheckService.instance.start();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      SyncCheckService.instance.stop();
+    }
+  }
+
+  void _showSyncNeededSnackBar() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.amber.shade200, size: 24),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Na webe boli zmeny v zákazníkoch. Obnoviť dáta?'),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1A1A1A),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Obnoviť',
+          textColor: Colors.amber,
+          onPressed: () => _pullCustomersFromBackend(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pullCustomersFromBackend() async {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final list = await fetchCustomersFromBackend();
+    if (list != null && list.isNotEmpty && mounted) {
+      await _db.replaceCustomersFromBackend(list);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Zákazníci boli obnovení z webu'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   void _persistCurrentUser() {

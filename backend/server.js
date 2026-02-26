@@ -22,6 +22,9 @@ if (pool) {
   });
 }
 
+// Časová pečiatka zmien zákazníkov (web alebo sync) – Flutter periodicky kontroluje a zobrazí notifikáciu
+let lastCustomersUpdatedAt = 0;
+
 function getDbHostname() {
   if (!databaseUrl) return null;
   try {
@@ -218,6 +221,7 @@ app.post('/api/sync/customers', async (req, res) => {
   if (!result.ok) {
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
+  lastCustomersUpdatedAt = Date.now();
   console.log('[sync] Customers OK:', result.count);
   res.status(200).json({ success: true, count: result.count });
 });
@@ -261,6 +265,60 @@ app.get('/api/customers/:id', async (req, res) => {
     console.error('[GET /api/customers/:id]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
+});
+
+app.put('/api/customers/:id', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: 'Neplatné id' });
+  }
+  const { name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active } = req.body || {};
+  const nameVal = name != null ? String(name).trim() : null;
+  const icoVal = ico != null ? String(ico).trim() : null;
+  if (!nameVal || nameVal === '' || !icoVal || icoVal === '') {
+    return res.status(400).json({ error: 'Meno a IČO sú povinné' });
+  }
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE customers SET
+        name = $1, ico = $2, email = $3, address = $4, city = $5, postal_code = $6,
+        dic = $7, ic_dph = $8, default_vat_rate = $9, is_active = $10
+       WHERE id = $11`,
+      [
+        nameVal,
+        icoVal,
+        email != null ? String(email).trim() || null : null,
+        address != null ? String(address).trim() || null : null,
+        city != null ? String(city).trim() || null : null,
+        postal_code != null ? String(postal_code).trim() || null : null,
+        dic != null ? String(dic).trim() || null : null,
+        ic_dph != null ? String(ic_dph).trim() || null : null,
+        default_vat_rate != null ? parseInt(default_vat_rate, 10) : 20,
+        is_active !== undefined && is_active !== null ? (is_active ? 1 : 0) : 1,
+        id,
+      ]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Zákazník nebol nájdený' });
+    }
+    const { rows } = await pool.query(
+      'SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active FROM customers WHERE id = $1',
+      [id]
+    );
+    lastCustomersUpdatedAt = Date.now();
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[PUT /api/customers/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
+app.get('/api/sync/check', (_req, res) => {
+  res.json({ customers_updated_at: lastCustomersUpdatedAt });
 });
 
 // --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---

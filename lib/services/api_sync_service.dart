@@ -47,3 +47,31 @@ void syncCustomersToBackend(List<Customer> customers) {
       .timeout(const Duration(seconds: 10))
       .ignore();
 }
+
+/// Stiahne zoznam zákazníkov z backendu (vrátane úprav urobených na webe).
+/// Vráti null pri chybe/offline. Volaj po prihlásení a potom zavolaj [DatabaseService.replaceCustomersFromBackend].
+Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
+  try {
+    final uri = Uri.parse('$kBackendApiBase/api/customers');
+    final res = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final list = jsonDecode(res.body) as List<dynamic>?;
+    if (list == null) return null;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Kontrola či boli na webe zmeny (GET /api/sync/check). Používa [SyncCheckService].
+Future<Map<String, dynamic>?> fetchSyncCheck() async {
+  try {
+    final uri = Uri.parse('$kBackendApiBase/api/sync/check');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    return map;
+  } catch (_) {
+    return null;
+  }
+}

@@ -69,6 +69,11 @@ class _LoginPageState extends State<LoginPage> {
           syncUserToBackend(user);
           final customers = await _dbService.getCustomers();
           syncCustomersToBackend(customers);
+          // Stiahnuť z backendu zmeny (úpravy zákazníkov z webu) a preniesť do lokálnej DB
+          final fromBackend = await fetchCustomersFromBackend();
+          if (fromBackend != null && fromBackend.isNotEmpty && mounted) {
+            await _dbService.replaceCustomersFromBackend(fromBackend);
+          }
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(
