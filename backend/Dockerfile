@@ -1,6 +1,9 @@
 # Node.js backend pre Raspberry Pi (arm64)
 FROM node:20-alpine
 
+# curl pre Coolify healthcheck (v Alpine defaultne nie je)
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 # Závislosti najprv (lepší cache)
