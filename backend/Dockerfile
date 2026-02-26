@@ -10,8 +10,8 @@ RUN npm install --omit=dev
 # Aplikácia
 COPY . .
 
-# Limity pre RPi: heap 256 MB, menej agresívny GC
-ENV NODE_OPTIONS="--max-old-space-size=256 --gc-interval=100"
+# Limity pre RPi: heap 256 MB (--gc-interval nie je povolený v NODE_OPTIONS)
+ENV NODE_OPTIONS="--max-old-space-size=256"
 
 USER node
 

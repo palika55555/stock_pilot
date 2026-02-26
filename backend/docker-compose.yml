@@ -8,7 +8,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NODE_OPTIONS=--max-old-space-size=256 --gc-interval=100
+      - NODE_OPTIONS=--max-old-space-size=256
     deploy:
       resources:
         limits:
