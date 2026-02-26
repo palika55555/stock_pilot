@@ -1,16 +1,35 @@
 import { useState } from 'react'
 import './App.css'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+
 function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState({ type: '', text: '' })
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    // TODO: connect to your auth API
-    setTimeout(() => setLoading(false), 800)
+    setMessage({ type: '', text: '' })
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: `Vitajte, ${data.user?.email || email}!` })
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Prihlásenie zlyhalo.' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Backend nedostupný. Skontrolujte URL alebo sieť.' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -53,6 +72,11 @@ function App() {
               className="input"
             />
           </label>
+          {message.text && (
+            <p className={message.type === 'success' ? 'msg-success' : 'msg-error'} role="alert">
+              {message.text}
+            </p>
+          )}
           <button type="submit" className="btn-login" disabled={loading}>
             {loading ? (
               <span className="btn-spinner" aria-hidden="true" />

@@ -201,6 +201,25 @@
   to { transform: rotate(360deg); }
 }
 
+.msg-success,
+.msg-error {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  margin: 0;
+}
+.msg-success {
+  color: #0c0f14;
+  background: rgba(34, 197, 94, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+.msg-error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .footer-text {
   margin: 1.75rem 0 0;
   text-align: center;

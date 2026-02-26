@@ -8,9 +8,14 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
+const envOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
+  : defaultOrigins;
+const allowedOrigins =
+  NODE_ENV === 'development'
+    ? [...envOrigins, 'http://localhost:5173', 'http://localhost:3000']
+    : envOrigins;
 
 // Middleware
 app.use(helmet());
@@ -48,6 +53,23 @@ app.get('/health', (req, res) => {
     service: 'stock-pilot-api',
     uptimeSeconds: getUptimeSeconds(),
     uptimeFormatted: formatUptime(getUptimeSeconds()),
+  });
+});
+
+// --- API: Auth (stub pre test frontendu) ---
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(401).json({
+      success: false,
+      error: 'E-mail a heslo sú povinné',
+    });
+  }
+  // Stub: akceptuje ľubovoľný pár (skutočná validácia neskôr cez DB)
+  res.status(200).json({
+    success: true,
+    token: `stub-${Buffer.from(email).toString('base64')}-${Date.now()}`,
+    user: { email: email.trim() },
   });
 });
 
