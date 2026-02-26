@@ -92,21 +92,55 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// --- API: Auth (stub pre test frontendu) ---
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) {
+// --- API: Auth (rovnaká logika ako Flutter login_page – username + password z DB) ---
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
     return res.status(401).json({
       success: false,
-      error: 'E-mail a heslo sú povinné',
+      error: 'Username a heslo sú povinné',
     });
   }
-  // Stub: akceptuje ľubovoľný pár (skutočná validácia neskôr cez DB)
-  res.status(200).json({
-    success: true,
-    token: `stub-${Buffer.from(email).toString('base64')}-${Date.now()}`,
-    user: { email: email.trim() },
-  });
+  if (!pool || !poolReady) {
+    return res.status(503).json({
+      success: false,
+      error: 'Databáza nie je k dispozícii',
+    });
+  }
+  try {
+    const {
+      rows: [user],
+    } = await pool.query(
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date FROM users WHERE username = $1',
+      [username.toString().trim()]
+    );
+    if (!user || user.password !== password) {
+      console.warn('[auth] Failed login attempt for username:', username);
+      return res.status(401).json({
+        success: false,
+        error: 'Nesprávny login alebo heslo',
+      });
+    }
+    const token = `Bearer-${Buffer.from(String(user.id)).toString('base64')}-${Date.now()}`;
+    console.log('[auth] Login OK:', user.username);
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        fullName: user.full_name || user.username,
+        role: user.role || 'user',
+        email: user.email || '',
+      },
+    });
+  } catch (err) {
+    console.error('[auth] Login error:', err.message);
+    res.status(500).json({
+      success: false,
+      error: 'Chyba servera',
+    });
+  }
 });
 
 // --- API: Stocks (PostgreSQL) ---
@@ -197,8 +231,22 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT,
+        full_name TEXT,
+        role TEXT,
+        email TEXT,
+        phone TEXT,
+        department TEXT,
+        avatar_url TEXT,
+        join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     poolReady = true;
-    console.log('[init] Table stocks ready');
+    console.log('[init] Tables stocks + users ready');
   } catch (err) {
     console.error('[init] Failed to create table stocks:', err.message);
     poolReady = false;

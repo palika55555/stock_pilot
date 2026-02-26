@@ -4,7 +4,7 @@ import './App.css'
 const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
 
 function App() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
@@ -17,11 +17,14 @@ function App() {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: `Vitajte, ${data.user?.email || email}!` })
+        setMessage({
+          type: 'success',
+          text: `Vitajte, ${data.user?.fullName || data.user?.username || username}!`,
+        })
       } else {
         setMessage({ type: 'error', text: data.error || 'Prihlásenie zlyhalo.' })
       }
@@ -49,13 +52,13 @@ function App() {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="field-label">
-            <span>E-mail</span>
+            <span>Username</span>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="vas@email.sk"
-              autoComplete="email"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your Username"
+              autoComplete="username"
               required
               className="input"
             />
