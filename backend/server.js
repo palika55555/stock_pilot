@@ -3,6 +3,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { Pool } = require('pg');
+const { runMigrations } = require('./DBsync/runMigrations');
+const { syncUser } = require('./DBsync/sync/userSync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -143,52 +145,18 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// --- Sync používateľa z Flutter (SQLite) do PostgreSQL – rovnaké heslo na web ---
+// --- Sync používateľa z Flutter (SQLite) do PostgreSQL – služba v DBsync/sync ---
 app.post('/api/auth/sync-user', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const {
-    username,
-    password,
-    full_name,
-    role,
-    email,
-    phone,
-    department,
-    avatar_url,
-  } = req.body || {};
-  if (!username || username.toString().trim() === '') {
-    return res.status(400).json({ success: false, error: 'username je povinný' });
+  const result = await syncUser(pool, req.body);
+  if (!result.ok) {
+    const status = result.error === 'username je povinný' ? 400 : 500;
+    return res.status(status).json({ success: false, error: result.error || 'Chyba servera' });
   }
-  const u = username.toString().trim();
-  const p = password != null ? String(password) : '';
-  const fn = full_name != null ? String(full_name).trim() : u;
-  const r = role != null ? String(role).trim() : 'user';
-  const e = email != null ? String(email).trim() : '';
-  const ph = phone != null ? String(phone).trim() : '';
-  const d = department != null ? String(department).trim() : '';
-  const av = avatar_url != null ? String(avatar_url).trim() : '';
-  try {
-    await pool.query(
-      `INSERT INTO users (username, password, full_name, role, email, phone, department, avatar_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (username) DO UPDATE SET
-         password = EXCLUDED.password,
-         full_name = EXCLUDED.full_name,
-         role = EXCLUDED.role,
-         email = EXCLUDED.email,
-         phone = EXCLUDED.phone,
-         department = EXCLUDED.department,
-         avatar_url = EXCLUDED.avatar_url`,
-      [u, p, fn, r, e, ph, d, av]
-    );
-    console.log('[auth] Sync user OK:', u);
-    res.status(200).json({ success: true, message: 'Používateľ zosynchronizovaný' });
-  } catch (err) {
-    console.error('[auth] Sync-user error:', err.message);
-    res.status(500).json({ success: false, error: 'Chyba servera' });
-  }
+  console.log('[auth] Sync user OK:', req.body?.username);
+  res.status(200).json({ success: true, message: 'Používateľ zosynchronizovaný' });
 });
 
 // --- API: Stocks (PostgreSQL) ---
@@ -240,6 +208,30 @@ app.post('/api/stocks', async (req, res) => {
   }
 });
 
+// --- API: Dashboard štatistiky (rovnaká štruktúra ako Flutter home – zatiaľ stub, neskôr sync) ---
+app.get('/api/dashboard/stats', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  try {
+    const stats = {
+      products: 0,
+      orders: 0,
+      customers: 0,
+      revenue: 0,
+      inboundCount: 0,
+      outboundCount: 0,
+      quotesCount: 0,
+      recentInbound: [],
+      recentOutbound: [],
+    };
+    res.json(stats);
+  } catch (err) {
+    console.error('[GET /api/dashboard/stats]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 // 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
@@ -265,42 +257,6 @@ function formatUptime(seconds) {
   return parts.join(' ');
 }
 
-async function initDatabase() {
-  if (!pool) {
-    console.warn('[init] DATABASE_URL not set, skipping table creation');
-    return;
-  }
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS stocks (
-        id SERIAL PRIMARY KEY,
-        symbol TEXT NOT NULL,
-        price NUMERIC NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT,
-        full_name TEXT,
-        role TEXT,
-        email TEXT,
-        phone TEXT,
-        department TEXT,
-        avatar_url TEXT,
-        join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    poolReady = true;
-    console.log('[init] Tables stocks + users ready');
-  } catch (err) {
-    console.error('[init] Failed to create table stocks:', err.message);
-    poolReady = false;
-  }
-}
-
 async function start() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`API beží na http://0.0.0.0:${PORT}`);
@@ -310,10 +266,18 @@ async function start() {
   if (!pool) return;
 
   for (;;) {
-    await initDatabase();
-    if (poolReady) break;
-    console.error('[init] Retry za 5 s...');
-    await sleep(5000);
+    try {
+      await pool.query('SELECT NOW()');
+      const { run } = await runMigrations(pool);
+      poolReady = true;
+      if (run > 0) console.log('[start] Migrácie spustené:', run);
+      break;
+    } catch (err) {
+      console.error('[start] DB / migrácie:', err.message);
+      poolReady = false;
+      console.error('[start] Retry za 5 s...');
+      await sleep(5000);
+    }
   }
 }
 
