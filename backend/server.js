@@ -12,6 +12,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const pool = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL })
   : null;
+let poolReady = false; // true až po úspešnom init (tabuľka stocks)
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
@@ -55,14 +56,14 @@ app.get('/', (req, res) => {
 
 app.get('/health', async (req, res) => {
   let database = 'error';
-  if (pool) {
+  if (pool && poolReady) {
     try {
       await pool.query('SELECT NOW()');
       database = 'connected';
     } catch (err) {
       console.error('[health] DB check failed:', err.message);
     }
-  } else {
+  } else if (!pool) {
     console.warn('[health] DATABASE_URL not set, skipping DB check');
   }
   res.json({
@@ -93,9 +94,9 @@ app.post('/api/auth/login', (req, res) => {
 
 // --- API: Stocks (PostgreSQL) ---
 app.get('/api/stocks', async (req, res) => {
-  if (!pool) {
-    console.error('[GET /api/stocks] DATABASE_URL not set');
-    return res.status(503).json({ error: 'Database not configured' });
+  if (!pool || !poolReady) {
+    console.error('[GET /api/stocks] Database not available');
+    return res.status(503).json({ error: 'Database not configured or unavailable' });
   }
   try {
     const { rows } = await pool.query(
@@ -110,9 +111,9 @@ app.get('/api/stocks', async (req, res) => {
 });
 
 app.post('/api/stocks', async (req, res) => {
-  if (!pool) {
-    console.error('[POST /api/stocks] DATABASE_URL not set');
-    return res.status(503).json({ error: 'Database not configured' });
+  if (!pool || !poolReady) {
+    console.error('[POST /api/stocks] Database not available');
+    return res.status(503).json({ error: 'Database not configured or unavailable' });
   }
   const { symbol, price } = req.body || {};
   if (symbol == null || symbol.toString().trim() === '' || price == null) {
@@ -179,10 +180,13 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    poolReady = true;
     console.log('[init] Table stocks ready');
   } catch (err) {
     console.error('[init] Failed to create table stocks:', err.message);
-    throw err;
+    console.warn('[init] Server will start without DB. Set database host (e.g. stockpilot-db) on same Docker network and restart.');
+    poolReady = false;
+    // Nepadneme – server naštartuje, /health vráti database: "error", /api/stocks 503
   }
 }
 
