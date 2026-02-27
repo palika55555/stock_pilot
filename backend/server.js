@@ -79,7 +79,7 @@ app.use('/api', (req, res, next) => {
   if (origin && allowedOrigins.includes(origin)) {
     return next();
   }
-  // Bez Origin (curl, Postman, priame zadanie URL v prehliadači) alebo neznámy origin = zamietnuť
+  // Bez Originb (curl, Postman, priame zadanie URL v prehliadači) alebo neznámy origin = zamietnuť
   res.status(403).json({ error: 'Prístup len z povolenej aplikácie (www.stockpilot.sk).' });
 });
 
