@@ -1412,6 +1412,37 @@ class DatabaseService {
     return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Nahradí lokálnych zákazníkov dátami z backendu (GET /api/customers).
+  /// Každá položka v [fromApi] má: local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active.
+  /// Používa sa po úprave zákazníka na webe – pri ďalšom spustení apky sa zmeny stiahnu.
+  Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> fromApi) async {
+    if (fromApi.isEmpty) return;
+    final Database db = await database;
+    final List<int> localIds = [];
+    for (final map in fromApi) {
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      localIds.add(localId);
+      final row = {
+        'id': localId,
+        'name': map['name'] as String? ?? '',
+        'ico': map['ico'] as String? ?? '',
+        'email': map['email'] as String?,
+        'address': map['address'] as String?,
+        'city': map['city'] as String?,
+        'postal_code': map['postal_code'] as String?,
+        'dic': map['dic'] as String?,
+        'ic_dph': map['ic_dph'] as String?,
+        'default_vat_rate': map['default_vat_rate'] as int? ?? 20,
+        'is_active': (map['is_active'] as int?) == 1 ? 1 : 0,
+      };
+      await db.insert('customers', row, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    if (localIds.isEmpty) return;
+    final placeholders = List.filled(localIds.length, '?').join(',');
+    await db.delete('customers', where: 'id NOT IN ($placeholders)', whereArgs: localIds);
+  }
+
   // Quote CRUD
   Future<String> getNextQuoteNumber() async {
     Database db = await database;

@@ -11,6 +11,10 @@ const { syncCustomers } = require('./DBsync/sync/customerSync');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+// Adresa, na ktorej server počúva. V produkcii 0.0.0.0 (dostupný pre Cloudflare/reverse proxy),
+// lokálne 127.0.0.1. Môžeš prepísať cez BIND_ADDRESS (napr. BIND_ADDRESS=127.0.0.1).
+const BIND_ADDRESS = process.env.BIND_ADDRESS
+  || (NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // PostgreSQL – URL nastav v Coolify ako DATABASE_URL (postgresql://user:pass@host:5432/dbname)
 const databaseUrl = process.env.DATABASE_URL;
@@ -37,18 +41,15 @@ function getDbHostname() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Povolené CORS origins – vždy www.stockpilot.sk + stockpilot.sk, prípadne ALLOWED_ORIGINS
+// Povolené CORS origins (z env alebo default pre Stock Pilot)
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
 const envOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-  : [];
-const allowedOrigins = [
-  ...new Set([
-    ...defaultOrigins,
-    ...envOrigins,
-    ...(NODE_ENV === 'development' ? ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'] : []),
-  ]),
-];
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  : defaultOrigins;
+const allowedOrigins =
+  NODE_ENV === 'development'
+    ? [...envOrigins, 'http://localhost:5173', 'http://localhost:3000']
+    : envOrigins;
 
 // Middleware
 app.use(helmet());
@@ -62,24 +63,10 @@ app.use(
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-stockpilot-key'],
   })
 );
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
-
-// Druhá vrstva ochrany: /api vyžaduje hlavičku x-stockpilot-key. /health je výnimka pre Coolify healthcheck (bez kľúča, vracia 200).
-const BACKEND_SECRET_KEY = process.env.BACKEND_SECRET_KEY || '';
-app.use('/api', (req, res, next) => {
-  if (!BACKEND_SECRET_KEY) return next();
-  const key = req.get('x-stockpilot-key');
-  if (key !== BACKEND_SECRET_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
-});
-// /health – žiadna kontrola kľúča, Coolify môže volať GET /health a dostať 200
 
 // Uptime od štartu procesu (sekundy)
 const startTime = Date.now();
@@ -87,9 +74,11 @@ const getUptimeSeconds = () => Math.floor((Date.now() - startTime) / 1000);
 
 // --- Routes ---
 
-// Základná cesta bez údajov (žiadny názov API ani verzia)
 app.get('/', (req, res) => {
-  res.status(404).end();
+  res.json({
+    message: 'Stock Pilot API',
+    version: '1.0.0',
+  });
 });
 
 app.get('/health', async (req, res) => {
@@ -371,16 +360,8 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// Error handler (CORS a iné chyby) – vždy pridáme CORS hlavičky, aby prehliadač neblokoval odpoveď
-function addCorsToResponse(req, res) {
-  const origin = req.get('Origin');
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-}
+// Error handler (CORS a iné chyby)
 app.use((err, req, res, next) => {
-  addCorsToResponse(req, res);
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'Origin not allowed' });
   }
@@ -400,8 +381,8 @@ function formatUptime(seconds) {
 }
 
 async function start() {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`API beží na http://0.0.0.0:${PORT}`);
+  app.listen(PORT, BIND_ADDRESS, () => {
+    console.log(`API beží na http://${BIND_ADDRESS}:${PORT}${BIND_ADDRESS === '127.0.0.1' ? ' (len localhost – nie je verejne dostupný)' : ''}`);
     console.log(`CORS: ${allowedOrigins.join(', ')}`);
   });
 

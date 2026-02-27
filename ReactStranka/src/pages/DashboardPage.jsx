@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
-import { apiGet } from '../api/client'
+
+const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -46,7 +47,7 @@ export default function DashboardPage() {
     let cancelled = false
     async function fetchStats() {
       try {
-        const res = await apiGet('/api/dashboard/stats', {
+        const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
           headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
         })
         if (!res.ok) throw new Error('Stats failed')
