@@ -6,6 +6,14 @@ import '../models/customer.dart';
 /// Backend API pre sync používateľa a zákazníkov do PostgreSQL (rovnaké dáta na webe).
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
 
+/// Kľúč pre hlavičku X-StockPilot-Key (z build-time: --dart-define=BACKEND_SECRET_KEY=...).
+const String kBackendSecretKey = String.fromEnvironment('BACKEND_SECRET_KEY', defaultValue: '');
+
+Map<String, String> get _apiHeaders => {
+  'Content-Type': 'application/json',
+  if (kBackendSecretKey.isNotEmpty) 'X-StockPilot-Key': kBackendSecretKey,
+};
+
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
 /// Volaj po úspešnom lokálnom prihlásení alebo po vytvorení používateľa. Ignoruje chyby (offline).
 void syncUserToBackend(User user) {
@@ -23,7 +31,7 @@ void syncUserToBackend(User user) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: _apiHeaders,
         body: body,
       )
       .timeout(const Duration(seconds: 5))
@@ -41,7 +49,7 @@ void syncCustomersToBackend(List<Customer> customers) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: _apiHeaders,
         body: body,
       )
       .timeout(const Duration(seconds: 10))
@@ -53,7 +61,7 @@ void syncCustomersToBackend(List<Customer> customers) {
 Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
   try {
     final uri = Uri.parse('$kBackendApiBase/api/customers');
-    final res = await http.get(uri).timeout(const Duration(seconds: 10));
+    final res = await http.get(uri, headers: _apiHeaders).timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final list = jsonDecode(res.body) as List<dynamic>?;
     if (list == null) return null;
@@ -67,7 +75,7 @@ Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
 Future<Map<String, dynamic>?> fetchSyncCheck() async {
   try {
     final uri = Uri.parse('$kBackendApiBase/api/sync/check');
-    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    final res = await http.get(uri, headers: _apiHeaders).timeout(const Duration(seconds: 8));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
     return map;
