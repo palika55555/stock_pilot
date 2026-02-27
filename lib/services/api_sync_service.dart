@@ -9,9 +9,10 @@ const String kBackendApiBase = 'https://backend.stockpilot.sk';
 /// Kľúč pre hlavičku X-StockPilot-Key (z build-time: --dart-define=BACKEND_SECRET_KEY=...).
 const String kBackendSecretKey = String.fromEnvironment('BACKEND_SECRET_KEY', defaultValue: '');
 
+/// Hlavička malými písmenami (Cloudflare WAF). Kľúč len pre stockpilot.sk – kBackendApiBase už je táto doména.
 Map<String, String> get _apiHeaders => {
   'Content-Type': 'application/json',
-  if (kBackendSecretKey.isNotEmpty) 'X-StockPilot-Key': kBackendSecretKey,
+  if (kBackendSecretKey.isNotEmpty) 'x-stockpilot-key': kBackendSecretKey,
 };
 
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.

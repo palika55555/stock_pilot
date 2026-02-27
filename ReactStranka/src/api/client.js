@@ -1,15 +1,18 @@
 /**
  * Centrálny API klient pre backend.stockpilot.sk.
- * Kľúč sa načíta z VITE_BACKEND_SECRET_KEY (build-time env).
+ * Bezpečnostná hlavička x-stockpilot-key (malé písmená pre Cloudflare WAF) sa pridáva
+ * len k požiadavkám smerujúcim na doménu stockpilot.sk; hodnota z VITE_BACKEND_SECRET_KEY.
  */
 const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
 const API_KEY = import.meta.env.VITE_BACKEND_SECRET_KEY || ''
 
-/** Základné hlavičky pre všetky API požiadavky (vrátane X-StockPilot-Key). */
+const isStockPilotDomain = () => API_BASE.includes('stockpilot.sk')
+
+/** Základné hlavičky. x-stockpilot-key len pre stockpilot.sk, aby sa kľúč neposielal tretím stranám. */
 export function getApiHeaders(extra = {}) {
   return {
     'Content-Type': 'application/json',
-    'X-StockPilot-Key': API_KEY,
+    ...(isStockPilotDomain() && API_KEY ? { 'x-stockpilot-key': API_KEY } : {}),
     ...extra,
   }
 }

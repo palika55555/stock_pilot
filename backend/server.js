@@ -64,11 +64,11 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
-// Druhá vrstva ochrany: požiadavky musia mať hlavičku X-StockPilot-Key zhodnú s BACKEND_SECRET_KEY v .env
+// Druhá vrstva ochrany: požiadavky musia mať hlavičku x-stockpilot-key (malé písmená, WAF) zhodnú s BACKEND_SECRET_KEY
 const BACKEND_SECRET_KEY = process.env.BACKEND_SECRET_KEY || '';
 app.use('/api', (req, res, next) => {
   if (!BACKEND_SECRET_KEY) return next(); // ak nie je nastavený, v dev neblokujeme
-  const key = req.get('X-StockPilot-Key');
+  const key = req.get('x-stockpilot-key');
   if (key !== BACKEND_SECRET_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -76,7 +76,7 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/health', (req, res, next) => {
   if (!BACKEND_SECRET_KEY) return next();
-  const key = req.get('X-StockPilot-Key');
+  const key = req.get('x-stockpilot-key');
   if (key !== BACKEND_SECRET_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
