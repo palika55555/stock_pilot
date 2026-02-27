@@ -41,18 +41,21 @@ function getDbHostname() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Povolené CORS origins (z env alebo default pre Stock Pilot)
+// Povolené CORS origins – vždy www.stockpilot.sk + stockpilot.sk, prípadne ALLOWED_ORIGINS
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
 const envOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : defaultOrigins;
-const allowedOrigins =
-  NODE_ENV === 'development'
-    ? [...envOrigins, 'http://localhost:5173', 'http://localhost:3000']
-    : envOrigins;
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = [
+  ...new Set([
+    ...defaultOrigins,
+    ...envOrigins,
+    ...(NODE_ENV === 'development' ? ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'] : []),
+  ]),
+];
 
-// Middleware
-app.use(helmet());
+// Middleware – Helmet s výnimkou pre CORS preflight
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -63,6 +66,8 @@ app.use(
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 app.use(express.json());
