@@ -37,15 +37,18 @@ function getDbHostname() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Povolené CORS origins (z env alebo default pre Stock Pilot)
+// Povolené CORS origins – vždy www.stockpilot.sk + stockpilot.sk, prípadne ALLOWED_ORIGINS
 const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
 const envOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : defaultOrigins;
-const allowedOrigins =
-  NODE_ENV === 'development'
-    ? [...envOrigins, 'http://localhost:5173', 'http://localhost:3000']
-    : envOrigins;
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = [
+  ...new Set([
+    ...defaultOrigins,
+    ...envOrigins,
+    ...(NODE_ENV === 'development' ? ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'] : []),
+  ]),
+];
 
 // Middleware
 app.use(helmet());
@@ -373,8 +376,16 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// Error handler (CORS a iné chyby)
+// Error handler (CORS a iné chyby) – vždy pridáme CORS hlavičky, aby prehliadač neblokoval odpoveď
+function addCorsToResponse(req, res) {
+  const origin = req.get('Origin');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+}
 app.use((err, req, res, next) => {
+  addCorsToResponse(req, res);
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'Origin not allowed' });
   }
