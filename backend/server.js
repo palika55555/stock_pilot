@@ -73,6 +73,16 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
+// API len z povolených originov – priame otvorenie backend.stockpilot.sk/api/... vráti 403
+app.use('/api', (req, res, next) => {
+  const origin = req.get('Origin');
+  if (origin && allowedOrigins.includes(origin)) {
+    return next();
+  }
+  // Bez Origin (curl, Postman, priame zadanie URL v prehliadači) alebo neznámy origin = zamietnuť
+  res.status(403).json({ error: 'Prístup len z povolenej aplikácie (www.stockpilot.sk).' });
+});
+
 // Uptime od štartu procesu (sekundy)
 const startTime = Date.now();
 const getUptimeSeconds = () => Math.floor((Date.now() - startTime) / 1000);
