@@ -62,22 +62,16 @@ app.use(
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-stockpilot-key'],
   })
 );
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
-// Druhá vrstva ochrany: požiadavky musia mať hlavičku x-stockpilot-key (malé písmená, WAF) zhodnú s BACKEND_SECRET_KEY
+// Druhá vrstva ochrany: /api vyžaduje hlavičku x-stockpilot-key. /health je výnimka pre Coolify healthcheck (bez kľúča, vracia 200).
 const BACKEND_SECRET_KEY = process.env.BACKEND_SECRET_KEY || '';
 app.use('/api', (req, res, next) => {
-  if (!BACKEND_SECRET_KEY) return next(); // ak nie je nastavený, v dev neblokujeme
-  const key = req.get('x-stockpilot-key');
-  if (key !== BACKEND_SECRET_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
-});
-app.use('/health', (req, res, next) => {
   if (!BACKEND_SECRET_KEY) return next();
   const key = req.get('x-stockpilot-key');
   if (key !== BACKEND_SECRET_KEY) {
@@ -85,6 +79,7 @@ app.use('/health', (req, res, next) => {
   }
   next();
 });
+// /health – žiadna kontrola kľúča, Coolify môže volať GET /health a dostať 200
 
 // Uptime od štartu procesu (sekundy)
 const startTime = Date.now();
