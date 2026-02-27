@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+import { apiGet } from '../api/client'
 
 export default function CustomersPage() {
   const navigate = useNavigate()
@@ -30,7 +29,7 @@ export default function CustomersPage() {
     let cancelled = false
     async function fetchCustomers() {
       try {
-        const res = await fetch(`${API_BASE}/api/customers`, {
+        const res = await apiGet('/api/customers', {
           headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
         })
         if (!res.ok) throw new Error('Načítanie zlyhalo')

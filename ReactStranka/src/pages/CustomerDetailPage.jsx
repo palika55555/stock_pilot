@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomerDetailPage.css'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+import { apiGet, apiPut } from '../api/client'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
@@ -45,7 +44,7 @@ export default function CustomerDetailPage() {
     let cancelled = false
     async function fetchCustomer() {
       try {
-        const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+        const res = await apiGet(`/api/customers/${id}`, {
           headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
         })
         if (res.status === 404) {
@@ -84,24 +83,19 @@ export default function CustomerDetailPage() {
     setSaveError('')
     setSaving(true)
     try {
-      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
-        },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          ico: form.ico.trim(),
-          email: form.email.trim() || null,
-          address: form.address.trim() || null,
-          city: form.city.trim() || null,
-          postal_code: form.postal_code.trim() || null,
-          dic: form.dic.trim() || null,
-          ic_dph: form.ic_dph.trim() || null,
-          default_vat_rate: parseInt(form.default_vat_rate, 10) || 20,
-          is_active: form.is_active,
-        }),
+      const res = await apiPut(`/api/customers/${id}`, {
+        name: form.name.trim(),
+        ico: form.ico.trim(),
+        email: form.email.trim() || null,
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        postal_code: form.postal_code.trim() || null,
+        dic: form.dic.trim() || null,
+        ic_dph: form.ic_dph.trim() || null,
+        default_vat_rate: parseInt(form.default_vat_rate, 10) || 20,
+        is_active: form.is_active,
+      }, {
+        headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+import { apiPost } from '../api/client'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -16,11 +15,7 @@ export default function LoginPage() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
+      const res = await apiPost('/api/auth/login', { username, password })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {
         const auth = {
