@@ -11,9 +11,10 @@ const { syncCustomers } = require('./DBsync/sync/customerSync');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-// Adresa, na ktorej server počúva. 127.0.0.1 = len localhost (nie je dostupný z vonku).
-// Pre Docker/Coolify za reverse proxy môžeš nastaviť BIND_ADDRESS=0.0.0.0.
-const BIND_ADDRESS = process.env.BIND_ADDRESS || '127.0.0.1';
+// Adresa, na ktorej server počúva. V produkcii 0.0.0.0 (dostupný pre Cloudflare/reverse proxy),
+// lokálne 127.0.0.1. Môžeš prepísať cez BIND_ADDRESS (napr. BIND_ADDRESS=127.0.0.1).
+const BIND_ADDRESS = process.env.BIND_ADDRESS
+  || (NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // PostgreSQL – URL nastav v Coolify ako DATABASE_URL (postgresql://user:pass@host:5432/dbname)
 const databaseUrl = process.env.DATABASE_URL;
