@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
@@ -64,6 +65,14 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
+// Rate limiting – ochrana proti brute-force (max 100 požiadaviek z IP za 15 min na /api/)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Príliš veľa požiadaviek, skús to neskôr.' },
+});
+app.use('/api/', apiLimiter);
+
 // Uptime od štartu procesu (sekundy)
 const startTime = Date.now();
 const getUptimeSeconds = () => Math.floor((Date.now() - startTime) / 1000);
@@ -71,13 +80,13 @@ const getUptimeSeconds = () => Math.floor((Date.now() - startTime) / 1000);
 // --- Routes ---
 
 app.get('/', (req, res) => {
-  res.json({
-    message: 'Stock Pilot API',
-    version: '1.0.0',
-  });
+  res.status(403).json({ error: 'Forbidden' });
 });
 
 app.get('/health', async (req, res) => {
+  if (NODE_ENV === 'production') {
+    return res.json({ status: 'up' });
+  }
   let database = 'error';
   if (pool && poolReady) {
     try {
