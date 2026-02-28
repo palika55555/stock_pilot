@@ -44,10 +44,11 @@ const defaultOrigins = [
   'https://stockpilot.sk',
 ];
 
-// Ak tvoj web na Verceli používa aj testovacie URL, pridaj ich sem:
-const envOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : [...defaultOrigins, 'https://stock-pilot-web.vercel.app'];
+// Vždy zahrni default origins; ALLOWED_ORIGINS len pridá ďalšie (nikdy nenahradí www.stockpilot.sk).
+const extraOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : ['https://stock-pilot-web.vercel.app'];
+const envOrigins = [...defaultOrigins, ...extraOrigins];
 
 // Dôležité: Uisti sa, že NODE_ENV je v Coolify nastavené na 'production'
 const allowedOrigins =
@@ -100,8 +101,12 @@ const authenticateToken = (req, res, next) => {
 // API router – všetky endpointy sú pod /api/:API_PATH_PREFIX/ (napr. /api/sp-9f2a4e1b/auth/login)
 const apiRouter = express.Router();
 
+// Preflight (OPTIONS) neposiela Authorization – musí prejsť, aby prehliadač potom poslal skutočný request
+apiRouter.options('*', (req, res) => res.sendStatus(204));
+
 // Všetko okrem /auth/* vyžaduje token
 apiRouter.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
   if (req.path.startsWith('/auth')) return next();
   authenticateToken(req, res, next);
 });
