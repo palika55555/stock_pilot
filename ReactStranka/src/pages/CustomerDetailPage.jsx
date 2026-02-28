@@ -46,7 +46,7 @@ export default function CustomerDetailPage() {
     async function fetchCustomer() {
       try {
         const res = await fetch(`${API_BASE}/api/customers/${id}`, {
-          headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+          headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (res.status === 404) {
           if (!cancelled) setError('Zákazník nebol nájdený')
@@ -88,7 +88,7 @@ export default function CustomerDetailPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+          ...(auth?.token ? { Authorization: auth.token } : {}),
         },
         body: JSON.stringify({
           name: form.name.trim(),

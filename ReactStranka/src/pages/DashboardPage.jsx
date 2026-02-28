@@ -48,7 +48,7 @@ export default function DashboardPage() {
     async function fetchStats() {
       try {
         const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
-          headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+          headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (!res.ok) throw new Error('Stats failed')
         const data = await res.json()

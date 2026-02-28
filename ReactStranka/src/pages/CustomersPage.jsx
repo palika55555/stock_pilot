@@ -31,7 +31,7 @@ export default function CustomersPage() {
     async function fetchCustomers() {
       try {
         const res = await fetch(`${API_BASE}/api/customers`, {
-          headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+          headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (!res.ok) throw new Error('Načítanie zlyhalo')
         const data = await res.json()
