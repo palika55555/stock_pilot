@@ -1189,6 +1189,21 @@ class DatabaseService {
     return await db.delete('products', where: 'unique_id = ?', whereArgs: [id]);
   }
 
+  /// Aktualizuje EAN lokálnych produktov podľa zoznamu z backendu (EAN priradené na webe).
+  /// Aktualizuje len keď backend má neprázdny EAN – lokálny EAN sa nikdy nevyčistí z backendu.
+  Future<void> updateProductEanFromBackend(List<Map<String, dynamic>> backendProducts) async {
+    for (final map in backendProducts) {
+      final uniqueId = map['unique_id'] as String?;
+      if (uniqueId == null || uniqueId.isEmpty) continue;
+      final eanRaw = map['ean'];
+      final ean = eanRaw is String ? eanRaw.trim() : null;
+      if (ean == null || ean.isEmpty) continue;
+      final product = await getProductByUniqueId(uniqueId);
+      if (product == null || product.ean == ean) continue;
+      await updateProduct(product.copyWith(ean: ean));
+    }
+  }
+
   // Receptúra – zložky (suroviny) receptúry
   Future<List<RecepturaPolozka>> getRecepturaPolozky(String recepturaKartaId) async {
     Database db = await database;

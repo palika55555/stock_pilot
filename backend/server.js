@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
 const { syncCustomers } = require('./DBsync/sync/customerSync');
+const { syncProducts } = require('./DBsync/sync/productSync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -260,6 +261,19 @@ apiRouter.post('/stocks', async (req, res) => {
   }
 });
 
+// --- Sync produktov z Flutter do PostgreSQL (DBsync/sync) ---
+apiRouter.post('/sync/products', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncProducts(pool, req.body);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  console.log('[sync] Products OK:', result.count);
+  res.status(200).json({ success: true, count: result.count });
+});
+
 // --- Sync zákazníkov z Flutter do PostgreSQL (DBsync/sync) ---
 apiRouter.post('/sync/customers', async (req, res) => {
   if (!pool || !poolReady) {
@@ -367,6 +381,86 @@ apiRouter.put('/customers/:id', async (req, res) => {
 // --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
 apiRouter.get('/sync/check', (_req, res) => {
   res.json({ customers_updated_at: lastCustomersUpdatedAt });
+});
+
+// --- API: Produkty (pre webové skenovanie a priradenie EAN) ---
+apiRouter.get('/products/by-barcode', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const code = (req.query.code ?? '').toString().trim();
+  if (!code) {
+    return res.status(400).json({ error: 'Parameter code je povinný' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
+       FROM products
+       WHERE (ean IS NOT NULL AND ean = $1) OR plu = $1
+       GROUP BY unique_id, name, plu, ean, unit
+       LIMIT 1`,
+      [code]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Produkt nenájdený', code });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /api/products/by-barcode]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/products', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const search = (req.query.search ?? '').toString().trim().toLowerCase();
+  try {
+    let query = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
+      FROM products GROUP BY unique_id, name, plu, ean, unit`;
+    const params = [];
+    if (search) {
+      params.push(`%${search}%`);
+      query = `SELECT * FROM (${query}) AS agg
+        WHERE LOWER(name) LIKE $1 OR plu LIKE $1 OR (ean IS NOT NULL AND LOWER(ean) LIKE $1)`;
+    }
+    query += ' ORDER BY name ASC LIMIT 200';
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/products]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.patch('/products/:uniqueId', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const uniqueId = (req.params.uniqueId ?? '').toString().trim();
+  if (!uniqueId) {
+    return res.status(400).json({ error: 'uniqueId je povinný' });
+  }
+  const { ean } = req.body || {};
+  const eanVal = ean != null ? String(ean).trim() || null : null;
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE products SET ean = $1 WHERE unique_id = $2',
+      [eanVal, uniqueId]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Produkt nenájdený' });
+    }
+    const { rows } = await pool.query(
+      'SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE unique_id = $1 GROUP BY unique_id, name, plu, ean, unit',
+      [uniqueId]
+    );
+    res.json(rows[0] || { unique_id: uniqueId, ean: eanVal });
+  } catch (err) {
+    console.error('[PATCH /api/products/:uniqueId]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
 });
 
 // --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---

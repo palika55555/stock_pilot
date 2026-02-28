@@ -83,23 +83,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _pullCustomersFromBackend() async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     final token = getBackendToken();
-    final list = await fetchCustomersFromBackendWithToken(token);
-    if (list != null && list.isNotEmpty && mounted) {
-      await _db.replaceCustomersFromBackend(list);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Zákazníci boli obnovení z webu'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } else if (mounted && token == null) {
+    if (token == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Obnova z webu vyžaduje prihlásenie (odhlásite sa a prihláste znova)'),
           backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final list = await fetchCustomersFromBackendWithToken(token);
+    if (list != null && list.isNotEmpty && mounted) {
+      await _db.replaceCustomersFromBackend(list);
+    }
+    // Nahratie produktov na web – skenovanie na webe potom zobrazí názov a množstvo
+    if (mounted) {
+      final products = await _db.getProducts();
+      syncProductsToBackend(products);
+    }
+    // Stiahnutie EAN z webu – priradenia z webového skenera sa prejavia v apke
+    if (mounted && token != null) {
+      final backendProducts = await fetchProductsFromBackendWithToken(token);
+      if (backendProducts != null && backendProducts.isNotEmpty) {
+        await _db.updateProductEanFromBackend(backendProducts);
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dáta boli synchronizované s webom (zákazníci + produkty + EAN)'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
         ),
       );
     }

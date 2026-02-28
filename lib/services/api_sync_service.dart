@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/user.dart';
 import '../models/customer.dart';
+import '../models/product.dart';
 
 /// Backend API pre sync používateľa a zákazníkov do PostgreSQL (rovnaké dáta na webe).
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
@@ -65,6 +66,32 @@ void syncCustomersToBackend(List<Customer> customers) {
       .ignore();
 }
 
+/// Pošle zoznam produktov do backendu – webové skenovanie potom zobrazí názov a množstvo.
+/// Volaj pri „Obnoviť z webu“ alebo po zmene produktov. Ignoruje chyby (offline).
+void syncProductsToBackend(List<Product> products) {
+  if (products.isEmpty) return;
+  final uri = Uri.parse('$_apiBase/sync/products');
+  final body = jsonEncode({
+    'products': products.map((p) => {
+          'uniqueId': p.uniqueId,
+          'name': p.name,
+          'plu': p.plu,
+          'ean': p.ean,
+          'unit': p.unit,
+          'warehouseId': p.warehouseId,
+          'qty': p.qty,
+        }).toList(),
+  });
+  http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      )
+      .timeout(const Duration(seconds: 15))
+      .ignore();
+}
+
 /// Prihlásenie na backend (rovnaké údaje ako lokálne) – vráti token alebo null pri chybe.
 /// Token potom použite pre [fetchCustomersFromBackendWithToken].
 Future<String?> fetchBackendToken(String username, String password) async {
@@ -89,6 +116,23 @@ Future<String?> fetchBackendToken(String username, String password) async {
 /// Stiahne zákazníkov z backendu (použije uložený token ak je z prihlásenia).
 Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
   return fetchCustomersFromBackendWithToken(getBackendToken());
+}
+
+/// Stiahne zoznam produktov z backendu (EAN priradené na webe sa tým dostanú do apky).
+/// [token] z [fetchBackendToken]. Pri null/chybe vráti null.
+Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? token) async {
+  try {
+    final uri = Uri.parse('$_apiBase/products');
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (token != null && token.isNotEmpty) headers['Authorization'] = token;
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final list = jsonDecode(res.body) as List<dynamic>?;
+    if (list == null) return null;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Stiahne zoznam zákazníkov z backendu (vrátane úprav z webu).
