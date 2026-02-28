@@ -82,7 +82,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _pullCustomersFromBackend() async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final list = await fetchCustomersFromBackend();
+    final token = getBackendToken();
+    final list = await fetchCustomersFromBackendWithToken(token);
     if (list != null && list.isNotEmpty && mounted) {
       await _db.replaceCustomersFromBackend(list);
       if (mounted) {
@@ -94,6 +95,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         );
       }
+    } else if (mounted && token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Obnova z webu vyžaduje prihlásenie (odhlásite sa a prihláste znova)'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 

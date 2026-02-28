@@ -11,6 +11,15 @@ const String kApiPathPrefix = 'sp-9f2a4e1b';
 
 String get _apiBase => '$kBackendApiBase/api/$kApiPathPrefix';
 
+/// Token z posledného úspešného prihlásenia na backend – používa sa pre GET /customers v apke.
+String? _backendToken;
+
+void setBackendToken(String? token) {
+  _backendToken = token;
+}
+
+String? getBackendToken() => _backendToken;
+
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
 /// Volaj po úspešnom lokálnom prihlásení alebo po vytvorení používateľa. Ignoruje chyby (offline).
 void syncUserToBackend(User user) {
@@ -53,12 +62,41 @@ void syncCustomersToBackend(List<Customer> customers) {
       .ignore();
 }
 
-/// Stiahne zoznam zákazníkov z backendu (vrátane úprav urobených na webe).
-/// Vráti null pri chybe/offline. Volaj po prihlásení a potom zavolaj [DatabaseService.replaceCustomersFromBackend].
+/// Prihlásenie na backend (rovnaké údaje ako lokálne) – vráti token alebo null pri chybe.
+/// Token potom použite pre [fetchCustomersFromBackendWithToken].
+Future<String?> fetchBackendToken(String username, String password) async {
+  try {
+    final uri = Uri.parse('$_apiBase/auth/login');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    final token = map?['token'] as String?;
+    return token != null && token.isNotEmpty ? token : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Stiahne zákazníkov z backendu (použije uložený token ak je z prihlásenia).
 Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
+  return fetchCustomersFromBackendWithToken(getBackendToken());
+}
+
+/// Stiahne zoznam zákazníkov z backendu (vrátane úprav z webu).
+/// [token] z [fetchBackendToken] – ak null, request zlyhá (401), vráti null.
+/// Pri null/chybe vráti null. Nikdy nenahradzujte lokálnu DB prázdnym zoznamom.
+Future<List<Map<String, dynamic>>?> fetchCustomersFromBackendWithToken(String? token) async {
   try {
     final uri = Uri.parse('$_apiBase/customers');
-    final res = await http.get(uri).timeout(const Duration(seconds: 10));
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (token != null && token.isNotEmpty) headers['Authorization'] = token;
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final list = jsonDecode(res.body) as List<dynamic>?;
     if (list == null) return null;

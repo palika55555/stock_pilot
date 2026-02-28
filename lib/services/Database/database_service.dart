@@ -1413,7 +1413,7 @@ class DatabaseService {
   }
 
   /// Nahradí lokálnych zákazníkov zoznamom z backendu (napr. po úpravách na webe).
-  /// Vymaže všetky lokálne záznamy a vloží položky z [list] (mapy z API).
+  /// Vymaže lokálne záznamy a vloží položky z [list]. Nikdy nevolajte s prázdnym zoznamom – dáta by sa v apke vymazali.
   Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> list) async {
     if (list.isEmpty) return;
     Database db = await database;
