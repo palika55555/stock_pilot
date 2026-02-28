@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+import { API_BASE } from '../config'
 
 export default function CustomersPage() {
   const navigate = useNavigate()

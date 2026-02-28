@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomerDetailPage.css'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://backend.stockpilot.sk'
+import { API_BASE } from '../config'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
