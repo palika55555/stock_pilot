@@ -86,7 +86,7 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Všetko pod /api/ okrem /api/auth/* vyžaduje token (login a sync-user ostávajú verejné)
+// Všetko pod /api/ okrem /api/auth/* vyžaduje token (login a sync-user ostávajú verejné).
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth')) return next();
   authenticateToken(req, res, next);
