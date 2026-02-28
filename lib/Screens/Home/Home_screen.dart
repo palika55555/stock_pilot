@@ -36,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       _showSyncNeededSnackBar();
     });
+    // Automatická synchronizácia produktov s webom (push na web + pull EAN) – ticho na pozadí
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncProductsWithBackend());
   }
 
   @override
@@ -50,8 +52,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       SyncCheckService.instance.start();
+      _syncProductsWithBackend();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       SyncCheckService.instance.stop();
+    }
+  }
+
+  /// Len nahratie všetkých produktov (vrátane už vytvorených) na web – na webe môžeš priradzovať EAN/PLU.
+  Future<void> _pushProductsToWeb() async {
+    final products = await _db.getProducts();
+    syncProductsToBackend(products);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Produkty (${products.length}) boli odoslané na web'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// Tichá synchronizácia produktov s webom: nahratie produktov na web + stiahnutie EAN priradených na webe.
+  Future<void> _syncProductsWithBackend() async {
+    final token = getBackendToken();
+    if (token == null || !mounted) return;
+    try {
+      final products = await _db.getProducts();
+      syncProductsToBackend(products);
+      final backendProducts = await fetchProductsFromBackendWithToken(token);
+      if (backendProducts != null && backendProducts.isNotEmpty && mounted) {
+        await _db.updateProductEanFromBackend(backendProducts);
+      }
+    } catch (_) {
+      // ticho – offline alebo chyba
     }
   }
 
@@ -144,7 +178,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
       body: RepaintBoundary(
-        child: HomeOverview(userRole: _currentRole),
+        child: HomeOverview(
+          userRole: _currentRole,
+          onSyncProductsToWeb: _pushProductsToWeb,
+        ),
       ),
     );
   }

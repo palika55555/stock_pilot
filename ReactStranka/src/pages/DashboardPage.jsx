@@ -96,7 +96,13 @@ export default function DashboardPage() {
         ) : (
           <>
             <div className="dashboard-kpi-grid">
-              <div className="dashboard-kpi-card">
+              <div
+                className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/dashboard/products')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/dashboard/products') } }}
+              >
                 <span className="dashboard-kpi-title">Produkty</span>
                 <span className="dashboard-kpi-value">{stats.products}</span>
               </div>

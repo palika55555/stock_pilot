@@ -434,6 +434,31 @@ apiRouter.get('/products', async (req, res) => {
   }
 });
 
+apiRouter.get('/products/:uniqueId', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const uniqueId = (req.params.uniqueId ?? '').toString().trim();
+  if (!uniqueId) {
+    return res.status(400).json({ error: 'uniqueId je povinný' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
+       FROM products WHERE unique_id = $1
+       GROUP BY unique_id, name, plu, ean, unit`,
+      [uniqueId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Produkt nenájdený' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /api/products/:uniqueId]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 apiRouter.patch('/products/:uniqueId', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
@@ -470,12 +495,17 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   }
   try {
     let customers = 0;
+    let products = 0;
     try {
       const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers');
       customers = r.rows[0]?.count ?? 0;
     } catch (_) {}
+    try {
+      const r = await pool.query('SELECT COUNT(DISTINCT unique_id)::int AS count FROM products');
+      products = r.rows[0]?.count ?? 0;
+    } catch (_) {}
     const stats = {
-      products: 0,
+      products,
       orders: 0,
       customers,
       revenue: 0,

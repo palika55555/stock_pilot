@@ -84,6 +84,15 @@ class _LoginPageState extends State<LoginPage> {
               ),
             );
           }
+          // Automatická synchronizácia produktov s webom (push + pull EAN) – na webe môžeš priradzovať EAN/PLU
+          if (mounted && token != null) {
+            final products = await _dbService.getProducts();
+            syncProductsToBackend(products);
+            final backendProducts = await fetchProductsFromBackendWithToken(token);
+            if (backendProducts != null && backendProducts.isNotEmpty) {
+              await _dbService.updateProductEanFromBackend(backendProducts);
+            }
+          }
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(

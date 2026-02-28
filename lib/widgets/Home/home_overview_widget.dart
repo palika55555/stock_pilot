@@ -12,7 +12,9 @@ import '../../l10n/app_localizations.dart';
 
 class HomeOverview extends StatefulWidget {
   final String userRole;
-  const HomeOverview({super.key, required this.userRole});
+  final Future<void> Function()? onSyncProductsToWeb;
+
+  const HomeOverview({super.key, required this.userRole, this.onSyncProductsToWeb});
 
   @override
   State<HomeOverview> createState() => _HomeOverviewState();
@@ -163,6 +165,10 @@ class _HomeOverviewState extends State<HomeOverview> {
                 ),
                 const SizedBox(height: 24),
                 _buildKpiCards(context, l10n),
+                if (widget.onSyncProductsToWeb != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSyncProductsToWeb(context),
+                ],
                 const SizedBox(height: 24),
                 _buildRecentMovementsCard(context, l10n),
                 const SizedBox(height: 24),
@@ -171,6 +177,51 @@ class _HomeOverviewState extends State<HomeOverview> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSyncProductsToWeb(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      shadowColor: Colors.black.withOpacity(0.06),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_upload_rounded, color: Theme.of(context).primaryColor, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Synchronizovať produkty na web',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  Text(
+                    'Všetky vytvorené produkty (vrátane EAN/PLU) sa odošlú na web.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                await widget.onSyncProductsToWeb?.call();
+              },
+              icon: const Icon(Icons.sync_rounded, size: 20),
+              label: const Text('Odoslať'),
+            ),
+          ],
         ),
       ),
     );

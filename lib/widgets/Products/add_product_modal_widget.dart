@@ -9,6 +9,7 @@ import '../../services/Product/product_service.dart';
 import '../../services/Product/product_kind_service.dart';
 import '../../services/Receptura/receptura_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
+import '../../services/api_sync_service.dart';
 
 class AddProductModal extends StatefulWidget {
   final String? initialPlu;
@@ -463,6 +464,9 @@ class _AddProductModalState extends State<AddProductModal> {
       if (_selectedCardType == 'receptúra' && product.uniqueId != null) {
         await _recepturaService.saveRecepturaZlozky(product.uniqueId!, _recepturaZlozky);
       }
+      // Synchronizácia všetkých produktov na web – nový/upravený produkt bude na webe na priradenie EAN
+      final allProducts = await _productService.getAllProducts();
+      syncProductsToBackend(allProducts);
       if (mounted) {
         Navigator.pop(context, product);
         ScaffoldMessenger.of(context).showSnackBar(

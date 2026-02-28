@@ -3,6 +3,8 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
+import ProductsPage from './pages/ProductsPage'
+import ProductDetailPage from './pages/ProductDetailPage'
 import ScanProductPage from './pages/ScanProductPage'
 import './App.css'
 
@@ -38,6 +40,22 @@ function App() {
           element={
             <PrivateRoute>
               <CustomerDetailPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products"
+          element={
+            <PrivateRoute>
+              <ProductsPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products/:uniqueId"
+          element={
+            <PrivateRoute>
+              <ProductDetailPage />
             </PrivateRoute>
           }
         />
