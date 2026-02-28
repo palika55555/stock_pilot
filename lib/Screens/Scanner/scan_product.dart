@@ -177,14 +177,31 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
       body: Stack(
         children: [
           if (hasPermission)
-            MobileScanner(
-              controller: controller,
-              onDetect: (capture) {
-                final List<Barcode> barcodes = capture.barcodes;
-                if (barcodes.isNotEmpty) {
-                  _handleScannedBarcode(barcodes.first.rawValue);
-                }
-              },
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Text(
+                    'Namiřte kameru na čiarový kód (EAN, UPC) alebo QR kód',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                Expanded(
+                  child: MobileScanner(
+                    controller: controller,
+                    onDetect: (capture) {
+                      final List<Barcode> barcodes = capture.barcodes;
+                      if (barcodes.isNotEmpty) {
+                        _handleScannedBarcode(barcodes.first.rawValue);
+                      }
+                    },
+                  ),
+                ),
+              ],
             )
           else
             const Center(

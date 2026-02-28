@@ -1412,6 +1412,18 @@ class DatabaseService {
     return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Nahradí lokálnych zákazníkov zoznamom z backendu (napr. po úpravách na webe).
+  /// Vymaže všetky lokálne záznamy a vloží položky z [list] (mapy z API).
+  Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> list) async {
+    if (list.isEmpty) return;
+    Database db = await database;
+    await db.delete('customers');
+    for (final map in list) {
+      final c = Customer.fromMap(Map<String, dynamic>.from(map));
+      await db.insert('customers', c.toMap());
+    }
+  }
+
   // Quote CRUD
   Future<String> getNextQuoteNumber() async {
     Database db = await database;

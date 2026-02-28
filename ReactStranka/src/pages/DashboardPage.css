@@ -164,6 +164,41 @@
   margin-bottom: 1.5rem;
 }
 
+.dashboard-scan-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dashboard-scan-card:hover {
+  border-color: rgba(255, 193, 61, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-scan-icon {
+  font-size: 1.75rem;
+}
+
+.dashboard-scan-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.dashboard-scan-cta {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .dashboard-section-title {
   font-size: 1.1rem;
   font-weight: 700;

@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
+import ScanProductPage from './pages/ScanProductPage'
 import './App.css'
 
 function PrivateRoute({ children }) {
@@ -37,6 +38,14 @@ function App() {
           element={
             <PrivateRoute>
               <CustomerDetailPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/scan"
+          element={
+            <PrivateRoute>
+              <ScanProductPage />
             </PrivateRoute>
           }
         />

@@ -121,6 +121,21 @@ export default function DashboardPage() {
             </div>
 
             <section className="dashboard-section">
+              <h3 className="dashboard-section-title">Skenovanie tovaru</h3>
+              <div
+                className="dashboard-scan-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/dashboard/scan')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/dashboard/scan') } }}
+              >
+                <span className="dashboard-scan-icon" aria-hidden="true">📷</span>
+                <span className="dashboard-scan-text">Skenovať čiarový kód alebo QR kód kamerou</span>
+                <span className="dashboard-scan-cta">Otvoriť skener →</span>
+              </div>
+            </section>
+
+            <section className="dashboard-section">
               <h3 className="dashboard-section-title">Poznámky</h3>
               <div className="dashboard-notes-placeholder">
                 Rovnaké informácie ako v aplikácii – poznámky a úlohy môžete pridať neskôr.

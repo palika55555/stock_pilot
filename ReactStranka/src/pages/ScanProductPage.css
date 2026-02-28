@@ -1,0 +1,173 @@
+.scan-product-page {
+  --bg-dark: #0c0f14;
+  --bg-card: rgba(18, 22, 28, 0.85);
+  --border: rgba(255, 193, 61, 0.25);
+  --accent: #ffc13d;
+  --text: #e8eaed;
+  --text-muted: #9ca3af;
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+
+  min-height: 100vh;
+  background: var(--bg-dark);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+.scan-product-header {
+  padding: 1rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.scan-product-back {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.scan-product-back:hover {
+  text-decoration: underline;
+}
+
+.scan-product-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: var(--text);
+}
+
+.scan-product-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.scan-product-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  position: relative;
+}
+
+.scan-product-reader {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: #000;
+}
+
+.scan-product-reader video {
+  width: 100%;
+  display: block;
+}
+
+.scan-product-error {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text);
+}
+
+.scan-product-error-hint {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.scan-product-paused {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.scan-product-result {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.scan-product-result-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.scan-product-result-code {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+}
+
+.scan-product-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.scan-product-result-row strong {
+  color: var(--accent);
+}
+
+.scan-product-result-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 1.25rem;
+}
+
+.scan-product-result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.scan-product-btn-primary {
+  padding: 0.875rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bg-dark);
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.scan-product-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.scan-product-btn-secondary {
+  padding: 0.75rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.scan-product-btn-secondary:hover {
+  background: rgba(255, 193, 61, 0.08);
+  border-color: var(--accent);
+}
