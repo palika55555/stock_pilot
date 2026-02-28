@@ -76,7 +76,8 @@ class _WarehouseInventorySheetWidgetState
       _filtered = _products.where((p) {
         return p.name.toLowerCase().contains(q) ||
             (p.plu.toLowerCase().contains(q)) ||
-            (p.uniqueId?.toLowerCase().contains(q) ?? false);
+            (p.uniqueId?.toLowerCase().contains(q) ?? false) ||
+            (p.ean?.toLowerCase().contains(q) ?? false);
       }).toList();
     }
     setState(() {});
@@ -87,7 +88,7 @@ class _WarehouseInventorySheetWidgetState
     if (c.isEmpty) return null;
     for (int i = 0; i < _filtered.length; i++) {
       final p = _filtered[i];
-      if (p.plu == c || p.uniqueId == c) return i;
+      if (p.plu == c || p.uniqueId == c || (p.ean != null && p.ean!.trim() == c)) return i;
     }
     return null;
   }

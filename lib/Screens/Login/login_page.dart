@@ -65,16 +65,24 @@ class _LoginPageState extends State<LoginPage> {
           } else {
             await _dbService.clearSavedLogin();
           }
-          // Sync používateľa a zákazníkov do PostgreSQL – web dashboard má rovnaké dáta
-          syncUserToBackend(user);
+          // Najprv sync používateľa na backend, aby tam bol pred prihlásením (rovnaké meno/heslo)
+          await syncUserToBackend(user);
           final customers = await _dbService.getCustomers();
           syncCustomersToBackend(customers);
-          // Stiahnuť z backendu zákazníkov (vrátane obnovy ak boli v apke vymazaní) – len s tokenom
+          // Stiahnuť z backendu zákazníkov (vrátane tých pridaných na webe) – potrebujeme token
           final token = await fetchBackendToken(user.username, user.password);
           if (token != null) setBackendToken(token);
           final fromBackend = await fetchCustomersFromBackendWithToken(token);
           if (fromBackend != null && fromBackend.isNotEmpty && mounted) {
             await _dbService.replaceCustomersFromBackend(fromBackend);
+          } else if (mounted && token == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Zákazníci z webu sa nenačítali. Skontrolujte sieť alebo prihlásenie (rovnaký účet ako na webe).'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
           }
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa

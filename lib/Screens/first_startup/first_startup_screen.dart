@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/database/database_service.dart';
+import '../../services/Database/database_service.dart';
 import '../../models/user.dart';
 import '../login/login_page.dart';
 import '../../widgets/common/standard_text_field.dart';

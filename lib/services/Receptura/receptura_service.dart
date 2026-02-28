@@ -95,6 +95,7 @@ class RecepturaService {
         uniqueId: product.uniqueId,
         name: product.name,
         plu: product.plu,
+        ean: product.ean,
         category: product.category,
         qty: newQty,
         unit: product.unit,

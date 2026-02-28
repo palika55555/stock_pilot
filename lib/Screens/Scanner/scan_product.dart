@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../models/product.dart';
+import '../../services/Database/database_service.dart';
 
 class ScanProductScreen extends StatefulWidget {
   const ScanProductScreen({super.key});
@@ -67,10 +69,61 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
     if (code == null || !isScanning) return;
 
     setState(() => isScanning = false);
-    _showProductDetail(code);
+    _lookupAndShowProduct(code);
   }
 
-  void _showProductDetail(String code) {
+  Future<void> _lookupAndShowProduct(String code) async {
+    final db = DatabaseService();
+    final product = await db.getProductByBarcode(code);
+    if (!mounted) return;
+    _showProductDetail(code, product);
+  }
+
+  Future<void> _showAssignProductSheet(String code) async {
+    final db = DatabaseService();
+    final products = await db.getProducts();
+    if (!mounted) return;
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('V databáze nie sú žiadne produkty. Najprv vytvorte produkt.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      setState(() => isScanning = true);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _AssignProductSheet(
+        scannedCode: code,
+        products: products,
+        onAssigned: () {
+          Navigator.pop(ctx);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('EAN bol priradený k produktu. Pri ďalšom skenovaní sa zobrazí množstvo.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            setState(() => isScanning = true);
+          }
+        },
+        onCancel: () {
+          Navigator.pop(ctx);
+          setState(() => isScanning = true);
+        },
+      ),
+    );
+  }
+
+  void _showProductDetail(String code, Product? product) {
     showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -78,19 +131,20 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
+        final found = product != null;
         return Container(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.inventory_2_rounded,
+              Icon(
+                found ? Icons.inventory_2_rounded : Icons.qr_code_scanner_rounded,
                 size: 60,
-                color: Colors.blue,
+                color: found ? Colors.blue : Colors.orange,
               ),
               const SizedBox(height: 16),
               Text(
-                'Naskenovaný produkt',
+                found ? 'Naskenovaný produkt' : 'Produkt nenájdený',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -100,21 +154,57 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
                 'Kód: $code',
                 style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
+              if (found) ...[
+                const SizedBox(height: 8),
+                Text(
+                  product!.name,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const Divider(height: 32),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Na sklade:', style: TextStyle(fontSize: 18)),
-                  Text(
-                    '42 ks',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
+              if (found)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Na sklade:', style: TextStyle(fontSize: 18)),
+                    Text(
+                      '${product!.qty} ${product.unit}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Vyberte produkt podľa PLU alebo názvu a priraďte mu tento kód, alebo pridajte EAN v karte produktu.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showAssignProductSheet(code);
+                    },
+                    icon: const Icon(Icons.link_rounded, size: 20),
+                    label: const Text('Priradiť k produktu'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.blue),
+                      foregroundColor: Colors.blue,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -279,4 +369,131 @@ class ScannerOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AssignProductSheet extends StatefulWidget {
+  const _AssignProductSheet({
+    required this.scannedCode,
+    required this.products,
+    required this.onAssigned,
+    required this.onCancel,
+  });
+
+  final String scannedCode;
+  final List<Product> products;
+  final VoidCallback onAssigned;
+  final VoidCallback onCancel;
+
+  @override
+  State<_AssignProductSheet> createState() => _AssignProductSheetState();
+}
+
+class _AssignProductSheetState extends State<_AssignProductSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  final DatabaseService _db = DatabaseService();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Product> get _filtered {
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isEmpty) return widget.products;
+    return widget.products.where((p) {
+      return p.name.toLowerCase().contains(q) ||
+          p.plu.toLowerCase().contains(q) ||
+          (p.ean?.toLowerCase().contains(q) ?? false);
+    }).toList();
+  }
+
+  Future<void> _assignToProduct(Product product) async {
+    final updated = product.copyWith(ean: widget.scannedCode);
+    await _db.updateProduct(updated);
+    widget.onAssigned();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Priradiť kód ${widget.scannedCode} k produktu',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Vyhľadajte podľa PLU alebo názvu',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'PLU alebo názov produktu...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searchController.text.trim().isEmpty
+                              ? 'Žiadne produkty'
+                              : 'Žiadny produkt nevyhovuje vyhľadávaniu',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: _filtered.length,
+                        itemBuilder: (context, index) {
+                          final p = _filtered[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(
+                                p.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text('PLU: ${p.plu} · ${p.qty} ${p.unit}'),
+                              trailing: const Icon(Icons.add_link_rounded),
+                              onTap: () => _assignToProduct(p),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: widget.onCancel,
+                child: const Text('Zrušiť'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

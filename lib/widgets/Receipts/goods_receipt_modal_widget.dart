@@ -7,7 +7,7 @@ import '../../models/warehouse.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/Receipt/receipt_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
-import '../../services/database/database_service.dart';
+import '../../services/Database/database_service.dart';
 import '../../services/supplier/supplier_service.dart';
 import '../products/add_product_modal_widget.dart';
 import '../suppliers/add_supplier_modal_widget.dart';

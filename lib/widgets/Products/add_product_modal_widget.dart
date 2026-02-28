@@ -43,6 +43,7 @@ class _AddProductModalState extends State<AddProductModal> {
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _pluController = TextEditingController();
+  final TextEditingController _eanController = TextEditingController();
 
   // Sales prices
   final TextEditingController _salesPriceWithoutVatController =
@@ -103,6 +104,7 @@ class _AddProductModalState extends State<AddProductModal> {
       final p = widget.productToEdit!;
       _nameController.text = p.name;
       _pluController.text = p.plu;
+      _eanController.text = p.ean ?? '';
       _selectedCategory = WarehouseType.all.contains(p.category)
           ? p.category
           : (WarehouseType.all.contains(p.productType) ? p.productType : WarehouseType.sklad);
@@ -372,6 +374,7 @@ class _AddProductModalState extends State<AddProductModal> {
   void dispose() {
     _nameController.dispose();
     _pluController.dispose();
+    _eanController.dispose();
     _salesPriceWithoutVatController.dispose();
     _salesVatController.dispose();
     _salesPriceWithVatController.dispose();
@@ -415,10 +418,12 @@ class _AddProductModalState extends State<AddProductModal> {
           0.0;
 
       final existing = widget.productToEdit;
+      final eanTrimmed = _eanController.text.trim();
       final product = Product(
         uniqueId: existing?.uniqueId ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}',
         name: _nameController.text.trim(),
         plu: _pluController.text.trim(),
+        ean: eanTrimmed.isEmpty ? null : eanTrimmed,
         category: _selectedCategory,
         qty: existing?.qty ?? 0,
         unit: _selectedUnit,
@@ -624,6 +629,21 @@ class _AddProductModalState extends State<AddProductModal> {
                                 ),
                               ),
                               const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _eanController,
+                                  decoration: _inputDecoration(
+                                    'EAN / Čiarový kód',
+                                    prefixIcon: const Icon(Icons.qr_code_2_rounded, size: 22),
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
                               Expanded(
                                 child: DropdownButtonFormField<int?>(
                                   value: _selectedWarehouseId != null &&

@@ -2,6 +2,8 @@ class Product {
   final String? uniqueId;
   final String name;
   final String plu;
+  /// EAN / čiarový kód – pre vyhľadanie pri skenovaní a zobrazenie množstva.
+  final String? ean;
   final String category;
   final int qty;
   final String unit;
@@ -54,6 +56,7 @@ class Product {
     this.uniqueId,
     required this.name,
     required this.plu,
+    this.ean,
     required this.category,
     required this.qty,
     required this.unit,
@@ -91,6 +94,7 @@ class Product {
       'unique_id': uniqueId,
       'name': name,
       'plu': plu,
+      'ean': ean,
       'category': category,
       'qty': qty,
       'unit': unit,
@@ -129,6 +133,7 @@ class Product {
       uniqueId: map['unique_id'],
       name: map['name'],
       plu: map['plu'],
+      ean: map['ean'] as String?,
       category: map['category'],
       qty: (map['qty'] as num?)?.toInt() ?? 0,
       unit: map['unit'],
@@ -162,6 +167,80 @@ class Product {
       cardType: map['card_type'] as String? ?? 'jednoduchá',
       hasExtendedPricing: (map['has_extended_pricing'] as num?)?.toInt() == 1,
       ibaCeleMnozstva: (map['iba_cele_mnozstva'] as num?)?.toInt() == 1,
+    );
+  }
+
+  Product copyWith({
+    String? uniqueId,
+    String? name,
+    String? plu,
+    String? ean,
+    String? category,
+    int? qty,
+    String? unit,
+    double? price,
+    double? withoutVat,
+    int? vat,
+    int? discount,
+    double? lastPurchasePrice,
+    double? lastPurchasePriceWithoutVat,
+    String? lastPurchaseDate,
+    String? currency,
+    String? location,
+    double? purchasePrice,
+    double? purchasePriceWithoutVat,
+    int? purchaseVat,
+    double? recyclingFee,
+    String? productType,
+    String? supplierName,
+    int? kindId,
+    int? warehouseId,
+    String? linkedProductUniqueId,
+    int? minQuantity,
+    bool? allowAtCashRegister,
+    bool? showInPriceList,
+    bool? isActive,
+    bool? temporarilyUnavailable,
+    String? stockGroup,
+    String? cardType,
+    bool? hasExtendedPricing,
+    bool? ibaCeleMnozstva,
+  }) {
+    return Product(
+      uniqueId: uniqueId ?? this.uniqueId,
+      name: name ?? this.name,
+      plu: plu ?? this.plu,
+      ean: ean ?? this.ean,
+      category: category ?? this.category,
+      qty: qty ?? this.qty,
+      unit: unit ?? this.unit,
+      price: price ?? this.price,
+      withoutVat: withoutVat ?? this.withoutVat,
+      vat: vat ?? this.vat,
+      discount: discount ?? this.discount,
+      lastPurchasePrice: lastPurchasePrice ?? this.lastPurchasePrice,
+      lastPurchasePriceWithoutVat: lastPurchasePriceWithoutVat ?? this.lastPurchasePriceWithoutVat,
+      lastPurchaseDate: lastPurchaseDate ?? this.lastPurchaseDate,
+      currency: currency ?? this.currency,
+      location: location ?? this.location,
+      purchasePrice: purchasePrice ?? this.purchasePrice,
+      purchasePriceWithoutVat: purchasePriceWithoutVat ?? this.purchasePriceWithoutVat,
+      purchaseVat: purchaseVat ?? this.purchaseVat,
+      recyclingFee: recyclingFee ?? this.recyclingFee,
+      productType: productType ?? this.productType,
+      supplierName: supplierName ?? this.supplierName,
+      kindId: kindId ?? this.kindId,
+      warehouseId: warehouseId ?? this.warehouseId,
+      linkedProductUniqueId: linkedProductUniqueId ?? this.linkedProductUniqueId,
+      minQuantity: minQuantity ?? this.minQuantity,
+      allowAtCashRegister: allowAtCashRegister ?? this.allowAtCashRegister,
+      showInPriceList: showInPriceList ?? this.showInPriceList,
+      isActive: isActive ?? this.isActive,
+      temporarilyUnavailable: temporarilyUnavailable ?? this.temporarilyUnavailable,
+      stockGroup: stockGroup ?? this.stockGroup,
+      cardType: cardType ?? this.cardType,
+      hasExtendedPricing: hasExtendedPricing ?? this.hasExtendedPricing,
+      ibaCeleMnozstva: ibaCeleMnozstva ?? this.ibaCeleMnozstva,
     );
   }
 }

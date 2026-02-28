@@ -57,7 +57,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 21,
+      version: 22,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -100,9 +100,14 @@ class DatabaseService {
         stock_group TEXT,
         card_type TEXT NOT NULL DEFAULT 'jednoduchá',
         has_extended_pricing INTEGER NOT NULL DEFAULT 0,
-        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0
+        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0,
+        ean TEXT
       )
     ''');
+    final productInfoEan = await db.rawQuery('PRAGMA table_info(products)');
+    if (!productInfoEan.any((c) => c['name'] == 'ean')) {
+      await db.execute('ALTER TABLE products ADD COLUMN ean TEXT');
+    }
     await db.execute('''
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -853,6 +858,12 @@ class DatabaseService {
         await db.execute('ALTER TABLE inbound_receipts ADD COLUMN je_vysporiadana INTEGER NOT NULL DEFAULT 0');
       }
     }
+    if (oldVersion < 22) {
+      final pInfo = await db.rawQuery('PRAGMA table_info(products)');
+      if (!pInfo.any((c) => c['name'] == 'ean')) {
+        await db.execute('ALTER TABLE products ADD COLUMN ean TEXT');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -889,7 +900,8 @@ class DatabaseService {
         stock_group TEXT,
         card_type TEXT NOT NULL DEFAULT 'jednoduchá',
         has_extended_pricing INTEGER NOT NULL DEFAULT 0,
-        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0
+        iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0,
+        ean TEXT
       )
     ''');
 
@@ -1136,6 +1148,30 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return Product.fromMap(maps.first);
+  }
+
+  /// Vyhľadá produkt podľa EAN kódu (čiarový kód).
+  Future<Product?> getProductByEan(String ean) async {
+    if (ean.isEmpty) return null;
+    Database db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'products',
+      where: 'ean = ?',
+      whereArgs: [ean.trim()],
+    );
+    if (maps.isEmpty) return null;
+    return Product.fromMap(maps.first);
+  }
+
+  /// Vyhľadá produkt podľa naskenovaného kódu: najprv EAN, potom PLU.
+  Future<Product?> getProductByBarcode(String code) async {
+    if (code.isEmpty) return null;
+    final trimmed = code.trim();
+    Product? p = await getProductByEan(trimmed);
+    if (p != null) return p;
+    final all = await getProducts();
+    final byPlu = all.where((p) => p.plu.trim() == trimmed).toList();
+    return byPlu.isEmpty ? null : byPlu.first;
   }
 
   Future<int> updateProduct(Product product) async {
@@ -1593,6 +1629,7 @@ class DatabaseService {
         uniqueId: source.uniqueId,
         name: source.name,
         plu: source.plu,
+        ean: source.ean,
         category: source.category,
         qty: newSourceQty,
         unit: source.unit,
@@ -1649,6 +1686,7 @@ class DatabaseService {
           uniqueId: target.uniqueId,
           name: target.name,
           plu: target.plu,
+          ean: target.ean,
           category: target.category,
           qty: target.qty + transfer.quantity,
           unit: target.unit,
@@ -1692,6 +1730,7 @@ class DatabaseService {
           uniqueId: newUniqueId,
           name: transfer.productName,
           plu: transfer.productPlu,
+          ean: source.ean,
           category: source.category,
           qty: transfer.quantity,
           unit: transfer.unit,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
-import '../../services/database/database_service.dart';
+import '../../services/Database/database_service.dart';
 
 /// Bottom sheet s históriou nákupných cien produktu (z príjemok).
 class PurchasePriceHistorySheet extends StatefulWidget {

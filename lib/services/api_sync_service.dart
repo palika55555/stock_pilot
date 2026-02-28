@@ -21,27 +21,30 @@ void setBackendToken(String? token) {
 String? getBackendToken() => _backendToken;
 
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
-/// Volaj po úspešnom lokálnom prihlásení alebo po vytvorení používateľa. Ignoruje chyby (offline).
-void syncUserToBackend(User user) {
-  final uri = Uri.parse('$_apiBase/auth/sync-user');
-  final body = jsonEncode({
-    'username': user.username,
-    'password': user.password,
-    'full_name': user.fullName,
-    'role': user.role,
-    'email': user.email,
-    'phone': user.phone,
-    'department': user.department,
-    'avatar_url': user.avatarUrl,
-  });
-  http
-      .post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      )
-      .timeout(const Duration(seconds: 5))
-      .ignore();
+/// Volaj po úspešnom lokálnom prihlásení. Počkaj na dokončenie, aby backend login potom našiel toho istého používateľa.
+Future<void> syncUserToBackend(User user) async {
+  try {
+    final uri = Uri.parse('$_apiBase/auth/sync-user');
+    final body = jsonEncode({
+      'username': user.username,
+      'password': user.password,
+      'full_name': user.fullName,
+      'role': user.role,
+      'email': user.email,
+      'phone': user.phone,
+      'department': user.department,
+      'avatar_url': user.avatarUrl,
+    });
+    await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        )
+        .timeout(const Duration(seconds: 8));
+  } catch (_) {
+    // offline alebo chyba – ďalej skúsime backend login (môže ísť ak bol user syncnutý skôr)
+  }
 }
 
 /// Pošle zoznam zákazníkov do backendu – dashboard na webe zobrazí rovnaký počet.
