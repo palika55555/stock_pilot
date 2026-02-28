@@ -73,6 +73,25 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+// Middleware na overenie Bearer tokenu – nepustí nikoho bez platného Authorization headeru
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+
+  if (!authHeader || !authHeader.startsWith('Bearer-')) {
+    console.warn(`[security] Nepovolený prístup zablokovaný na: ${req.originalUrl}`);
+    return res.status(401).json({ error: 'Prístup zamietnutý. Vyžaduje sa prihlásenie.' });
+  }
+
+  // V budúcne môžeš overovať platnosť tokenu v DB alebo JWT; zatiaľ stačí prítomnosť Bearer- tokenu
+  next();
+};
+
+// Všetko pod /api/ okrem /api/auth/* vyžaduje token (login a sync-user ostávajú verejné)
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth')) return next();
+  authenticateToken(req, res, next);
+});
+
 // Uptime od štartu procesu (sekundy)
 const startTime = Date.now();
 const getUptimeSeconds = () => Math.floor((Date.now() - startTime) / 1000);
