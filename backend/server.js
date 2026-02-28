@@ -39,10 +39,17 @@ function getDbHostname() {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
-const defaultOrigins = ['https://www.stockpilot.sk', 'https://stockpilot.sk'];
+const defaultOrigins = [
+  'https://www.stockpilot.sk',
+  'https://stockpilot.sk',
+];
+
+// Ak tvoj web na Verceli používa aj testovacie URL, pridaj ich sem:
 const envOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : defaultOrigins;
+  : [...defaultOrigins, 'https://stock-pilot-web.vercel.app'];
+
+// Dôležité: Uisti sa, že NODE_ENV je v Coolify nastavené na 'production'
 const allowedOrigins =
   NODE_ENV === 'development'
     ? [...envOrigins, 'http://localhost:5173', 'http://localhost:3000']
