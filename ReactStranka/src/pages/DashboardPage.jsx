@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
-import { API_BASE } from '../config'
+import { API_BASE_FOR_CALLS } from '../config'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -46,7 +46,7 @@ export default function DashboardPage() {
     let cancelled = false
     async function fetchStats() {
       try {
-        const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
+        const res = await fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, {
           headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (!res.ok) throw new Error('Stats failed')

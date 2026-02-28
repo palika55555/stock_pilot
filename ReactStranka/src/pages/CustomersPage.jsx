@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
-import { API_BASE } from '../config'
+import { API_BASE_FOR_CALLS } from '../config'
 
 export default function CustomersPage() {
   const navigate = useNavigate()
@@ -29,7 +29,7 @@ export default function CustomersPage() {
     let cancelled = false
     async function fetchCustomers() {
       try {
-        const res = await fetch(`${API_BASE}/api/customers`, {
+        const res = await fetch(`${API_BASE_FOR_CALLS}/customers`, {
           headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (!res.ok) throw new Error('Načítanie zlyhalo')

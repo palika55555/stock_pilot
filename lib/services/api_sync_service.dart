@@ -6,10 +6,15 @@ import '../models/customer.dart';
 /// Backend API pre sync používateľa a zákazníkov do PostgreSQL (rovnaké dáta na webe).
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
 
+/// Tajný path prefix pre API – musí zodpovedať API_PATH_PREFIX na serveri (obfuskovácia endpointov).
+const String kApiPathPrefix = 'sp-9f2a4e1b';
+
+String get _apiBase => '$kBackendApiBase/api/$kApiPathPrefix';
+
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
 /// Volaj po úspešnom lokálnom prihlásení alebo po vytvorení používateľa. Ignoruje chyby (offline).
 void syncUserToBackend(User user) {
-  final uri = Uri.parse('$kBackendApiBase/api/auth/sync-user');
+  final uri = Uri.parse('$_apiBase/auth/sync-user');
   final body = jsonEncode({
     'username': user.username,
     'password': user.password,
@@ -34,7 +39,7 @@ void syncUserToBackend(User user) {
 /// Volaj po prihlásení a po pridaní/úprave zákazníka. Ignoruje chyby (offline).
 void syncCustomersToBackend(List<Customer> customers) {
   if (customers.isEmpty) return;
-  final uri = Uri.parse('$kBackendApiBase/api/sync/customers');
+  final uri = Uri.parse('$_apiBase/sync/customers');
   final body = jsonEncode({
     'customers': customers.map((c) => c.toMap()).toList(),
   });
@@ -52,7 +57,7 @@ void syncCustomersToBackend(List<Customer> customers) {
 /// Vráti null pri chybe/offline. Volaj po prihlásení a potom zavolaj [DatabaseService.replaceCustomersFromBackend].
 Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
   try {
-    final uri = Uri.parse('$kBackendApiBase/api/customers');
+    final uri = Uri.parse('$_apiBase/customers');
     final res = await http.get(uri).timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final list = jsonDecode(res.body) as List<dynamic>?;
@@ -66,7 +71,7 @@ Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
 /// Kontrola či boli na webe zmeny (GET /api/sync/check). Používa [SyncCheckService].
 Future<Map<String, dynamic>?> fetchSyncCheck() async {
   try {
-    final uri = Uri.parse('$kBackendApiBase/api/sync/check');
+    final uri = Uri.parse('$_apiBase/sync/check');
     final res = await http.get(uri).timeout(const Duration(seconds: 8));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final map = jsonDecode(res.body) as Map<String, dynamic>?;

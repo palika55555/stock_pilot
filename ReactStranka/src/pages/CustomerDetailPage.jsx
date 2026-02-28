@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomerDetailPage.css'
-import { API_BASE } from '../config'
+import { API_BASE_FOR_CALLS } from '../config'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
@@ -44,7 +44,7 @@ export default function CustomerDetailPage() {
     let cancelled = false
     async function fetchCustomer() {
       try {
-        const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+        const res = await fetch(`${API_BASE_FOR_CALLS}/customers/${id}`, {
           headers: auth?.token ? { Authorization: auth.token } : {},
         })
         if (res.status === 404) {
@@ -83,7 +83,7 @@ export default function CustomerDetailPage() {
     setSaveError('')
     setSaving(true)
     try {
-      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+      const res = await fetch(`${API_BASE_FOR_CALLS}/customers/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

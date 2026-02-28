@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
-import { API_BASE } from '../config'
+import { API_BASE_FOR_CALLS } from '../config'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -15,7 +15,7 @@ export default function LoginPage() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetch(`${API_BASE_FOR_CALLS}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

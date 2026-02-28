@@ -65,6 +65,10 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
+// Tajný path prefix pre API – bez znalosti tejto cesty sa nikto nedostane k endpointom (obfuskovácia).
+// Na Coolify nastav API_PATH_PREFIX (napr. vlastný náhodný reťazec). Musí byť rovnaký vo Flutter/React.
+const API_PATH_PREFIX = process.env.API_PATH_PREFIX || 'sp-9f2a4e1b';
+
 // Rate limiting – ochrana proti brute-force (max 100 požiadaviek z IP za 15 min na /api/)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -86,8 +90,11 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Všetko pod /api/ okrem /api/auth/* vyžaduje token (login a sync-user ostávajú verejné).
-app.use('/api', (req, res, next) => {
+// API router – všetky endpointy sú pod /api/:API_PATH_PREFIX/ (napr. /api/sp-9f2a4e1b/auth/login)
+const apiRouter = express.Router();
+
+// Všetko okrem /auth/* vyžaduje token
+apiRouter.use((req, res, next) => {
   if (req.path.startsWith('/auth')) return next();
   authenticateToken(req, res, next);
 });
@@ -128,7 +135,7 @@ app.get('/health', async (req, res) => {
 });
 
 // --- API: Auth (rovnaká logika ako Flutter login_page – username + password z DB) ---
-app.post('/api/auth/login', async (req, res) => {
+apiRouter.post('/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(401).json({
@@ -179,7 +186,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- Sync používateľa z Flutter (SQLite) do PostgreSQL – služba v DBsync/sync ---
-app.post('/api/auth/sync-user', async (req, res) => {
+apiRouter.post('/auth/sync-user', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
@@ -193,7 +200,7 @@ app.post('/api/auth/sync-user', async (req, res) => {
 });
 
 // --- API: Stocks (PostgreSQL) ---
-app.get('/api/stocks', async (req, res) => {
+apiRouter.get('/stocks', async (req, res) => {
   if (!pool || !poolReady) {
     console.error('[GET /api/stocks] Database not available');
     return res.status(503).json({ error: 'Database not configured or unavailable' });
@@ -210,7 +217,7 @@ app.get('/api/stocks', async (req, res) => {
   }
 });
 
-app.post('/api/stocks', async (req, res) => {
+apiRouter.post('/stocks', async (req, res) => {
   if (!pool || !poolReady) {
     console.error('[POST /api/stocks] Database not available');
     return res.status(503).json({ error: 'Database not configured or unavailable' });
@@ -242,7 +249,7 @@ app.post('/api/stocks', async (req, res) => {
 });
 
 // --- Sync zákazníkov z Flutter do PostgreSQL (DBsync/sync) ---
-app.post('/api/sync/customers', async (req, res) => {
+apiRouter.post('/sync/customers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
@@ -256,7 +263,7 @@ app.post('/api/sync/customers', async (req, res) => {
 });
 
 // --- API: Zákazníci (zoznam a detail) ---
-app.get('/api/customers', async (req, res) => {
+apiRouter.get('/customers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
@@ -272,7 +279,7 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-app.get('/api/customers/:id', async (req, res) => {
+apiRouter.get('/customers/:id', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
@@ -296,7 +303,7 @@ app.get('/api/customers/:id', async (req, res) => {
   }
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+apiRouter.put('/customers/:id', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
@@ -346,12 +353,12 @@ app.put('/api/customers/:id', async (req, res) => {
 });
 
 // --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
-app.get('/api/sync/check', (_req, res) => {
+apiRouter.get('/sync/check', (_req, res) => {
   res.json({ customers_updated_at: lastCustomersUpdatedAt });
 });
 
 // --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---
-app.get('/api/dashboard/stats', async (req, res) => {
+apiRouter.get('/dashboard/stats', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
@@ -378,6 +385,9 @@ app.get('/api/dashboard/stats', async (req, res) => {
     res.status(500).json({ error: 'Chyba servera' });
   }
 });
+
+// Montovanie API routera pod tajný prefix – bez znalosti cesty /api/:prefix/ sa nikto nedostane k dátam
+app.use(`/api/${API_PATH_PREFIX}`, apiRouter);
 
 // 404
 app.use((req, res) => {
