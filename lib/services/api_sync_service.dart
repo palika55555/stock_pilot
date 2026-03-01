@@ -205,15 +205,19 @@ Future<void> syncBatchesToBackend() async {
       }
     }
     final uri = Uri.parse('$_apiBase/sync/batches');
-    await http
+    final res = await http
         .post(
           uri,
           headers: {'Content-Type': 'application/json', 'Authorization': token},
           body: jsonEncode({'batches': batchPayloads, 'pallets': palletPayloads}),
         )
         .timeout(const Duration(seconds: 15));
-  } catch (_) {
-    // offline alebo chyba – web nemusí mať najnovšie šarže
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      print('syncBatchesToBackend failed: ${res.statusCode} ${res.body}');
+    }
+  } catch (e, st) {
+    print('syncBatchesToBackend error: $e');
+    if (st != null) print(st);
   }
 }
 
