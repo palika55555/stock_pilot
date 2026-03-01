@@ -9,6 +9,7 @@ const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
 const { syncCustomers } = require('./DBsync/sync/customerSync');
 const { syncProducts } = require('./DBsync/sync/productSync');
+const { syncBatches } = require('./DBsync/sync/batchSync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -332,6 +333,19 @@ apiRouter.post('/sync/customers', async (req, res) => {
   res.status(200).json({ success: true, count: result.count });
 });
 
+// --- Sync šarží a paliet z Flutter do PostgreSQL ---
+apiRouter.post('/sync/batches', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncBatches(pool, req.body);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  console.log('[sync] Batches OK:', result.count);
+  res.status(200).json({ success: true, count: result.count });
+});
+
 // --- API: Zákazníci (zoznam a detail) ---
 apiRouter.get('/customers', async (req, res) => {
   if (!pool || !poolReady) {
@@ -617,6 +631,33 @@ apiRouter.post('/batches', async (req, res) => {
   }
 });
 
+apiRouter.get('/batches/by-local/:localId', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const localId = parseInt(req.params.localId, 10);
+  if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE local_id = $1',
+      [localId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
+    const r = rows[0];
+    res.json({
+      id: r.id,
+      production_date: r.production_date instanceof Date ? r.production_date.toISOString().slice(0, 10) : r.production_date,
+      product_type: r.product_type,
+      quantity_produced: Number(r.quantity_produced) || 0,
+      notes: r.notes,
+      created_at: r.created_at,
+      cost_total: r.cost_total != null ? Number(r.cost_total) : null,
+      revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+    });
+  } catch (err) {
+    console.error('[GET /api/batches/by-local/:localId]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 apiRouter.get('/batches/:id', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const id = parseInt(req.params.id, 10);
@@ -728,6 +769,32 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
     );
   } catch (err) {
     console.error('[POST /api/batches/:id/pallets]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/pallets/by-local/:localId', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const localId = parseInt(req.params.localId, 10);
+  if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE local_id = $1',
+      [localId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
+    const r = rows[0];
+    res.json({
+      id: r.id,
+      batch_id: r.batch_id,
+      product_type: r.product_type,
+      quantity: Number(r.quantity),
+      customer_id: r.customer_id,
+      status: r.status || 'Na sklade',
+      created_at: r.created_at,
+    });
+  } catch (err) {
+    console.error('[GET /api/pallets/by-local/:localId]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });

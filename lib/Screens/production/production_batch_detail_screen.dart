@@ -5,6 +5,7 @@ import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/models/pallet.dart';
 import 'package:stock_pilot/models/production_batch_recipe_item.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
+import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/screens/production/production_batch_form_screen.dart';
 import 'package:stock_pilot/screens/pallet/create_pallets_dialog.dart';
 import 'package:stock_pilot/screens/pallet/pallet_labels_screen.dart';
@@ -144,6 +145,7 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
                       );
                       if (list != null && list.isNotEmpty && mounted) {
                         _load();
+                        syncBatchesToBackend();
                         Navigator.push(
                           context,
                           MaterialPageRoute(

@@ -80,19 +80,30 @@ export default function ScanProductPage() {
       setPalletResult(null)
       if (bp.type === 'batch' && bp.id) {
         fetch(`${API_BASE_FOR_CALLS}/batches/${bp.id}`, { headers: { Authorization: auth.token } })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => { if (data) setBatchResult(data) })
-          .catch(() => {})
+          .then((r) => {
+            if (r.ok) return r.json()
+            if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/batches/by-local/${bp.id}`, { headers: { Authorization: auth.token } }).then((r2) => (r2.ok ? r2.json() : null))
+            return null
+          })
+          .then((data) => { setBatchResult(data || { notFound: true }) })
+          .catch(() => { setBatchResult({ notFound: true }) })
       }
       if (bp.type === 'pallet' && bp.id) {
+        const fetchPallet = () =>
+          fetch(`${API_BASE_FOR_CALLS}/pallets/${bp.id}`, { headers: { Authorization: auth.token } })
+            .then((r) => {
+              if (r.ok) return r.json()
+              if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/pallets/by-local/${bp.id}`, { headers: { Authorization: auth.token } }).then((r2) => (r2.ok ? r2.json() : null))
+              return null
+            })
         Promise.all([
-          fetch(`${API_BASE_FOR_CALLS}/pallets/${bp.id}`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : null)),
+          fetchPallet(),
           fetch(`${API_BASE_FOR_CALLS}/customers`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : [])),
         ])
           .then(([pallet, customers]) => {
-            setPalletResult({ pallet, customers: Array.isArray(customers) ? customers : [] })
+            setPalletResult(pallet ? { pallet, customers: Array.isArray(customers) ? customers : [] } : { notFound: true, customers: Array.isArray(customers) ? customers : [] })
           })
-          .catch(() => {})
+          .catch(() => { setPalletResult({ notFound: true, customers: [] }) })
       }
       return
     }
@@ -284,17 +295,21 @@ export default function ScanProductPage() {
               <>
                 <div className="scan-product-result-row">
                   <span>Šarža (výroba)</span>
-                  <strong>{batchResult ? `${batchResult.product_type} – ${batchResult.quantity_produced} ks` : 'Načítavam…'}</strong>
+                  <strong>
+                    {batchResult?.notFound ? 'Šarža nebola nájdená (sync z aplikácie alebo vytvorte na webe)' : batchResult ? `${batchResult.product_type} – ${batchResult.quantity_produced} ks` : 'Načítavam…'}
+                  </strong>
                 </div>
                 {batchResult && (
                   <div className="scan-product-result-actions">
-                    <button
-                      type="button"
-                      className="scan-product-btn-primary"
-                      onClick={() => { navigate(`/dashboard/production/${batchResult.id}`); setShowResult(false) }}
-                    >
-                      Otvoriť detail šarže
-                    </button>
+                    {!batchResult.notFound && (
+                      <button
+                        type="button"
+                        className="scan-product-btn-primary"
+                        onClick={() => { navigate(`/dashboard/production/${batchResult.id}`); setShowResult(false) }}
+                      >
+                        Otvoriť detail šarže
+                      </button>
+                    )}
                     <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
                       Skenovať ďalej
                     </button>
@@ -307,7 +322,7 @@ export default function ScanProductPage() {
                 <div className="scan-product-result-row">
                   <span>Paleta</span>
                   <strong>
-                    {palletResult?.pallet
+                    {palletResult?.notFound ? 'Paleta nebola nájdená (sync z aplikácie)' : palletResult?.pallet
                       ? `${palletResult.pallet.product_type} – ${palletResult.pallet.quantity} ks (${palletResult.pallet.status})`
                       : 'Načítavam…'}
                   </strong>
@@ -336,14 +351,16 @@ export default function ScanProductPage() {
                   </div>
                 )}
                 {assignSuccess && <p className="scan-product-result-success">Paleta priradená zákazníkovi.</p>}
-                <div className="scan-product-result-actions">
-                  <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
-                    Skenovať ďalej
-                  </button>
-                  <button type="button" className="scan-product-btn-secondary" onClick={handleBack}>
-                    Späť na prehľad
-                  </button>
-                </div>
+                {(palletResult?.pallet || palletResult?.notFound) && (
+                  <div className="scan-product-result-actions">
+                    <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
+                      Skenovať ďalej
+                    </button>
+                    <button type="button" className="scan-product-btn-secondary" onClick={handleBack}>
+                      Späť na prehľad
+                    </button>
+                  </div>
+                )}
               </>
             )}
             {productResult === 'not_found' && (

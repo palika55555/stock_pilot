@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/user.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
+import 'Database/database_service.dart';
 
 /// Backend API pre sync do PostgreSQL (zákazníci, produkty, login).
 /// Všetky volania (dotahovanie zákazníkov, sync produktov, login) používajú rovnakú _apiBase.
@@ -157,6 +158,62 @@ Future<List<Map<String, dynamic>>?> fetchCustomersFromBackendWithToken(String? t
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   } catch (_) {
     return null;
+  }
+}
+
+/// Pošle všetky šarže a palety do backendu – web potom zobrazí rovnaké šarže.
+/// Volaj po prihlásení a po vytvorení/úprave šarže alebo paliet. Vyžaduje token.
+Future<void> syncBatchesToBackend() async {
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
+  try {
+    final db = DatabaseService();
+    final batches = await db.getProductionBatchesByDateRange('2020-01-01', '2099-12-31');
+    final batchPayloads = <Map<String, dynamic>>[];
+    final palletPayloads = <Map<String, dynamic>>[];
+    for (final b in batches) {
+      if (b.id == null) continue;
+      final recipe = await db.getRecipeForBatch(b.id!);
+      batchPayloads.add({
+        'id': b.id,
+        'production_date': b.productionDate,
+        'product_type': b.productType,
+        'quantity_produced': b.quantityProduced,
+        'notes': b.notes,
+        'created_at': b.createdAt,
+        'cost_total': b.costTotal,
+        'revenue_total': b.revenueTotal,
+        'recipe': recipe
+            .map((r) => {
+                  'material_name': r.materialName,
+                  'quantity': r.quantity,
+                  'unit': r.unit,
+                })
+            .toList(),
+      });
+      final pallets = await db.getPalletsByBatchId(b.id!);
+      for (final p in pallets) {
+        if (p.id == null) continue;
+        palletPayloads.add({
+          'id': p.id,
+          'batch_id': p.batchId,
+          'product_type': p.productType,
+          'quantity': p.quantity,
+          'customer_id': p.customerId,
+          'status': p.status.label,
+        });
+      }
+    }
+    final uri = Uri.parse('$_apiBase/sync/batches');
+    await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json', 'Authorization': token},
+          body: jsonEncode({'batches': batchPayloads, 'pallets': palletPayloads}),
+        )
+        .timeout(const Duration(seconds: 15));
+  } catch (_) {
+    // offline alebo chyba – web nemusí mať najnovšie šarže
   }
 }
 

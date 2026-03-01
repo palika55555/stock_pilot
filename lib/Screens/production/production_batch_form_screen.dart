@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/models/production_batch_recipe_item.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
+import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/screens/production/production_batch_detail_screen.dart';
 
 const List<String> _defaultProductTypes = [
@@ -144,6 +145,7 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
       }
 
       if (!mounted) return;
+      syncBatchesToBackend();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

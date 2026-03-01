@@ -5,6 +5,7 @@ import '../../models/customer.dart';
 import '../../models/pallet.dart';
 import '../../models/product.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/api_sync_service.dart';
 import '../production/production_batch_detail_screen.dart';
 import '../pallet/pallet_expedition_screen.dart';
 
@@ -96,6 +97,7 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
           }
           await db.assignPalletToCustomer(palletId, widget.expeditionCustomer!.id!);
           if (!mounted) return;
+          syncBatchesToBackend();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Paleta priradená zákazníkovi ${widget.expeditionCustomer!.name}'),

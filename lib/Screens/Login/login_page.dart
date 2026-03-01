@@ -94,6 +94,7 @@ class _LoginPageState extends State<LoginPage> {
             if (backendProducts != null && backendProducts.isNotEmpty) {
               await _dbService.updateProductEanFromBackend(backendProducts);
             }
+            await syncBatchesToBackend();
           }
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa

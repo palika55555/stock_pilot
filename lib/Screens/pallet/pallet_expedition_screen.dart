@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stock_pilot/models/customer.dart';
 import 'package:stock_pilot/models/pallet.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
+import 'package:stock_pilot/services/api_sync_service.dart';
 
 /// Expedícia palety: výber zákazníka a priradenie palety (zvýšenie palletBalance).
 class PalletExpeditionScreen extends StatefulWidget {
@@ -56,6 +57,7 @@ class _PalletExpeditionScreenState extends State<PalletExpeditionScreen> {
     await _db.assignPalletToCustomer(widget.palletId, _selectedCustomer!.id!);
     if (!mounted) return;
     setState(() => _saving = false);
+    syncBatchesToBackend();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Paleta priradená zákazníkovi ${_selectedCustomer!.name}'),
