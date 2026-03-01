@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../models/customer.dart';
+import '../../models/pallet.dart';
 import '../../models/product.dart';
 import '../../services/Database/database_service.dart';
+import '../production/production_batch_detail_screen.dart';
+import '../pallet/pallet_expedition_screen.dart';
 
 class ScanProductScreen extends StatefulWidget {
-  const ScanProductScreen({super.key});
+  /// Ak je nastavený, naskenovaná paleta sa automaticky priradí tomuto zákazníkovi (predaj / expedícia).
+  final Customer? expeditionCustomer;
+
+  const ScanProductScreen({super.key, this.expeditionCustomer});
 
   @override
   State<ScanProductScreen> createState() => _ScanProductScreenState();
@@ -74,6 +81,55 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
 
   Future<void> _lookupAndShowProduct(String code) async {
     final db = DatabaseService();
+    final palletId = Pallet.parseIdFromQr(code);
+    if (palletId != null) {
+      final pallet = await db.getPalletById(palletId);
+      if (!mounted) return;
+      if (pallet != null) {
+        if (widget.expeditionCustomer != null) {
+          if (pallet.status == PalletStatus.uZakaznika) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Paleta je už priradená inému zákazníkovi')),
+            );
+            setState(() => isScanning = true);
+            return;
+          }
+          await db.assignPalletToCustomer(palletId, widget.expeditionCustomer!.id!);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Paleta priradená zákazníkovi ${widget.expeditionCustomer!.name}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          setState(() => isScanning = true);
+          return;
+        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PalletExpeditionScreen(palletId: palletId),
+          ),
+        );
+        setState(() => isScanning = true);
+        return;
+      }
+    }
+    final batchId = DatabaseService.parseProductionBatchIdFromQr(code);
+    if (batchId != null) {
+      final batch = await db.getProductionBatchById(batchId);
+      if (!mounted) return;
+      if (batch != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductionBatchDetailScreen(batchId: batchId),
+          ),
+        );
+        setState(() => isScanning = true);
+        return;
+      }
+    }
     final product = await db.getProductByBarcode(code);
     if (!mounted) return;
     _showProductDetail(code, product);
@@ -238,7 +294,11 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Skenovať tovar'),
+        title: Text(
+          widget.expeditionCustomer != null
+              ? 'Expedícia – ${widget.expeditionCustomer!.name}'
+              : 'Skenovať tovar',
+        ),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [

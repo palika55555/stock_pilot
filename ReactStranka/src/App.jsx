@@ -6,6 +6,9 @@ import CustomerDetailPage from './pages/CustomerDetailPage'
 import ProductsPage from './pages/ProductsPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import ScanProductPage from './pages/ScanProductPage'
+import ProductionPage from './pages/ProductionPage'
+import ProductionBatchFormPage from './pages/ProductionBatchFormPage'
+import ProductionBatchDetailPage from './pages/ProductionBatchDetailPage'
 import './App.css'
 
 function PrivateRoute({ children }) {
@@ -64,6 +67,30 @@ function App() {
           element={
             <PrivateRoute>
               <ScanProductPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/production"
+          element={
+            <PrivateRoute>
+              <ProductionPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/production/new"
+          element={
+            <PrivateRoute>
+              <ProductionBatchFormPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/production/:id"
+          element={
+            <PrivateRoute>
+              <ProductionBatchDetailPage />
             </PrivateRoute>
           }
         />

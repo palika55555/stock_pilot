@@ -69,9 +69,11 @@ class _LoginPageState extends State<LoginPage> {
           await syncUserToBackend(user);
           final customers = await _dbService.getCustomers();
           syncCustomersToBackend(customers);
-          // Stiahnuť z backendu zákazníkov (vrátane tých pridaných na webe) – potrebujeme token
+          // Token potrebujeme pre sync aj pre dotiahnutie z webu
           final token = await fetchBackendToken(user.username, user.password);
           if (token != null) setBackendToken(token);
+          // So tokenom odošleme zákazníkov a produkty na backend (inak backend vracia 401)
+          if (token != null) syncCustomersToBackend(customers);
           final fromBackend = await fetchCustomersFromBackendWithToken(token);
           if (fromBackend != null && fromBackend.isNotEmpty && mounted) {
             await _dbService.replaceCustomersFromBackend(fromBackend);

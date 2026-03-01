@@ -136,8 +136,31 @@ export default function DashboardPage() {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/dashboard/scan') } }}
               >
                 <span className="dashboard-scan-icon" aria-hidden="true">📷</span>
-                <span className="dashboard-scan-text">Skenovať čiarový kód alebo QR kód kamerou</span>
+                <span className="dashboard-scan-text">Skenovať čiarový kód alebo QR kód kamerou (produkty, šarže, palety)</span>
                 <span className="dashboard-scan-cta">Otvoriť skener →</span>
+              </div>
+            </section>
+
+            <section className="dashboard-section">
+              <h3 className="dashboard-section-title">Výroba – šarže a palety</h3>
+              <div
+                className="dashboard-scan-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/dashboard/production')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/dashboard/production') } }}
+              >
+                <span className="dashboard-scan-icon" aria-hidden="true">🏭</span>
+                <span className="dashboard-scan-text">Vytvárať šarže, palety a tlačiť QR kódy</span>
+                <span className="dashboard-scan-cta">Výroba →</span>
+              </div>
+            </section>
+
+            <section className="dashboard-section">
+              <h3 className="dashboard-section-title">Synchronizácia s aplikáciou</h3>
+              <div className="dashboard-notes-placeholder">
+                Prihlásením v mobilnej aplikácii Stock Pilot (rovnaký účet) sa zákazníci a produkty synchronizujú s týmto webom.
+                Šarže a palety môžete spravovať tu na webe aj v aplikácii – údaje sú uložené na serveri a sú dostupné na oboch miestach.
               </div>
             </section>
 

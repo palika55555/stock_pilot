@@ -23,7 +23,9 @@ export default function ScanProductPage() {
   const [error, setError] = useState(null)
   const [lastScanned, setLastScanned] = useState(null)
   const [showResult, setShowResult] = useState(false)
-  const [productResult, setProductResult] = useState(null) // null | 'loading' | 'not_found' | { name, plu, ean, unit, qty }
+  const [productResult, setProductResult] = useState(null) // null | 'loading' | 'not_found' | 'batch' | 'pallet' | product
+  const [batchResult, setBatchResult] = useState(null) // { id, product_type, quantity_produced, production_date }
+  const [palletResult, setPalletResult] = useState(null) // { id, product_type, quantity, status } + customers for assign
   const [assignOpen, setAssignOpen] = useState(false)
   const [productsList, setProductsList] = useState([])
   const [assignSearch, setAssignSearch] = useState('')
@@ -56,9 +58,47 @@ export default function ScanProductPage() {
     return res.json()
   }, [auth?.token])
 
+  const parseBatchOrPallet = useCallback((code) => {
+    const s = (code || '').toString().trim()
+    if (s.startsWith('STOCKPILOT_BATCH:')) {
+      const id = parseInt(s.slice('STOCKPILOT_BATCH:'.length), 10)
+      return { type: 'batch', id: Number.isNaN(id) ? null : id }
+    }
+    if (s.startsWith('STOCKPILOT_PALLET:')) {
+      const id = parseInt(s.slice('STOCKPILOT_PALLET:'.length), 10)
+      return { type: 'pallet', id: Number.isNaN(id) ? null : id }
+    }
+    return null
+  }, [])
+
   useEffect(() => {
     if (!showResult || !lastScanned || !auth?.token) return
+    const bp = parseBatchOrPallet(lastScanned)
+    if (bp) {
+      setProductResult(bp.type)
+      setBatchResult(null)
+      setPalletResult(null)
+      if (bp.type === 'batch' && bp.id) {
+        fetch(`${API_BASE_FOR_CALLS}/batches/${bp.id}`, { headers: { Authorization: auth.token } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => { if (data) setBatchResult(data) })
+          .catch(() => {})
+      }
+      if (bp.type === 'pallet' && bp.id) {
+        Promise.all([
+          fetch(`${API_BASE_FOR_CALLS}/pallets/${bp.id}`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`${API_BASE_FOR_CALLS}/customers`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : [])),
+        ])
+          .then(([pallet, customers]) => {
+            setPalletResult({ pallet, customers: Array.isArray(customers) ? customers : [] })
+          })
+          .catch(() => {})
+      }
+      return
+    }
     setProductResult('loading')
+    setBatchResult(null)
+    setPalletResult(null)
     let cancelled = false
     fetchProductByBarcode(lastScanned)
       .then((data) => {
@@ -68,7 +108,7 @@ export default function ScanProductPage() {
         if (!cancelled) setProductResult('not_found')
       })
     return () => { cancelled = true }
-  }, [showResult, lastScanned, auth?.token, fetchProductByBarcode])
+  }, [showResult, lastScanned, auth?.token, fetchProductByBarcode, parseBatchOrPallet])
 
   useEffect(() => {
     if (!auth) return
@@ -140,11 +180,34 @@ export default function ScanProductPage() {
     setShowResult(false)
     setLastScanned(null)
     setProductResult(null)
+    setBatchResult(null)
+    setPalletResult(null)
     setAssignSuccess(false)
     if (scannerRef.current && !scannerRef.current.isScanning) {
       scannerRef.current.resume()
     }
     setScanning(true)
+  }
+
+  const [palletAssignCustomerId, setPalletAssignCustomerId] = useState('')
+  const [palletAssigning, setPalletAssigning] = useState(false)
+  const handleAssignPalletToCustomer = () => {
+    const cid = parseInt(palletAssignCustomerId, 10)
+    const pid = palletResult?.pallet?.id
+    if (!auth?.token || Number.isNaN(cid) || !pid) return
+    setPalletAssigning(true)
+    fetch(`${API_BASE_FOR_CALLS}/pallets/${pid}/assign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: auth.token },
+      body: JSON.stringify({ customer_id: cid }),
+    })
+      .then((r) => {
+        if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Chyba') })
+        setAssignSuccess(true)
+        setPalletResult((prev) => prev ? { ...prev, pallet: { ...prev.pallet, status: 'U zákazníka', customer_id: cid } } : null)
+      })
+      .catch((err) => alert(err.message))
+      .finally(() => setPalletAssigning(false))
   }
 
   const handleAssignToProduct = (product) => {
@@ -217,6 +280,72 @@ export default function ScanProductPage() {
             {productResult === 'loading' && (
               <p className="scan-product-result-loading">Načítavam produkt zo skladu…</p>
             )}
+            {productResult === 'batch' && (
+              <>
+                <div className="scan-product-result-row">
+                  <span>Šarža (výroba)</span>
+                  <strong>{batchResult ? `${batchResult.product_type} – ${batchResult.quantity_produced} ks` : 'Načítavam…'}</strong>
+                </div>
+                {batchResult && (
+                  <div className="scan-product-result-actions">
+                    <button
+                      type="button"
+                      className="scan-product-btn-primary"
+                      onClick={() => { navigate(`/dashboard/production/${batchResult.id}`); setShowResult(false) }}
+                    >
+                      Otvoriť detail šarže
+                    </button>
+                    <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
+                      Skenovať ďalej
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            {productResult === 'pallet' && (
+              <>
+                <div className="scan-product-result-row">
+                  <span>Paleta</span>
+                  <strong>
+                    {palletResult?.pallet
+                      ? `${palletResult.pallet.product_type} – ${palletResult.pallet.quantity} ks (${palletResult.pallet.status})`
+                      : 'Načítavam…'}
+                  </strong>
+                </div>
+                {palletResult?.pallet && palletResult.pallet.status !== 'U zákazníka' && palletResult.customers?.length > 0 && (
+                  <div className="scan-product-assign-sheet" style={{ marginTop: '1rem', padding: '0.5rem 0' }}>
+                    <label className="scan-product-result-hint">Priradiť zákazníkovi (predaj):</label>
+                    <select
+                      value={palletAssignCustomerId}
+                      onChange={(e) => setPalletAssignCustomerId(e.target.value)}
+                      style={{ width: '100%', padding: '0.5rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}
+                    >
+                      <option value="">— Vyberte zákazníka —</option>
+                      {palletResult.customers.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="scan-product-btn-primary"
+                      disabled={!palletAssignCustomerId || palletAssigning}
+                      onClick={handleAssignPalletToCustomer}
+                    >
+                      {palletAssigning ? 'Priraďujem...' : 'Priradiť zákazníkovi'}
+                    </button>
+                  </div>
+                )}
+                {assignSuccess && <p className="scan-product-result-success">Paleta priradená zákazníkovi.</p>}
+                <div className="scan-product-result-actions">
+                  <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
+                    Skenovať ďalej
+                  </button>
+                  <button type="button" className="scan-product-btn-secondary" onClick={handleBack}>
+                    Späť na prehľad
+                  </button>
+                </div>
+              </>
+            )}
             {productResult === 'not_found' && (
               <>
                 <div className="scan-product-result-row">
@@ -243,7 +372,7 @@ export default function ScanProductPage() {
                 </div>
               </>
             )}
-            {productResult && productResult !== 'loading' && productResult !== 'not_found' && (
+            {productResult && productResult !== 'loading' && productResult !== 'not_found' && productResult !== 'batch' && productResult !== 'pallet' && typeof productResult === 'object' && (
               <>
                 <div className="scan-product-result-row">
                   <span>Produkt</span>

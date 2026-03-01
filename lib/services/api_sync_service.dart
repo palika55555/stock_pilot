@@ -4,12 +4,15 @@ import '../models/user.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
 
-/// Backend API pre sync používateľa a zákazníkov do PostgreSQL (rovnaké dáta na webe).
+/// Backend API pre sync do PostgreSQL (zákazníci, produkty, login).
+/// Všetky volania (dotahovanie zákazníkov, sync produktov, login) používajú rovnakú _apiBase.
+/// Pre Coolify/Raspberry zmeň kBackendApiBase na URL svojho backendu (bez koncového lomítka).
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
 
 /// Tajný path prefix pre API – musí zodpovedať API_PATH_PREFIX na serveri (obfuskovácia endpointov).
 const String kApiPathPrefix = 'sp-9f2a4e1b';
 
+/// Jedna base URL pre všetky endpointy: auth, customers, products, sync.
 String get _apiBase => '$kBackendApiBase/api/$kApiPathPrefix';
 
 /// Token z posledného úspešného prihlásenia na backend – používa sa pre GET /customers v apke.
@@ -49,9 +52,11 @@ Future<void> syncUserToBackend(User user) async {
 }
 
 /// Pošle zoznam zákazníkov do backendu – dashboard na webe zobrazí rovnaký počet.
-/// Volaj po prihlásení a po pridaní/úprave zákazníka. Ignoruje chyby (offline).
+/// Volaj po prihlásení a po pridaní/úprave zákazníka. Vyžaduje token (backend vracia 401 bez neho).
 void syncCustomersToBackend(List<Customer> customers) {
   if (customers.isEmpty) return;
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
   final uri = Uri.parse('$_apiBase/sync/customers');
   final body = jsonEncode({
     'customers': customers.map((c) => c.toMap()).toList(),
@@ -59,7 +64,7 @@ void syncCustomersToBackend(List<Customer> customers) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'Authorization': token},
         body: body,
       )
       .timeout(const Duration(seconds: 10))
@@ -67,9 +72,11 @@ void syncCustomersToBackend(List<Customer> customers) {
 }
 
 /// Pošle zoznam produktov do backendu – webové skenovanie potom zobrazí názov a množstvo.
-/// Volaj pri „Obnoviť z webu“ alebo po zmene produktov. Ignoruje chyby (offline).
+/// Vyžaduje token (backend vracia 401 bez neho). Volaj po prihlásení alebo pri „Odoslať“ na Domove.
 void syncProductsToBackend(List<Product> products) {
   if (products.isEmpty) return;
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
   final uri = Uri.parse('$_apiBase/sync/products');
   final body = jsonEncode({
     'products': products.map((p) => {
@@ -85,7 +92,7 @@ void syncProductsToBackend(List<Product> products) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'Authorization': token},
         body: body,
       )
       .timeout(const Duration(seconds: 15))

@@ -147,6 +147,47 @@ app.get('/health', async (req, res) => {
   });
 });
 
+// Kontrola tabuliek v PostgreSQL (pre web) – bez auth, vracia zoznam tabuliek a spustených migrácií
+app.get('/health/db-tables', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({
+      error: 'Databáza nie je nakonfigurovaná alebo nie je pripojená',
+      tables: [],
+      migrations: [],
+    });
+  }
+  try {
+    const tablesRes = await pool.query(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
+    );
+    const tables = (tablesRes.rows || []).map((r) => r.tablename);
+    let migrations = [];
+    try {
+      const migRes = await pool.query('SELECT name, run_at FROM schema_migrations ORDER BY name');
+      migrations = (migRes.rows || []).map((r) => ({ name: r.name, run_at: r.run_at }));
+    } catch (_) {
+      // schema_migrations ešte neexistuje
+    }
+    const expected = ['schema_migrations', 'users', 'customers', 'products', 'stocks'];
+    const missing = expected.filter((t) => !tables.includes(t));
+    res.json({
+      database: 'connected',
+      tables,
+      migrations,
+      expected,
+      missing: missing.length ? missing : null,
+      ok: missing.length === 0,
+    });
+  } catch (err) {
+    console.error('[health/db-tables]', err.message);
+    res.status(500).json({
+      error: err.message,
+      tables: [],
+      migrations: [],
+    });
+  }
+});
+
 // --- API: Auth (rovnaká logika ako Flutter login_page – username + password z DB) ---
 apiRouter.post('/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -263,14 +304,17 @@ apiRouter.post('/stocks', async (req, res) => {
 
 // --- Sync produktov z Flutter do PostgreSQL (DBsync/sync) ---
 apiRouter.post('/sync/products', async (req, res) => {
+  const received = Array.isArray(req.body?.products) ? req.body.products.length : 0;
+  console.log('[sync] Products request received:', received, 'items');
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
   const result = await syncProducts(pool, req.body);
   if (!result.ok) {
+    console.error('[sync] Products failed:', result.error);
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
-  console.log('[sync] Products OK:', result.count);
+  console.log('[sync] Products OK, saved:', result.count);
   res.status(200).json({ success: true, count: result.count });
 });
 
@@ -484,6 +528,257 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
     res.json(rows[0] || { unique_id: uniqueId, ean: eanVal });
   } catch (err) {
     console.error('[PATCH /api/products/:uniqueId]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Výroba – šarže a palety ---
+apiRouter.get('/batches', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const date = (req.query.date || '').toString().trim();
+  const from = (req.query.from || '').toString().trim();
+  const to = (req.query.to || '').toString().trim();
+  try {
+    let query = 'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches';
+    const params = [];
+    if (date) {
+      query += ' WHERE production_date = $1';
+      params.push(date);
+    } else if (from && to) {
+      query += ' WHERE production_date >= $1 AND production_date <= $2';
+      params.push(from, to);
+    }
+    query += ' ORDER BY production_date DESC, created_at DESC';
+    const { rows } = await pool.query(query, params);
+    res.json(rows.map((r) => ({
+      id: r.id,
+      production_date: r.production_date instanceof Date ? r.production_date.toISOString().slice(0, 10) : r.production_date,
+      product_type: r.product_type,
+      quantity_produced: Number(r.quantity_produced) || 0,
+      notes: r.notes,
+      created_at: r.created_at,
+      cost_total: r.cost_total != null ? Number(r.cost_total) : null,
+      revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+    })));
+  } catch (err) {
+    console.error('[GET /api/batches]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/batches', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { production_date, product_type, quantity_produced, notes, cost_total, revenue_total, recipe } = req.body || {};
+  const dateVal = (production_date || '').toString().trim();
+  const typeVal = (product_type || '').toString().trim();
+  if (!dateVal || !typeVal) {
+    return res.status(400).json({ error: 'production_date a product_type sú povinné' });
+  }
+  const qty = parseInt(quantity_produced, 10) || 0;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO production_batches (production_date, product_type, quantity_produced, notes, cost_total, revenue_total)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total`,
+      [
+        dateVal,
+        typeVal,
+        qty,
+        notes != null ? String(notes).trim() || null : null,
+        cost_total != null ? parseFloat(cost_total) : null,
+        revenue_total != null ? parseFloat(revenue_total) : null,
+      ]
+    );
+    const batch = rows[0];
+    const batchId = batch.id;
+    const recipeList = Array.isArray(recipe) ? recipe : [];
+    for (const item of recipeList) {
+      const q = parseFloat(item.quantity) || 0;
+      if (q <= 0) continue;
+      const matName = (item.material_name || '').toString().trim() || 'Materiál';
+      const unit = (item.unit || 'kg').toString().trim();
+      await pool.query(
+        'INSERT INTO production_batch_recipe (batch_id, material_name, quantity, unit) VALUES ($1, $2, $3, $4)',
+        [batchId, matName, q, unit]
+      );
+    }
+    res.status(201).json({
+      id: batchId,
+      production_date: batch.production_date instanceof Date ? batch.production_date.toISOString().slice(0, 10) : batch.production_date,
+      product_type: batch.product_type,
+      quantity_produced: Number(batch.quantity_produced) || 0,
+      notes: batch.notes,
+      created_at: batch.created_at,
+      cost_total: batch.cost_total != null ? Number(batch.cost_total) : null,
+      revenue_total: batch.revenue_total != null ? Number(batch.revenue_total) : null,
+    });
+  } catch (err) {
+    console.error('[POST /api/batches]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/batches/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE id = $1',
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
+    const r = rows[0];
+    res.json({
+      id: r.id,
+      production_date: r.production_date instanceof Date ? r.production_date.toISOString().slice(0, 10) : r.production_date,
+      product_type: r.product_type,
+      quantity_produced: Number(r.quantity_produced) || 0,
+      notes: r.notes,
+      created_at: r.created_at,
+      cost_total: r.cost_total != null ? Number(r.cost_total) : null,
+      revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+    });
+  } catch (err) {
+    console.error('[GET /api/batches/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/batches/:id/recipe', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, batch_id, material_name, quantity, unit FROM production_batch_recipe WHERE batch_id = $1 ORDER BY id ASC',
+      [id]
+    );
+    res.json(rows.map((r) => ({ id: r.id, batch_id: r.batch_id, material_name: r.material_name, quantity: Number(r.quantity), unit: r.unit || 'kg' })));
+  } catch (err) {
+    console.error('[GET /api/batches/:id/recipe]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/batches/:id/pallets', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE batch_id = $1 ORDER BY id ASC',
+      [id]
+    );
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        batch_id: r.batch_id,
+        product_type: r.product_type,
+        quantity: Number(r.quantity),
+        customer_id: r.customer_id,
+        status: r.status || 'Na sklade',
+        created_at: r.created_at,
+      }))
+    );
+  } catch (err) {
+    console.error('[GET /api/batches/:id/pallets]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/batches/:id/pallets', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const batchId = parseInt(req.params.id, 10);
+  if (Number.isNaN(batchId)) return res.status(400).json({ error: 'Neplatné id šarže' });
+  const { pieces_per_pallet: qtyPerPallet, count: palletCount } = req.body || {};
+  const qty = parseInt(qtyPerPallet, 10) || 0;
+  const count = parseInt(palletCount, 10) || 0;
+  if (qty <= 0 || count <= 0) {
+    return res.status(400).json({ error: 'pieces_per_pallet a count musia byť kladné čísla' });
+  }
+  try {
+    const batchRes = await pool.query(
+      'SELECT id, product_type, quantity_produced FROM production_batches WHERE id = $1',
+      [batchId]
+    );
+    if (batchRes.rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
+    const batch = batchRes.rows[0];
+    const total = qty * count;
+    if (total > Number(batch.quantity_produced)) {
+      return res.status(400).json({ error: `Celkom ${total} kusov prevyšuje počet vyrobených (${batch.quantity_produced}).` });
+    }
+    const created = [];
+    for (let i = 0; i < count; i++) {
+      const { rows } = await pool.query(
+        `INSERT INTO pallets (batch_id, product_type, quantity, status) VALUES ($1, $2, $3, 'Na sklade') RETURNING id, batch_id, product_type, quantity, status, created_at`,
+        [batchId, batch.product_type, qty]
+      );
+      if (rows[0]) created.push(rows[0]);
+    }
+    res.status(201).json(
+      created.map((r) => ({
+        id: r.id,
+        batch_id: r.batch_id,
+        product_type: r.product_type,
+        quantity: Number(r.quantity),
+        customer_id: null,
+        status: r.status || 'Na sklade',
+        created_at: r.created_at,
+      }))
+    );
+  } catch (err) {
+    console.error('[POST /api/batches/:id/pallets]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/pallets/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE id = $1',
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
+    const r = rows[0];
+    res.json({
+      id: r.id,
+      batch_id: r.batch_id,
+      product_type: r.product_type,
+      quantity: Number(r.quantity),
+      customer_id: r.customer_id,
+      status: r.status || 'Na sklade',
+      created_at: r.created_at,
+    });
+  } catch (err) {
+    console.error('[GET /api/pallets/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.put('/pallets/:id/assign', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const palletId = parseInt(req.params.id, 10);
+  const customerId = parseInt(req.body?.customer_id, 10);
+  if (Number.isNaN(palletId) || Number.isNaN(customerId)) {
+    return res.status(400).json({ error: 'customer_id je povinný' });
+  }
+  try {
+    const palletRes = await pool.query('SELECT id, status FROM pallets WHERE id = $1', [palletId]);
+    if (palletRes.rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
+    if (palletRes.rows[0].status === 'U zákazníka') {
+      return res.status(400).json({ error: 'Paleta je už priradená zákazníkovi' });
+    }
+    const custRes = await pool.query('SELECT id, pallet_balance FROM customers WHERE id = $1', [customerId]);
+    if (custRes.rows.length === 0) return res.status(404).json({ error: 'Zákazník nebol nájdený' });
+    await pool.query("UPDATE pallets SET customer_id = $1, status = 'U zákazníka' WHERE id = $2", [customerId, palletId]);
+    const newBalance = (Number(custRes.rows[0].pallet_balance) || 0) + 1;
+    await pool.query('UPDATE customers SET pallet_balance = $1 WHERE id = $2', [newBalance, customerId]);
+    res.json({ success: true, message: 'Paleta priradená zákazníkovi' });
+  } catch (err) {
+    console.error('[PUT /api/pallets/:id/assign]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });

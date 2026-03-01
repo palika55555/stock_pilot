@@ -58,22 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Len nahratie všetkých produktov (vrátane už vytvorených) na web – na webe môžeš priradzovať EAN/PLU.
-  Future<void> _pushProductsToWeb() async {
-    final products = await _db.getProducts();
-    syncProductsToBackend(products);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Produkty (${products.length}) boli odoslané na web'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  /// Tichá synchronizácia produktov s webom: nahratie produktov na web + stiahnutie EAN priradených na webe.
+  /// Automatická synchronizácia produktov s webom: nahratie produktov na web + stiahnutie EAN priradených na webe.
   Future<void> _syncProductsWithBackend() async {
     final token = getBackendToken();
     if (token == null || !mounted) return;
@@ -136,18 +121,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       syncProductsToBackend(products);
     }
     // Stiahnutie EAN z webu – priradenia z webového skenera sa prejavia v apke
+    int eanUpdated = 0;
     if (mounted && token != null) {
       final backendProducts = await fetchProductsFromBackendWithToken(token);
       if (backendProducts != null && backendProducts.isNotEmpty) {
-        await _db.updateProductEanFromBackend(backendProducts);
+        eanUpdated = await _db.updateProductEanFromBackend(backendProducts);
       }
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dáta boli synchronizované s webom (zákazníci + produkty + EAN)'),
+        SnackBar(
+          content: Text(
+            eanUpdated > 0
+                ? 'Dáta synchronizované. EAN z webu: aktualizovaných $eanUpdated produktov.'
+                : 'Dáta boli synchronizované s webom (zákazníci + produkty + EAN)',
+          ),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -178,10 +168,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
       body: RepaintBoundary(
-        child: HomeOverview(
-          userRole: _currentRole,
-          onSyncProductsToWeb: _pushProductsToWeb,
-        ),
+        child: HomeOverview(userRole: _currentRole),
       ),
     );
   }

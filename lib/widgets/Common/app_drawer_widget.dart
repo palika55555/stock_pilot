@@ -7,6 +7,8 @@ import 'package:stock_pilot/screens/login/login_page.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/screens/customers/customers_page.dart';
 import 'package:stock_pilot/screens/suppliers/suppliers_page.dart';
+import 'package:stock_pilot/screens/production/production_list_screen.dart';
+import 'package:stock_pilot/screens/pallet/customers_pallets_screen.dart';
 import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
 import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
@@ -301,6 +303,30 @@ class _MenuItemsList extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const CustomersPage()),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
+          delay: 475,
+          icon: Icons.precision_manufacturing_rounded,
+          title: 'Výroba',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProductionListScreen()),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
+          delay: 485,
+          icon: Icons.local_shipping_rounded,
+          title: 'Zákazníci / Palety',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CustomersPalletsScreen()),
             );
           },
         ),

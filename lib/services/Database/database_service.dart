@@ -17,6 +17,9 @@ import '../../models/warehouse_movement_record.dart';
 import '../../models/transport.dart';
 import '../../models/product_kind.dart';
 import '../../models/receptura_polozka.dart';
+import '../../models/production_batch.dart';
+import '../../models/production_batch_recipe_item.dart';
+import '../../models/pallet.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -57,7 +60,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 22,
+      version: 24,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -393,6 +396,45 @@ class DatabaseService {
     }
     if (!productInfo.any((c) => c['name'] == 'iba_cele_mnozstva')) {
       await db.execute('ALTER TABLE products ADD COLUMN iba_cele_mnozstva INTEGER NOT NULL DEFAULT 0');
+    }
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS production_batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        production_date TEXT NOT NULL,
+        product_type TEXT NOT NULL,
+        quantity_produced INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT,
+        cost_total REAL,
+        revenue_total REAL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS production_batch_recipe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER NOT NULL,
+        material_name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        unit TEXT NOT NULL DEFAULT 'kg',
+        FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER NOT NULL,
+        product_type TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        customer_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'Na sklade',
+        created_at TEXT,
+        FOREIGN KEY (batch_id) REFERENCES production_batches(id),
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
+    if (!custInfo.any((c) => c['name'] == 'pallet_balance')) {
+      await db.execute('ALTER TABLE customers ADD COLUMN pallet_balance INTEGER NOT NULL DEFAULT 0');
     }
     await db.execute('''
       CREATE TABLE IF NOT EXISTS receptura_polozky (
@@ -864,6 +906,49 @@ class DatabaseService {
         await db.execute('ALTER TABLE products ADD COLUMN ean TEXT');
       }
     }
+    if (oldVersion < 23) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS production_batches (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          production_date TEXT NOT NULL,
+          product_type TEXT NOT NULL,
+          quantity_produced INTEGER NOT NULL DEFAULT 0,
+          notes TEXT,
+          created_at TEXT,
+          cost_total REAL,
+          revenue_total REAL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS production_batch_recipe (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          batch_id INTEGER NOT NULL,
+          material_name TEXT NOT NULL,
+          quantity REAL NOT NULL,
+          unit TEXT NOT NULL DEFAULT 'kg',
+          FOREIGN KEY (batch_id) REFERENCES production_batches(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 24) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pallets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          batch_id INTEGER NOT NULL,
+          product_type TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          customer_id INTEGER,
+          status TEXT NOT NULL DEFAULT 'Na sklade',
+          created_at TEXT,
+          FOREIGN KEY (batch_id) REFERENCES production_batches(id),
+          FOREIGN KEY (customer_id) REFERENCES customers(id)
+        )
+      ''');
+      final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
+      if (!custInfo.any((c) => c['name'] == 'pallet_balance')) {
+        await db.execute('ALTER TABLE customers ADD COLUMN pallet_balance INTEGER NOT NULL DEFAULT 0');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -1190,8 +1275,9 @@ class DatabaseService {
   }
 
   /// Aktualizuje EAN lokálnych produktov podľa zoznamu z backendu (EAN priradené na webe).
-  /// Aktualizuje len keď backend má neprázdny EAN – lokálny EAN sa nikdy nevyčistí z backendu.
-  Future<void> updateProductEanFromBackend(List<Map<String, dynamic>> backendProducts) async {
+  /// Vráti počet skutočne aktualizovaných produktov.
+  Future<int> updateProductEanFromBackend(List<Map<String, dynamic>> backendProducts) async {
+    int count = 0;
     for (final map in backendProducts) {
       final uniqueId = map['unique_id'] as String?;
       if (uniqueId == null || uniqueId.isEmpty) continue;
@@ -1201,7 +1287,9 @@ class DatabaseService {
       final product = await getProductByUniqueId(uniqueId);
       if (product == null || product.ean == ean) continue;
       await updateProduct(product.copyWith(ean: ean));
+      count++;
     }
+    return count;
   }
 
   // Receptúra – zložky (suroviny) receptúry
@@ -2222,5 +2310,172 @@ class DatabaseService {
     for (final e in changes.entries) {
       await db.update('products', {'qty': e.value}, where: 'unique_id = ?', whereArgs: [e.key]);
     }
+  }
+
+  // ---------- Výroba – šarže a receptúry ----------
+  static const String _productionBatchQrPrefix = 'STOCKPILOT_BATCH:';
+
+  static String productionBatchQrPayload(int batchId) => '$_productionBatchQrPrefix$batchId';
+
+  static int? parseProductionBatchIdFromQr(String qrContent) {
+    if (!qrContent.startsWith(_productionBatchQrPrefix)) return null;
+    final idStr = qrContent.substring(_productionBatchQrPrefix.length).trim();
+    return int.tryParse(idStr);
+  }
+
+  Future<int> insertProductionBatch(ProductionBatch batch) async {
+    Database db = await database;
+    final map = batch.toMap()
+      ..remove('id')
+      ..['created_at'] = batch.createdAt ?? DateTime.now().toIso8601String();
+    return await db.insert('production_batches', map);
+  }
+
+  Future<ProductionBatch?> getProductionBatchById(int id) async {
+    Database db = await database;
+    final maps = await db.query('production_batches', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return ProductionBatch.fromMap(maps.first);
+  }
+
+  Future<List<ProductionBatch>> getProductionBatchesByDate(String date) async {
+    Database db = await database;
+    final maps = await db.query(
+      'production_batches',
+      where: 'production_date = ?',
+      whereArgs: [date],
+      orderBy: 'created_at DESC',
+    );
+    return maps.map((m) => ProductionBatch.fromMap(m)).toList();
+  }
+
+  Future<List<ProductionBatch>> getProductionBatchesByDateRange(String fromDate, String toDate) async {
+    Database db = await database;
+    final maps = await db.query(
+      'production_batches',
+      where: 'production_date >= ? AND production_date <= ?',
+      whereArgs: [fromDate, toDate],
+      orderBy: 'production_date DESC, created_at DESC',
+    );
+    return maps.map((m) => ProductionBatch.fromMap(m)).toList();
+  }
+
+  Future<List<ProductionBatchRecipeItem>> getRecipeForBatch(int batchId) async {
+    Database db = await database;
+    final maps = await db.query(
+      'production_batch_recipe',
+      where: 'batch_id = ?',
+      whereArgs: [batchId],
+      orderBy: 'id ASC',
+    );
+    return maps.map((m) => ProductionBatchRecipeItem.fromMap(m)).toList();
+  }
+
+  Future<int> insertProductionBatchRecipeItem(ProductionBatchRecipeItem item) async {
+    Database db = await database;
+    final map = item.toMap()..remove('id');
+    return await db.insert('production_batch_recipe', map);
+  }
+
+  Future<int> deleteProductionBatchRecipeItems(int batchId) async {
+    Database db = await database;
+    return await db.delete(
+      'production_batch_recipe',
+      where: 'batch_id = ?',
+      whereArgs: [batchId],
+    );
+  }
+
+  Future<int> updateProductionBatch(ProductionBatch batch) async {
+    if (batch.id == null) return 0;
+    Database db = await database;
+    return await db.update(
+      'production_batches',
+      batch.toMap()..remove('id'),
+      where: 'id = ?',
+      whereArgs: [batch.id],
+    );
+  }
+
+  Future<int> deleteProductionBatch(int id) async {
+    Database db = await database;
+    await db.delete('production_batch_recipe', where: 'batch_id = ?', whereArgs: [id]);
+    return await db.delete('production_batches', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---------- Palety (Expedícia) ----------
+  Future<int> insertPallet(Pallet pallet) async {
+    Database db = await database;
+    final map = pallet.toMap()
+      ..remove('id')
+      ..['created_at'] = pallet.createdAt ?? DateTime.now().toIso8601String();
+    return await db.insert('pallets', map);
+  }
+
+  Future<Pallet?> getPalletById(int id) async {
+    Database db = await database;
+    final maps = await db.query('pallets', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return Pallet.fromMap(maps.first);
+  }
+
+  Future<List<Pallet>> getPalletsByBatchId(int batchId) async {
+    Database db = await database;
+    final maps = await db.query(
+      'pallets',
+      where: 'batch_id = ?',
+      whereArgs: [batchId],
+      orderBy: 'id ASC',
+    );
+    return maps.map((m) => Pallet.fromMap(m)).toList();
+  }
+
+  Future<int> updatePallet(Pallet pallet) async {
+    if (pallet.id == null) return 0;
+    Database db = await database;
+    return await db.update(
+      'pallets',
+      pallet.toMap()..remove('id'),
+      where: 'id = ?',
+      whereArgs: [pallet.id],
+    );
+  }
+
+  /// Priradí paletu zákazníkovi: status U zákazníka, zvýši customer.palletBalance o 1.
+  Future<void> assignPalletToCustomer(int palletId, int customerId) async {
+    Database db = await database;
+    final pallet = await getPalletById(palletId);
+    final customer = await getCustomerById(customerId);
+    if (pallet == null || customer == null) return;
+    await db.update(
+      'pallets',
+      {
+        'customer_id': customerId,
+        'status': PalletStatus.uZakaznika.label,
+      },
+      where: 'id = ?',
+      whereArgs: [palletId],
+    );
+    await db.update(
+      'customers',
+      {'pallet_balance': (customer.palletBalance + 1)},
+      where: 'id = ?',
+      whereArgs: [customerId],
+    );
+  }
+
+  /// Zníži zákazníkovi palletBalance o [count]. Neprebieha zmena stavu paliet (len bilancia).
+  Future<void> returnPalletsForCustomer(int customerId, int count) async {
+    if (count <= 0) return;
+    Database db = await database;
+    final customer = await getCustomerById(customerId);
+    if (customer == null) return;
+    final newBalance = (customer.palletBalance - count).clamp(0, 0x7fffffff);
+    await db.update(
+      'customers',
+      {'pallet_balance': newBalance},
+      where: 'id = ?',
+      whereArgs: [customerId],
+    );
   }
 }

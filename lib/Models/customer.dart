@@ -15,6 +15,9 @@ class Customer {
   /// Stav zákazníka: aktívny (používaný pri cenových ponukách) alebo neaktívny.
   final bool isActive;
 
+  /// Bilancia paliet u zákazníka (požičané / dlhované).
+  final int palletBalance;
+
   Customer({
     this.id,
     required this.name,
@@ -27,6 +30,7 @@ class Customer {
     this.icDph,
     this.defaultVatRate = 20,
     this.isActive = true,
+    this.palletBalance = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -42,6 +46,7 @@ class Customer {
       'ic_dph': icDph,
       'default_vat_rate': defaultVatRate,
       'is_active': isActive ? 1 : 0,
+      'pallet_balance': palletBalance,
     };
   }
 
@@ -58,6 +63,7 @@ class Customer {
       icDph: map['ic_dph'] as String?,
       defaultVatRate: map['default_vat_rate'] as int? ?? 20,
       isActive: (map['is_active'] as int?) != 0,
+      palletBalance: map['pallet_balance'] as int? ?? 0,
     );
   }
 
@@ -73,6 +79,7 @@ class Customer {
     String? icDph,
     int? defaultVatRate,
     bool? isActive,
+    int? palletBalance,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -86,6 +93,7 @@ class Customer {
       icDph: icDph ?? this.icDph,
       defaultVatRate: defaultVatRate ?? this.defaultVatRate,
       isActive: isActive ?? this.isActive,
+      palletBalance: palletBalance ?? this.palletBalance,
     );
   }
 }
