@@ -23,20 +23,25 @@ async function syncBatches(pool, body) {
       const costTotal = b.cost_total != null ? parseFloat(b.cost_total) : null;
       const revenueTotal = b.revenue_total != null ? parseFloat(b.revenue_total) : null;
 
-      const ins = await client.query(
-        `INSERT INTO production_batches (local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total)
-         VALUES ($1, $2, $3, $4, $5, $6::timestamp, $7, $8)
-         ON CONFLICT (local_id) DO UPDATE SET
-           production_date = EXCLUDED.production_date,
-           product_type = EXCLUDED.product_type,
-           quantity_produced = EXCLUDED.quantity_produced,
-           notes = EXCLUDED.notes,
-           cost_total = EXCLUDED.cost_total,
-           revenue_total = EXCLUDED.revenue_total
-         RETURNING id`,
-        [localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal]
+      let backendBatchId;
+      const existing = await client.query(
+        'SELECT id FROM production_batches WHERE local_id = $1',
+        [localId]
       );
-      const backendBatchId = ins.rows[0]?.id;
+      if (existing.rows.length > 0) {
+        backendBatchId = existing.rows[0].id;
+        await client.query(
+          `UPDATE production_batches SET production_date = $1, product_type = $2, quantity_produced = $3, notes = $4, created_at = $5::timestamp, cost_total = $6, revenue_total = $7 WHERE id = $8`,
+          [productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal, backendBatchId]
+        );
+      } else {
+        const ins = await client.query(
+          `INSERT INTO production_batches (local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total)
+           VALUES ($1, $2, $3, $4, $5, $6::timestamp, $7, $8) RETURNING id`,
+          [localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal]
+        );
+        backendBatchId = ins.rows[0]?.id;
+      }
       if (backendBatchId) batchIdMap[localId] = backendBatchId;
 
       const recipe = Array.isArray(b.recipe) ? b.recipe : [];
@@ -67,17 +72,19 @@ async function syncBatches(pool, body) {
         const cust = await client.query('SELECT id FROM customers WHERE local_id = $1', [Number(p.customer_id)]);
         if (cust.rows[0]) backendCustomerId = cust.rows[0].id;
       }
-      await client.query(
-        `INSERT INTO pallets (local_id, batch_id, product_type, quantity, customer_id, status)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (local_id) DO UPDATE SET
-           batch_id = EXCLUDED.batch_id,
-           product_type = EXCLUDED.product_type,
-           quantity = EXCLUDED.quantity,
-           customer_id = EXCLUDED.customer_id,
-           status = EXCLUDED.status`,
-        [localId, backendBatchId, productType, quantity, backendCustomerId, status]
-      );
+      const existingPallet = await client.query('SELECT id FROM pallets WHERE local_id = $1', [localId]);
+      if (existingPallet.rows.length > 0) {
+        await client.query(
+          `UPDATE pallets SET batch_id = $1, product_type = $2, quantity = $3, customer_id = $4, status = $5 WHERE local_id = $6`,
+          [backendBatchId, productType, quantity, backendCustomerId, status, localId]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO pallets (local_id, batch_id, product_type, quantity, customer_id, status)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [localId, backendBatchId, productType, quantity, backendCustomerId, status]
+        );
+      }
     }
 
     return { ok: true, count: batches.length };

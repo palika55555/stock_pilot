@@ -95,6 +95,10 @@ class _LoginPageState extends State<LoginPage> {
               await _dbService.updateProductEanFromBackend(backendProducts);
             }
             await syncBatchesToBackend();
+            final backendBatches = await fetchBatchesFromBackendWithToken(token);
+            if (backendBatches != null) {
+              await _dbService.replaceBatchesFromBackend(backendBatches);
+            }
           }
           if (!mounted) return;
           // Navigácia na HomeScreen s reálnymi dátami používateľa

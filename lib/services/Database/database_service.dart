@@ -2464,6 +2464,60 @@ class DatabaseService {
     );
   }
 
+  /// Nahradí lokálne šarže, recepty a palety dátami z backendu (ako replaceCustomersFromBackend).
+  /// Po volaní má aplikácia rovnaké šarže ako web. Volaj po fetchBatchesFromBackend.
+  Future<void> replaceBatchesFromBackend(List<Map<String, dynamic>> batches) async {
+    final db = await database;
+    await db.delete('production_batch_recipe');
+    await db.delete('pallets');
+    await db.delete('production_batches');
+    if (batches.isEmpty) return;
+    for (final b in batches) {
+      final batchId = b['id'] as int?;
+      if (batchId == null) continue;
+      final productionDate = (b['production_date'] as String?) ?? '';
+      final productType = (b['product_type'] as String?) ?? '';
+      final quantityProduced = (b['quantity_produced'] as num?)?.toInt() ?? 0;
+      await db.insert('production_batches', {
+        'id': batchId,
+        'production_date': productionDate,
+        'product_type': productType,
+        'quantity_produced': quantityProduced,
+        'notes': b['notes'],
+        'created_at': b['created_at']?.toString(),
+        'cost_total': (b['cost_total'] as num?)?.toDouble(),
+        'revenue_total': (b['revenue_total'] as num?)?.toDouble(),
+      });
+      final recipe = b['recipe'] as List<dynamic>? ?? [];
+      for (final r in recipe) {
+        final map = Map<String, dynamic>.from(r as Map);
+        final qty = (map['quantity'] as num?)?.toDouble() ?? 0;
+        if (qty <= 0) continue;
+        await db.insert('production_batch_recipe', {
+          'batch_id': batchId,
+          'material_name': (map['material_name'] as String?) ?? '',
+          'quantity': qty,
+          'unit': (map['unit'] as String?) ?? 'kg',
+        });
+      }
+      final pallets = b['pallets'] as List<dynamic>? ?? [];
+      for (final p in pallets) {
+        final map = Map<String, dynamic>.from(p as Map);
+        final palletId = map['id'] as int?;
+        if (palletId == null) continue;
+        await db.insert('pallets', {
+          'id': palletId,
+          'batch_id': batchId,
+          'product_type': (map['product_type'] as String?) ?? '',
+          'quantity': (map['quantity'] as num?)?.toInt() ?? 0,
+          'customer_id': map['customer_id'] as int?,
+          'status': (map['status'] as String?) ?? 'Na sklade',
+          'created_at': map['created_at']?.toString(),
+        });
+      }
+    }
+  }
+
   /// Zníži zákazníkovi palletBalance o [count]. Neprebieha zmena stavu paliet (len bilancia).
   Future<void> returnPalletsForCustomer(int customerId, int count) async {
     if (count <= 0) return;

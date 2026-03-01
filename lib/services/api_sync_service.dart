@@ -221,6 +221,25 @@ Future<void> syncBatchesToBackend() async {
   }
 }
 
+/// Stiahne šarže (s receptami a paletami) z backendu – rovnaký princíp ako zákazníci.
+/// Vráti zoznam šarží alebo null pri chybe. Potom volaj [DatabaseService.replaceBatchesFromBackend].
+Future<List<Map<String, dynamic>>?> fetchBatchesFromBackendWithToken(String? token) async {
+  if (token == null || token.isEmpty) return null;
+  try {
+    final uri = Uri.parse('$_apiBase/batches/sync?from=2020-01-01&to=2099-12-31');
+    final res = await http
+        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': token})
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    final list = map?['batches'] as List<dynamic>?;
+    if (list == null) return null;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Kontrola či boli na webe zmeny (GET /api/sync/check). Používa [SyncCheckService].
 Future<Map<String, dynamic>?> fetchSyncCheck() async {
   try {

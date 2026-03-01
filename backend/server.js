@@ -547,13 +547,61 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
 });
 
 // --- API: Výroba – šarže a palety ---
+// Pre synchronizáciu do aplikácie: vráti všetky šarže s receptami a paletami (ako zákazníci – app nahradí lokálne dáta).
+apiRouter.get('/batches/sync', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const from = (req.query.from || '2020-01-01').toString().trim();
+  const to = (req.query.to || '2099-12-31').toString().trim();
+  try {
+    const batchRows = await pool.query(
+      `SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total
+       FROM production_batches WHERE production_date >= $1 AND production_date <= $2 ORDER BY production_date DESC, created_at DESC`,
+      [from, to]
+    );
+    const batches = [];
+    for (const b of batchRows.rows) {
+      const batchId = b.id;
+      const [recipeRes, palletRes] = await Promise.all([
+        pool.query('SELECT id, batch_id, material_name, quantity, unit FROM production_batch_recipe WHERE batch_id = $1 ORDER BY id', [batchId]),
+        pool.query('SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE batch_id = $1 ORDER BY id', [batchId]),
+      ]);
+      const productionDate = b.production_date instanceof Date ? b.production_date.toISOString().slice(0, 10) : b.production_date;
+      batches.push({
+        id: batchId,
+        local_id: b.local_id != null ? Number(b.local_id) : null,
+        production_date: productionDate,
+        product_type: b.product_type,
+        quantity_produced: Number(b.quantity_produced) || 0,
+        notes: b.notes,
+        created_at: b.created_at,
+        cost_total: b.cost_total != null ? Number(b.cost_total) : null,
+        revenue_total: b.revenue_total != null ? Number(b.revenue_total) : null,
+        recipe: (recipeRes.rows || []).map((r) => ({ id: r.id, batch_id: r.batch_id, material_name: r.material_name, quantity: Number(r.quantity), unit: r.unit || 'kg' })),
+        pallets: (palletRes.rows || []).map((p) => ({
+          id: p.id,
+          batch_id: p.batch_id,
+          product_type: p.product_type,
+          quantity: Number(p.quantity),
+          customer_id: p.customer_id,
+          status: p.status || 'Na sklade',
+          created_at: p.created_at,
+        })),
+      });
+    }
+    res.json({ batches });
+  } catch (err) {
+    console.error('[GET /api/batches/sync]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 apiRouter.get('/batches', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const date = (req.query.date || '').toString().trim();
   const from = (req.query.from || '').toString().trim();
   const to = (req.query.to || '').toString().trim();
   try {
-    let query = 'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches';
+    let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches';
     const params = [];
     if (date) {
       query += ' WHERE production_date = $1';
@@ -566,6 +614,7 @@ apiRouter.get('/batches', async (req, res) => {
     const { rows } = await pool.query(query, params);
     res.json(rows.map((r) => ({
       id: r.id,
+      local_id: r.local_id != null ? Number(r.local_id) : null,
       production_date: r.production_date instanceof Date ? r.production_date.toISOString().slice(0, 10) : r.production_date,
       product_type: r.product_type,
       quantity_produced: Number(r.quantity_produced) || 0,
