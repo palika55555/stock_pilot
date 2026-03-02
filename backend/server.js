@@ -1,4 +1,4 @@
-// Stock Pilot API – Coolify deploy (v1.0.1)
+// Stock Pilot API – Coolify deploy (v1.0.2)
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
