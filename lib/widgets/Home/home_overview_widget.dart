@@ -7,6 +7,7 @@ import '../../screens/price_quote/price_quotes_list_screen.dart';
 import '../../screens/warehouse/warehouse_supplies.dart';
 import '../../screens/stock_out/stock_out_screen.dart';
 import '../../screens/customers/customers_page.dart';
+import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../services/dashboard/dashboard_service.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -18,6 +19,13 @@ class HomeOverview extends StatefulWidget {
   @override
   State<HomeOverview> createState() => _HomeOverviewState();
 }
+
+const Color _kHomeBg = Color(0xFF111114);
+const Color _kHomeCard = Color(0xFF212124);
+const Color _kHomeAccent = Color(0xFFFFC107);
+const Color _kHomeText = Color(0xFFFFFFFF);
+const Color _kHomeTextMuted = Color(0xFF9CA3AF);
+const Color _kHomeBorder = Color(0x40FFC107); // accent 25%
 
 class _HomeOverviewState extends State<HomeOverview> {
   final DashboardService _dashboardService = DashboardService();
@@ -102,19 +110,22 @@ class _HomeOverviewState extends State<HomeOverview> {
     final l10n = AppLocalizations.of(context)!;
     if (_isLoading) {
       return Container(
-        color: const Color(0xFFF0F0F0),
-        child: const Center(
-          child: CircularProgressIndicator(),
+        color: _kHomeBg,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: _kHomeAccent,
+            strokeWidth: 2,
+          ),
         ),
       );
     }
 
     return RefreshIndicator(
       onRefresh: _loadStats,
-      color: Colors.white,
-      backgroundColor: Theme.of(context).primaryColor,
+      color: _kHomeAccent,
+      backgroundColor: _kHomeCard,
       child: Container(
-        color: const Color(0xFFF0F0F0),
+        color: _kHomeBg,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
@@ -134,7 +145,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A),
+                    color: _kHomeText,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -163,6 +174,10 @@ class _HomeOverviewState extends State<HomeOverview> {
                   },
                 ),
                 const SizedBox(height: 24),
+                _buildReceiptKpiCards(context),
+                const SizedBox(height: 16),
+                _buildProductionKpiCards(context),
+                const SizedBox(height: 16),
                 _buildKpiCards(context, l10n),
                 const SizedBox(height: 24),
                 _buildRecentMovementsCard(context, l10n),
@@ -174,6 +189,124 @@ class _HomeOverviewState extends State<HomeOverview> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReceiptKpiCards(BuildContext context) {
+    final receiptsToday = _stats['receiptsToday'] is int ? _stats['receiptsToday'] as int : 0;
+    final pendingCount = _stats['pendingReceiptCount'] is int ? _stats['pendingReceiptCount'] as int : 0;
+    final valueMonth = _stats['receiptsValueThisMonth'] is num ? (_stats['receiptsValueThisMonth'] as num).toDouble() : 0.0;
+    final lowStock = _stats['lowStockCount'] is int ? _stats['lowStockCount'] as int : 0;
+    final lastR = _stats['lastReceipt'] as Map<String, dynamic>?;
+    String lastReceiptText = '—';
+    if (lastR != null) {
+      final numStr = lastR['receipt_number'] as String? ?? '—';
+      final createdAt = lastR['created_at'] as String?;
+      if (createdAt != null) {
+        try {
+          final dt = DateTime.parse(createdAt);
+          final diff = DateTime.now().difference(dt);
+          if (diff.inMinutes < 60) lastReceiptText = '$numStr (pred ${diff.inMinutes} min)';
+          else if (diff.inHours < 24) lastReceiptText = '$numStr (pred ${diff.inHours} h)';
+          else if (diff.inDays < 7) lastReceiptText = '$numStr (pred ${diff.inDays} d)';
+          else lastReceiptText = numStr;
+        } catch (_) {
+          lastReceiptText = numStr;
+        }
+      } else {
+        lastReceiptText = numStr;
+      }
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 700 ? 5 : (constraints.maxWidth > 450 ? 3 : 2);
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.2,
+          children: [
+            _DashboardKpiCard(
+              title: 'Príjemky dnes',
+              value: receiptsToday.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Čaká na schválenie',
+              value: pendingCount.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Hodnota príjemiek tento mesiac',
+              value: '${NumberFormat.decimalPattern('sk_SK').format(valueMonth)} €',
+              trendPercent: 0,
+              onTap: () {},
+            ),
+            _DashboardKpiCard(
+              title: 'Produkty pod min. zásobou',
+              value: lowStock.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseSuppliesScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Posledná príjemka',
+              value: lastReceiptText,
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProductionKpiCards(BuildContext context) {
+    final ordersToday = _stats['productionOrdersToday'] is int ? _stats['productionOrdersToday'] as int : 0;
+    final inProgress = _stats['productionInProgressCount'] is int ? _stats['productionInProgressCount'] as int : 0;
+    final pendingApproval = _stats['productionPendingApprovalCount'] is int ? _stats['productionPendingApprovalCount'] as int : 0;
+    final costMonth = _stats['productionCostThisMonth'] is num ? (_stats['productionCostThisMonth'] as num).toDouble() : 0.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.2,
+          children: [
+            _DashboardKpiCard(
+              title: 'Výrobné príkazy dnes',
+              value: ordersToday.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Prebieha výroba',
+              value: inProgress.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Čaká na schválenie (VP)',
+              value: pendingApproval.toString(),
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+            ),
+            _DashboardKpiCard(
+              title: 'Výrobné náklady tento mesiac',
+              value: '${NumberFormat.decimalPattern('sk_SK').format(costMonth)} €',
+              trendPercent: 0,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -226,27 +359,38 @@ class _HomeOverviewState extends State<HomeOverview> {
       minLines: 3,
       decoration: InputDecoration(
         hintText: l10n.overviewNotesPlaceholder,
-        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+        hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: _kHomeTextMuted.withOpacity(0.15)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _kHomeAccent, width: 1.5),
+        ),
+        filled: true,
+        fillColor: _kHomeBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         isDense: true,
       ),
-      style: const TextStyle(fontSize: 14),
+      style: const TextStyle(fontSize: 14, color: _kHomeText),
       onChanged: _saveNotes,
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: _kHomeCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kHomeTextMuted.withOpacity(0.12), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
@@ -254,15 +398,28 @@ class _HomeOverviewState extends State<HomeOverview> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.overviewNotesTitle,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: _kHomeAccent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                l10n.overviewNotesTitle,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _kHomeText,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (matchHeight) Expanded(child: notesField) else notesField,
         ],
       ),
@@ -285,6 +442,11 @@ class _HomeOverviewState extends State<HomeOverview> {
               child: Checkbox(
                 value: done,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                activeColor: _kHomeAccent,
+                fillColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) return _kHomeAccent;
+                  return _kHomeTextMuted;
+                }),
                 onChanged: (v) {
                   _overviewTasks[i]['d'] = v ?? false;
                   _saveTasks();
@@ -298,12 +460,12 @@ class _HomeOverviewState extends State<HomeOverview> {
                 style: TextStyle(
                   fontSize: 14,
                   decoration: done ? TextDecoration.lineThrough : null,
-                  color: done ? Colors.grey[600] : const Color(0xFF374151),
+                  color: done ? _kHomeTextMuted : _kHomeText,
                 ),
               ),
             ),
             IconButton(
-              icon: Icon(Icons.close, size: 20, color: Colors.grey[600]),
+              icon: const Icon(Icons.close, size: 20, color: _kHomeTextMuted),
               onPressed: () {
                 _overviewTasks.removeAt(i);
                 _saveTasks();
@@ -317,21 +479,32 @@ class _HomeOverviewState extends State<HomeOverview> {
     }).toList();
 
     final addTaskRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: TextField(
             controller: _newTaskController,
             decoration: InputDecoration(
               hintText: l10n.overviewNewTaskHint,
-              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+              hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _kHomeTextMuted.withOpacity(0.15)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _kHomeAccent, width: 1.5),
+              ),
+              filled: true,
+              fillColor: _kHomeBg,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               isDense: true,
             ),
-            style: const TextStyle(fontSize: 13),
+            style: const TextStyle(fontSize: 14, color: _kHomeText),
             onSubmitted: (value) {
               final t = value.trim();
               if (t.isEmpty) return;
@@ -341,7 +514,7 @@ class _HomeOverviewState extends State<HomeOverview> {
             },
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         FilledButton.icon(
           onPressed: () {
             final t = _newTaskController.text.trim();
@@ -350,11 +523,22 @@ class _HomeOverviewState extends State<HomeOverview> {
             _newTaskController.clear();
             _saveTasks();
           },
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(l10n.overviewAddTask),
+          icon: const Icon(Icons.add_rounded, size: 20, color: Color(0xFF111114)),
+          label: Text(
+            l10n.overviewAddTask,
+            style: const TextStyle(
+              color: Color(0xFF111114),
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            backgroundColor: _kHomeAccent,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             minimumSize: Size.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
       ],
@@ -362,14 +546,15 @@ class _HomeOverviewState extends State<HomeOverview> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: _kHomeCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kHomeTextMuted.withOpacity(0.12), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
@@ -377,13 +562,26 @@ class _HomeOverviewState extends State<HomeOverview> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.overviewTasksTitle,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: _kHomeAccent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                l10n.overviewTasksTitle,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _kHomeText,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           if (matchHeight)
@@ -475,15 +673,9 @@ class _HomeOverviewState extends State<HomeOverview> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _kHomeCard,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _kHomeBorder, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,7 +685,7 @@ class _HomeOverviewState extends State<HomeOverview> {
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
+              color: _kHomeText,
             ),
           ),
           const SizedBox(height: 16),
@@ -567,14 +759,14 @@ class _HomeOverviewState extends State<HomeOverview> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF374151),
+            color: _kHomeTextMuted,
           ),
         ),
         const SizedBox(height: 12),
         if (items.isEmpty)
-          Text(
+          const Text(
             '—',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 13, color: _kHomeTextMuted),
           )
         else
           ...items.map((e) {
@@ -597,9 +789,9 @@ class _HomeOverviewState extends State<HomeOverview> {
                 children: [
                   Text(
                     dateStr,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[700],
+                      color: _kHomeTextMuted,
                     ),
                   ),
                   Text(
@@ -641,15 +833,9 @@ class _DashboardKpiCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _kHomeCard,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _kHomeBorder, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -665,10 +851,10 @@ class _DashboardKpiCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
+                  color: _kHomeTextMuted,
                 ),
               ),
               const SizedBox(height: 8),
@@ -677,7 +863,7 @@ class _DashboardKpiCard extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A1A),
+                  color: _kHomeAccent,
                   letterSpacing: -0.5,
                 ),
               ),

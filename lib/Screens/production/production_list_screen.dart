@@ -64,7 +64,6 @@ class _ProductionListScreenState extends State<ProductionListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(

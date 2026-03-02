@@ -83,17 +83,16 @@ export default function ProductionPage() {
   if (!auth) return null
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page production-page-wrap">
       <header className="dashboard-header">
         <div className="dashboard-brand">
           <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">
             ←
           </button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
+          <span className="dashboard-logo-label production-logo-text">STOCK PILOT</span>
         </div>
         <div className="dashboard-user">
-          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Používateľ'}</span>
+          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Administrátor'}</span>
           <button type="button" className="btn-logout" onClick={() => { localStorage.removeItem('stockpilot_auth'); navigate('/', { replace: true }) }}>
             Odhlásiť sa
           </button>
@@ -126,7 +125,7 @@ export default function ProductionPage() {
         </div>
 
         {apiError && (
-          <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(248,113,113,0.15)', borderRadius: 8, color: '#f87171' }}>
+          <div className="production-error-box">
             {apiError}
           </div>
         )}

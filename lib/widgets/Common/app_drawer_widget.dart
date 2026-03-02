@@ -8,11 +8,19 @@ import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/screens/customers/customers_page.dart';
 import 'package:stock_pilot/screens/suppliers/suppliers_page.dart';
 import 'package:stock_pilot/screens/production/production_list_screen.dart';
+import 'package:stock_pilot/screens/Recipe/recipe_list_screen.dart';
+import 'package:stock_pilot/screens/ProductionOrder/production_order_list_screen.dart';
 import 'package:stock_pilot/screens/pallet/customers_pallets_screen.dart';
 import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
 import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
+import 'package:stock_pilot/screens/Reports/reports_list_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
+
+const Color _kDrawerBg = Color(0xFF212124);
+const Color _kDrawerText = Color(0xFFFFFFFF);
+const Color _kDrawerTextMuted = Color(0xFFB0B0B5);
+const Color _kDrawerAccent = Color(0xFFFFC107);
 
 class AppDrawer extends StatelessWidget {
   final String userRole;
@@ -21,53 +29,25 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.transparent, // Nutne pre Glassmorphism
+      backgroundColor: _kDrawerBg,
       elevation: 0,
-      child: Stack(
-        children: [
-          // 1. Sklenený efekt (Blur a jemné šedé pozadie)
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topRight: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(
-                    0.4,
-                  ), // Jemná šedá/biela priehľadnosť
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.6),
-                      Colors.grey.withOpacity(0.1),
-                    ],
-                  ),
-                  border: Border(
-                    right: BorderSide(color: Colors.white.withOpacity(0.3)),
-                  ),
-                ),
-              ),
-            ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _AnimatedDrawerHeader(userRole: userRole),
+              const SizedBox(height: 10),
+              Expanded(child: _MenuItemsList(userRole: userRole)),
+              Divider(color: _kDrawerTextMuted.withOpacity(0.3), indent: 20, endIndent: 20),
+              _LogoutItem(),
+              const SizedBox(height: 10),
+            ],
           ),
-
-          // 2. Obsah menu
-          SafeArea(
-            child: Column(
-              children: [
-                _AnimatedDrawerHeader(userRole: userRole),
-                const SizedBox(height: 10),
-                Expanded(child: _MenuItemsList(userRole: userRole)),
-                const Divider(color: Colors.white30, indent: 20, endIndent: 20),
-                _LogoutItem(),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -84,44 +64,37 @@ class _DrawerHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 30),
       child: Column(
         children: [
-          // Ikona s jemným tieňom
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(
-                0xFF3F3D56,
-              ).withOpacity(0.8), // Tmavošedá/modrá z loga
+              color: _kDrawerTextMuted.withOpacity(0.2),
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                ),
-              ],
+              border: Border.all(color: _kDrawerAccent.withOpacity(0.4), width: 1),
             ),
             child: const Icon(
               Icons.inventory_2_rounded,
               size: 40,
-              color: Colors.white,
+              color: _kDrawerAccent,
             ),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 16),
           const Text(
             'StockPilot v1.0',
             style: TextStyle(
-              color: Color(0xFF2F2E41),
+              color: _kDrawerText,
               fontSize: 20,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.1,
             ),
           ),
+          const SizedBox(height: 4),
           Text(
             userRole.toUpperCase(),
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 12,
+            style: const TextStyle(
+              color: _kDrawerTextMuted,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
             ),
           ),
         ],
@@ -319,6 +292,34 @@ class _MenuItemsList extends StatelessWidget {
           },
         ),
         _AnimatedMenuItem(
+          delay: 478,
+          icon: Icons.menu_book_rounded,
+          title: 'Receptúry',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RecipeListScreen(userRole: userRole),
+              ),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
+          delay: 480,
+          icon: Icons.assignment_rounded,
+          title: 'Výrobné príkazy',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductionOrderListScreen(userRole: userRole),
+              ),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
           delay: 485,
           icon: Icons.local_shipping_rounded,
           title: 'Zákazníci / Palety',
@@ -327,6 +328,18 @@ class _MenuItemsList extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const CustomersPalletsScreen()),
+            );
+          },
+        ),
+        _AnimatedMenuItem(
+          delay: 480,
+          icon: Icons.assessment_rounded,
+          title: 'Reporty',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ReportsListScreen()),
             );
           },
         ),
@@ -358,7 +371,7 @@ class _LogoutItem extends StatelessWidget {
       delay: 500,
       icon: Icons.logout_rounded,
       title: l10n.logout,
-      color: Colors.redAccent.withOpacity(0.8),
+      color: const Color(0xFFEF4444),
       onTap: () async {
         await DatabaseService().clearSavedLogin();
         if (!context.mounted) return;
@@ -388,27 +401,27 @@ class _MenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = color ?? _kDrawerAccent;
+    final textColor = color ?? _kDrawerText;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
-          splashColor: Colors.white.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(14),
+          splashColor: _kDrawerAccent.withOpacity(0.2),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
-              // Efekt aktívnej položky (voliteľné)
-              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+              color: _kDrawerTextMuted.withOpacity(0.08),
             ),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  color:
-                      color ?? const Color(0xFF575ED8), // Moderná modro-fialová
+                  color: iconColor,
                   size: 24,
                 ),
                 const SizedBox(width: 20),
@@ -417,8 +430,8 @@ class _MenuItem extends StatelessWidget {
                     title,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: color ?? const Color(0xFF2F2E41),
-                      fontSize: 15,
+                      color: textColor,
+                      fontSize: 16,
                     ),
                   ),
                 ),

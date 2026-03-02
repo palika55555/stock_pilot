@@ -60,6 +60,8 @@ class StockOut {
   final StockOutIssueType issueType;
   /// Povinné pri type SCRP (odpis) – dôvod: expirácia, poškodenie, krádež...
   final String? writeOffReason;
+  /// Pri prevodke: id príjemky (príjem do cieľového skladu).
+  final int? linkedReceiptId;
 
   StockOut({
     this.id,
@@ -74,6 +76,7 @@ class StockOut {
     this.vatRate,
     this.issueType = StockOutIssueType.sale,
     this.writeOffReason,
+    this.linkedReceiptId,
   });
 
   bool get isZeroVat => vatRate == 0;
@@ -102,6 +105,7 @@ class StockOut {
       'vat_rate': vatRate,
       'issue_type': issueType.value,
       'write_off_reason': writeOffReason,
+      'linked_receipt_id': linkedReceiptId,
     };
   }
 
@@ -119,6 +123,7 @@ class StockOut {
       vatRate: map['vat_rate'] as int?,
       issueType: StockOutIssueType.fromString(map['issue_type'] as String?),
       writeOffReason: map['write_off_reason'] as String?,
+      linkedReceiptId: map['linked_receipt_id'] as int?,
     );
   }
 
@@ -135,6 +140,7 @@ class StockOut {
     int? vatRate,
     StockOutIssueType? issueType,
     String? writeOffReason,
+    int? linkedReceiptId,
   }) {
     return StockOut(
       id: id ?? this.id,
@@ -149,6 +155,7 @@ class StockOut {
       vatRate: vatRate ?? this.vatRate,
       issueType: issueType ?? this.issueType,
       writeOffReason: writeOffReason ?? this.writeOffReason,
+      linkedReceiptId: linkedReceiptId ?? this.linkedReceiptId,
     );
   }
 }

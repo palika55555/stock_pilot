@@ -39,7 +39,20 @@ class _ReceiptItemRow {
       TextEditingController();
   /// DPH % pre túto položku; prázdne = použiť spoločné DPH alebo DPH produktu.
   final TextEditingController vatPercentController = TextEditingController();
+  /// Pri manuálnom rozpočítaní: zadaná alokovaná suma na položku (s DPH).
+  final TextEditingController manualAllocatedCostController = TextEditingController();
   String get unit => product?.unit ?? 'ks';
+}
+
+/// Jeden riadok obstarávacieho nákladu v príjemke s nákladmi.
+class _AcquisitionCostRow {
+  String costType;
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController amountWithoutVatController = TextEditingController();
+  final TextEditingController vatPercentController = TextEditingController(text: '20');
+  final TextEditingController costSupplierController = TextEditingController();
+  final TextEditingController documentNumberController = TextEditingController();
+  _AcquisitionCostRow({this.costType = 'Doprava'});
 }
 
 class GoodsReceiptModal extends StatefulWidget {
@@ -83,8 +96,25 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   List<ReceiptMovementType> _movementTypes = [];
   Supplier? _selectedSupplier;
   Warehouse? _selectedWarehouse;
+  Warehouse? _selectedSourceWarehouse;
   ReceiptMovementType? _selectedMovementType;
   bool _productsLoaded = false;
+  bool _supplierValidationError = false;
+
+  bool get _isTransfer =>
+      _selectedMovementType?.code == 'TRANSFER';
+  bool get _isWithCosts =>
+      _selectedMovementType?.code == 'WITH_COSTS';
+
+  final List<_AcquisitionCostRow> _acquisitionCostRows = [];
+  String _costDistributionMethod = 'by_value'; // by_value, by_quantity, by_weight, manual
+
+  List<Product> get _productsForRows =>
+      _isTransfer && _selectedSourceWarehouse != null
+          ? _products
+              .where((p) => p.warehouseId == _selectedSourceWarehouse!.id)
+              .toList()
+          : _products;
   bool _isSaving = false;
   InboundReceipt? _editReceipt;
 
@@ -152,6 +182,10 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     final id = widget.receiptId!;
     final receipt = await _db.getInboundReceiptById(id);
     final items = await _db.getInboundReceiptItems(id);
+    List<ReceiptAcquisitionCost> acquisitionCostsList = [];
+    if (receipt?.movementTypeCode == 'WITH_COSTS') {
+      acquisitionCostsList = await _receiptService.getReceiptAcquisitionCosts(id);
+    }
     final products = await _productService.getAllProducts();
     final allSuppliers = await _supplierService.getAllSuppliers();
     final warehouses = await _warehouseService.getActiveWarehouses();
@@ -187,6 +221,15 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     if (matchedMovementType == null && movementTypes.isNotEmpty) {
       matchedMovementType = movementTypes.first;
     }
+    Warehouse? matchedSourceWarehouse;
+    if (receipt?.sourceWarehouseId != null) {
+      for (final w in warehouses) {
+        if (w.id == receipt!.sourceWarehouseId) {
+          matchedSourceWarehouse = w;
+          break;
+        }
+      }
+    }
     var displaySuppliers = allSuppliers.where((s) => s.isActive).toList();
     if (matchedSupplier != null &&
         !matchedSupplier.isActive &&
@@ -203,6 +246,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       if (receipt != null) {
         _selectedSupplier = matchedSupplier;
         _selectedWarehouse = matchedWarehouse;
+        _selectedSourceWarehouse = matchedSourceWarehouse;
         _selectedMovementType = matchedMovementType;
         _isSettled = receipt.isSettled;
         _invoiceController.text = receipt.invoiceNumber ?? '';
@@ -214,6 +258,20 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             receipt.vatRate?.toString() ??
             (matchedSupplier?.defaultVatRate.toString() ?? '20');
         _manualReceiptNumber = true;
+        if (receipt.movementTypeCode == 'WITH_COSTS') {
+          _costDistributionMethod = receipt.costDistributionMethod ?? 'by_value';
+          _acquisitionCostRows.clear();
+          for (final c in acquisitionCostsList) {
+            final cr = _AcquisitionCostRow(costType: c.costType);
+            cr.descriptionController.text = c.description ?? '';
+            cr.amountWithoutVatController.text = c.amountWithoutVat.toStringAsFixed(2);
+            cr.vatPercentController.text = c.vatPercent.toString();
+            cr.costSupplierController.text = c.costSupplierName ?? '';
+            cr.documentNumberController.text = c.documentNumber ?? '';
+            _acquisitionCostRows.add(cr);
+          }
+          if (_acquisitionCostRows.isEmpty) _acquisitionCostRows.add(_AcquisitionCostRow());
+        }
       }
       _rows.clear();
       for (final item in items) {
@@ -254,6 +312,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             .replaceAll(RegExp(r'\.$'), '');
         if (item.vatPercent != null) {
           row.vatPercentController.text = item.vatPercent.toString();
+        }
+        if (item.allocatedCost > 0) {
+          row.manualAllocatedCostController.text = item.allocatedCost.toStringAsFixed(2);
         }
         row.unitPriceWithoutVatController.addListener(() => _updateRowWithVat(row));
         row.vatPercentController.addListener(() => _updateRowWithVat(row));
@@ -313,7 +374,27 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       _rows[index].unitPriceWithoutVatController.dispose();
       _rows[index].unitPriceWithVatController.dispose();
       _rows[index].vatPercentController.dispose();
+      _rows[index].manualAllocatedCostController.dispose();
       _rows.removeAt(index);
+    });
+  }
+
+  static const List<String> _costTypes = ['Doprava', 'Clo', 'Balné', 'Poistenie', 'Iné'];
+
+  void _addAcquisitionCostRow() {
+    setState(() => _acquisitionCostRows.add(_AcquisitionCostRow()));
+  }
+
+  void _removeAcquisitionCostRow(int index) {
+    if (_acquisitionCostRows.length <= 1) return;
+    setState(() {
+      final r = _acquisitionCostRows[index];
+      r.descriptionController.dispose();
+      r.amountWithoutVatController.dispose();
+      r.vatPercentController.dispose();
+      r.costSupplierController.dispose();
+      r.documentNumberController.dispose();
+      _acquisitionCostRows.removeAt(index);
     });
   }
 
@@ -361,6 +442,10 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     bool allowEmpty = false,
   }) async {
     final items = <InboundReceiptItem>[];
+    final allocations = _isWithCosts && _acquisitionCostRows.isNotEmpty
+        ? _computeAllocatedCostPerItem()
+        : <double>[];
+    var allocationIndex = 0;
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
       if (row.product == null) {
@@ -403,6 +488,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       final unitPriceToStore = _pricesIncludeVat
           ? priceWithVat
           : priceWithoutVat;
+      final allocatedCost = allocationIndex < allocations.length
+          ? _roundPrice(allocations[allocationIndex++])
+          : 0.0;
 
       items.add(
         InboundReceiptItem(
@@ -414,6 +502,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           unit: row.unit,
           unitPrice: _roundPrice(unitPriceToStore),
           vatPercent: vat,
+          allocatedCost: allocatedCost,
         ),
       );
     }
@@ -435,15 +524,33 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       );
       return;
     }
-    setState(() => _isSaving = true);
+    if (_isTransfer && _selectedSourceWarehouse == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vyberte zdrojový sklad')),
+      );
+      return;
+    }
+    if (!_isTransfer && _selectedSupplier == null) {
+      setState(() => _supplierValidationError = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vyberte dodávateľa')),
+      );
+      return;
+    }
+    setState(() {
+      _supplierValidationError = false;
+      _isSaving = true;
+    });
     try {
       final vatRate = _vatAppliesToAll
           ? int.tryParse(_vatRateController.text.trim())
           : null;
-      final supplierName = _selectedSupplier?.name;
-      final invoice = _invoiceController.text.trim().isEmpty
+      final supplierName = _isTransfer ? null : _selectedSupplier?.name;
+      final invoice = _isTransfer
           ? null
-          : _invoiceController.text.trim();
+          : (_invoiceController.text.trim().isEmpty
+              ? null
+              : _invoiceController.text.trim());
       final notesText = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
@@ -453,9 +560,29 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         if (mounted) _receiptNumberController.text = receiptNumber;
       }
       final warehouseId = _selectedWarehouse?.id;
+      final sourceWarehouseId = _isTransfer ? _selectedSourceWarehouse?.id : null;
       final movementTypeCode = _selectedMovementType?.code ?? 'STANDARD';
 
       if (_isEditMode && _editReceipt != null) {
+        List<ReceiptAcquisitionCost>? draftEditCosts;
+        if (_isWithCosts && _acquisitionCostRows.isNotEmpty) {
+          draftEditCosts = [];
+          for (final r in _acquisitionCostRows) {
+            final without = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+            if (without <= 0) continue;
+            final vat = int.tryParse(r.vatPercentController.text.trim()) ?? 0;
+            draftEditCosts.add(ReceiptAcquisitionCost(
+              receiptId: _editReceipt!.id!,
+              costType: r.costType,
+              description: r.descriptionController.text.trim().isEmpty ? null : r.descriptionController.text.trim(),
+              amountWithoutVat: without,
+              vatPercent: vat,
+              amountWithVat: _receiptService.calculateWithVat(without, vat),
+              costSupplierName: r.costSupplierController.text.trim().isEmpty ? null : r.costSupplierController.text.trim(),
+              documentNumber: r.documentNumberController.text.trim().isEmpty ? null : r.documentNumberController.text.trim(),
+            ));
+          }
+        }
         final receipt = _editReceipt!.copyWith(
           receiptNumber: receiptNumber,
           invoiceNumber: invoice,
@@ -466,10 +593,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           vatRate: vatRate,
           status: InboundReceiptStatus.rozpracovany,
           warehouseId: warehouseId,
+          sourceWarehouseId: sourceWarehouseId,
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
+          costDistributionMethod: _isWithCosts ? _costDistributionMethod : _editReceipt!.costDistributionMethod,
         );
-        await _receiptService.updateReceipt(receipt: receipt, items: items);
+        await _receiptService.updateReceipt(receipt: receipt, items: items, acquisitionCosts: draftEditCosts);
         if (mounted) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -480,6 +609,25 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           );
         }
       } else {
+        List<ReceiptAcquisitionCost>? draftCosts;
+        if (_isWithCosts && _acquisitionCostRows.isNotEmpty) {
+          draftCosts = [];
+          for (final r in _acquisitionCostRows) {
+            final without = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+            if (without <= 0) continue;
+            final vat = int.tryParse(r.vatPercentController.text.trim()) ?? 0;
+            draftCosts.add(ReceiptAcquisitionCost(
+              receiptId: 0,
+              costType: r.costType,
+              description: r.descriptionController.text.trim().isEmpty ? null : r.descriptionController.text.trim(),
+              amountWithoutVat: without,
+              vatPercent: vat,
+              amountWithVat: _receiptService.calculateWithVat(without, vat),
+              costSupplierName: r.costSupplierController.text.trim().isEmpty ? null : r.costSupplierController.text.trim(),
+              documentNumber: r.documentNumberController.text.trim().isEmpty ? null : r.documentNumberController.text.trim(),
+            ));
+          }
+        }
         final receipt = InboundReceipt(
           receiptNumber: receiptNumber,
           invoiceNumber: invoice,
@@ -490,12 +638,15 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           vatAppliesToAll: _vatAppliesToAll,
           vatRate: vatRate,
           warehouseId: warehouseId,
+          sourceWarehouseId: sourceWarehouseId,
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
+          costDistributionMethod: _isWithCosts ? _costDistributionMethod : null,
         );
         await _receiptService.createReceipt(
           receipt: receipt,
           items: items,
+          acquisitionCosts: draftCosts,
           isDraft: true,
         );
         if (mounted) {
@@ -528,27 +679,120 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       );
       return;
     }
+    if (_isTransfer) {
+      if (_selectedSourceWarehouse == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vyberte zdrojový sklad')),
+        );
+        return;
+      }
+      if (_selectedSourceWarehouse!.id == _selectedWarehouse!.id) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Zdrojový a cieľový sklad musia byť rôzne')),
+        );
+        return;
+      }
+    } else {
+      if (_selectedSupplier == null) {
+        setState(() => _supplierValidationError = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vyberte dodávateľa')),
+        );
+        return;
+      }
+      // Pri príjemke S DPH: ak nie je zaškrtnuté "Použiť DPH pre všetky položky", každá položka musí mať vyplnené DPH %
+      if (_pricesIncludeVat && !_vatAppliesToAll) {
+        for (var i = 0; i < _rows.length; i++) {
+          final row = _rows[i];
+          if (row.product == null) continue;
+          final vatText = row.vatPercentController.text.trim();
+          if (vatText.isEmpty || int.tryParse(vatText) == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Položka ${i + 1}: pri príjemke S DPH zadajte DPH % pre každú položku (alebo zaškrtnite "Použiť DPH pre všetky položky").',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+      }
+      if (_isWithCosts) {
+        for (final r in _acquisitionCostRows) {
+          final amt = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.'));
+          if (amt != null && amt < 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Suma obstarávacieho nákladu nemôže byť záporná'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          final hasContent = r.descriptionController.text.trim().isNotEmpty ||
+              (r.amountWithoutVatController.text.trim().isNotEmpty) ||
+              r.costSupplierController.text.trim().isNotEmpty ||
+              r.documentNumberController.text.trim().isNotEmpty;
+          if (hasContent && (amt == null || amt <= 0)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Zadajte sumu bez DPH > 0 pre pridaný obstarávací náklad'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+      }
+    }
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _supplierValidationError = false;
+      _isSaving = true;
+    });
     try {
       final vatRate = _vatAppliesToAll
           ? int.tryParse(_vatRateController.text.trim())
           : null;
-      final supplierName = _selectedSupplier?.name;
-      final invoice = _invoiceController.text.trim().isEmpty
+      final supplierName = _isTransfer ? null : _selectedSupplier?.name;
+      final invoice = _isTransfer
           ? null
-          : _invoiceController.text.trim();
+          : (_invoiceController.text.trim().isEmpty
+              ? null
+              : _invoiceController.text.trim());
       final notesText = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
       final receiptNumber = _receiptNumberController.text.trim();
       final warehouseId = _selectedWarehouse?.id;
+      final sourceWarehouseId = _isTransfer ? _selectedSourceWarehouse?.id : null;
       final movementTypeCode = _selectedMovementType?.code ?? 'STANDARD';
 
       if (_isEditMode && _editReceipt != null) {
         final status = _editReceipt!.isDraft
             ? InboundReceiptStatus.vykazana
             : _editReceipt!.status;
+        List<ReceiptAcquisitionCost>? editAcquisitionCosts;
+        if (_isWithCosts && _acquisitionCostRows.isNotEmpty) {
+          editAcquisitionCosts = [];
+          for (final r in _acquisitionCostRows) {
+            final without = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+            if (without <= 0) continue;
+            final vat = int.tryParse(r.vatPercentController.text.trim()) ?? 0;
+            editAcquisitionCosts.add(ReceiptAcquisitionCost(
+              receiptId: _editReceipt!.id!,
+              costType: r.costType,
+              description: r.descriptionController.text.trim().isEmpty ? null : r.descriptionController.text.trim(),
+              amountWithoutVat: without,
+              vatPercent: vat,
+              amountWithVat: _receiptService.calculateWithVat(without, vat),
+              costSupplierName: r.costSupplierController.text.trim().isEmpty ? null : r.costSupplierController.text.trim(),
+              documentNumber: r.documentNumberController.text.trim().isEmpty ? null : r.documentNumberController.text.trim(),
+            ));
+          }
+        }
         final receipt = _editReceipt!.copyWith(
           receiptNumber: receiptNumber,
           invoiceNumber: invoice,
@@ -559,10 +803,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           vatRate: vatRate,
           status: status,
           warehouseId: warehouseId,
+          sourceWarehouseId: sourceWarehouseId,
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
+          costDistributionMethod: _isWithCosts ? _costDistributionMethod : _editReceipt!.costDistributionMethod,
         );
-        await _receiptService.updateReceipt(receipt: receipt, items: items);
+        await _receiptService.updateReceipt(receipt: receipt, items: items, acquisitionCosts: editAcquisitionCosts);
         if (mounted) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -577,6 +823,27 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           );
         }
       } else {
+        final costDistributionMethod = _isWithCosts ? _costDistributionMethod : null;
+        List<ReceiptAcquisitionCost>? acquisitionCosts;
+        if (_isWithCosts && _acquisitionCostRows.isNotEmpty) {
+          acquisitionCosts = [];
+          for (final r in _acquisitionCostRows) {
+            final without = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+            if (without <= 0) continue;
+            final vat = int.tryParse(r.vatPercentController.text.trim()) ?? 0;
+            final withVat = _receiptService.calculateWithVat(without, vat);
+            acquisitionCosts.add(ReceiptAcquisitionCost(
+              receiptId: 0,
+              costType: r.costType,
+              description: r.descriptionController.text.trim().isEmpty ? null : r.descriptionController.text.trim(),
+              amountWithoutVat: without,
+              vatPercent: vat,
+              amountWithVat: withVat,
+              costSupplierName: r.costSupplierController.text.trim().isEmpty ? null : r.costSupplierController.text.trim(),
+              documentNumber: r.documentNumberController.text.trim().isEmpty ? null : r.documentNumberController.text.trim(),
+            ));
+          }
+        }
         final receipt = InboundReceipt(
           receiptNumber: receiptNumber,
           invoiceNumber: invoice,
@@ -587,25 +854,46 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           vatAppliesToAll: _vatAppliesToAll,
           vatRate: vatRate,
           warehouseId: warehouseId,
+          sourceWarehouseId: sourceWarehouseId,
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
+          costDistributionMethod: costDistributionMethod,
         );
-        await _receiptService.createReceipt(receipt: receipt, items: items);
+        final receiptId = await _receiptService.createReceipt(
+          receipt: receipt,
+          items: items,
+          acquisitionCosts: acquisitionCosts,
+          isDraft: true,
+        );
         if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Príjemka bola uložená'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          String? savedNumber;
+          final savedReceipt = await _receiptService.getReceiptById(receiptId);
+          if (savedReceipt != null) savedNumber = savedReceipt.receiptNumber;
+          if (mounted) {
+            Navigator.pop(context, true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  savedNumber != null && savedNumber.isNotEmpty
+                      ? 'Príjemka $savedNumber uložená ako rozpracovaná. Pre vykázanie ju otvorte a zvoľte „Vykázať príjem“.'
+                      : 'Príjemka uložená ako rozpracovaná. Pre vykázanie ju otvorte a zvoľte „Vykázať príjem“.',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Chyba: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -763,20 +1051,22 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _invoiceController,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Číslo faktúry',
-                                    isDense: true,
-                                    contentPadding: _compactPadding,
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.description, size: 20),
+                              if (!_isTransfer) ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _invoiceController,
+                                    style: const TextStyle(fontSize: 13),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Číslo faktúry',
+                                      isDense: true,
+                                      contentPadding: _compactPadding,
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.description, size: 20),
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -814,22 +1104,65 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                             ],
                             onChanged: (w) => setState(() => _selectedWarehouse = w),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<Supplier?>(
-                                  isExpanded: true,
-                                  value: _selectedSupplier,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Dodávateľ',
-                                    isDense: true,
-                                    contentPadding: _compactPadding,
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.business, size: 20),
+                          if (_isTransfer) ...[
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<Warehouse?>(
+                              isExpanded: true,
+                              value: _selectedSourceWarehouse,
+                              decoration: const InputDecoration(
+                                labelText: 'Zdrojový sklad *',
+                                isDense: true,
+                                contentPadding: _compactPadding,
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.warehouse_outlined, size: 20),
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('— Vyberte zdrojový sklad —'),
+                                ),
+                                ..._warehouses
+                                    .where((w) => w.id != _selectedWarehouse?.id)
+                                    .map(
+                                  (w) => DropdownMenuItem(
+                                    value: w,
+                                    child: Text(
+                                      w.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
                                   ),
-                                  items: [
+                                ),
+                              ],
+                              onChanged: (w) => setState(() => _selectedSourceWarehouse = w),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          if (!_isTransfer)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<Supplier?>(
+                                    isExpanded: true,
+                                    value: _selectedSupplier,
+                                    decoration: InputDecoration(
+                                      labelText: 'Dodávateľ',
+                                      isDense: true,
+                                      contentPadding: _compactPadding,
+                                      border: const OutlineInputBorder(),
+                                      prefixIcon: const Icon(Icons.business, size: 20),
+                                      errorText: _supplierValidationError
+                                          ? 'Vyberte dodávateľa'
+                                          : null,
+                                      errorBorder: _supplierValidationError
+                                          ? OutlineInputBorder(
+                                              borderSide: const BorderSide(color: Colors.red),
+                                              borderRadius: BorderRadius.circular(4),
+                                            )
+                                          : null,
+                                    ),
+                                    items: [
                                     const DropdownMenuItem(
                                       value: null,
                                       child: Text('— Vyberte dodávateľa —'),
@@ -854,6 +1187,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                   onChanged: (s) {
                                     setState(() {
                                       _selectedSupplier = s;
+                                      _supplierValidationError = false;
                                       if (s != null) {
                                         _vatRateController.text = s.defaultVatRate
                                             .toString();
@@ -861,50 +1195,50 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                         _updateAllRowPrices();
                                       }
                                     });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.add_circle_outline,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                  tooltip: 'Pridať dodávateľa',
+                                  style: IconButton.styleFrom(
+                                    padding: const EdgeInsets.all(4),
+                                    minimumSize: const Size(36, 36),
+                                  ),
+                                  onPressed: () async {
+                                    final result = await showModalBottomSheet<Supplier>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(20),
+                                        ),
+                                      ),
+                                      builder: (ctx) => const AddSupplierModal(),
+                                    );
+                                    if (!mounted) return;
+                                    await _loadSuppliers();
+                                    if (result != null && mounted)
+                                      setState(() {
+                                        final match = _suppliers.where(
+                                          (s) => s.id == result.id,
+                                        );
+                                        _selectedSupplier = match.isEmpty
+                                            ? result
+                                            : match.first;
+                                        _vatRateController.text = result.defaultVatRate
+                                            .toString();
+                                        _vatAppliesToAll = true;
+                                        _updateAllRowPrices();
+                                      });
                                   },
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.add_circle_outline,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                tooltip: 'Pridať dodávateľa',
-                                style: IconButton.styleFrom(
-                                  padding: const EdgeInsets.all(4),
-                                  minimumSize: const Size(36, 36),
-                                ),
-                                onPressed: () async {
-                                  final result = await showModalBottomSheet<Supplier>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.vertical(
-                                        top: Radius.circular(20),
-                                      ),
-                                    ),
-                                    builder: (ctx) => const AddSupplierModal(),
-                                  );
-                                  if (!mounted) return;
-                                  await _loadSuppliers();
-                                  if (result != null && mounted)
-                                    setState(() {
-                                      final match = _suppliers.where(
-                                        (s) => s.id == result.id,
-                                      );
-                                      _selectedSupplier = match.isEmpty
-                                          ? result
-                                          : match.first;
-                                      _vatRateController.text = result.defaultVatRate
-                                          .toString();
-                                      _vatAppliesToAll = true;
-                                      _updateAllRowPrices();
-                                    });
-                                },
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _notesController,
@@ -954,9 +1288,42 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (t) =>
-                                setState(() => _selectedMovementType = t),
+                            onChanged: (t) {
+                              setState(() {
+                                _selectedMovementType = t;
+                                if (t?.code == 'TRANSFER') {
+                                  _selectedSourceWarehouse = null;
+                                  _pricesIncludeVat = false;
+                                }
+                                if (t?.code == 'WITH_COSTS' && _acquisitionCostRows.isEmpty) {
+                                  _acquisitionCostRows.add(_AcquisitionCostRow());
+                                }
+                              });
+                            },
                           ),
+                          if (_isTransfer) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, size: 20, color: Colors.blue.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Tovar bude presunutý z vybraného zdrojového skladu do cieľového skladu.',
+                                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           CheckboxListTile(
                             title: const Text('Vysporiadané', style: TextStyle(fontSize: 13)),
@@ -971,51 +1338,53 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                             dense: true,
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            'Typ príjemky',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                          if (!_isTransfer) ...[
+                            Text(
+                              'Typ príjemky',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<bool>(
-                                  title: const Text('S DPH', style: TextStyle(fontSize: 13)),
-                                  value: true,
-                                  groupValue: _pricesIncludeVat,
-                                  onChanged: (v) =>
-                                      setState(() => _pricesIncludeVat = true),
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: RadioListTile<bool>(
+                                    title: const Text('S DPH', style: TextStyle(fontSize: 13)),
+                                    value: true,
+                                    groupValue: _pricesIncludeVat,
+                                    onChanged: (v) =>
+                                        setState(() => _pricesIncludeVat = true),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                child: RadioListTile<bool>(
-                                  title: const Text('Bez DPH', style: TextStyle(fontSize: 13)),
-                                  value: false,
-                                  groupValue: _pricesIncludeVat,
-                                  onChanged: (v) =>
-                                      setState(() => _pricesIncludeVat = false),
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
+                                Expanded(
+                                  child: RadioListTile<bool>(
+                                    title: const Text('Bez DPH', style: TextStyle(fontSize: 13)),
+                                    value: false,
+                                    groupValue: _pricesIncludeVat,
+                                    onChanged: (v) =>
+                                        setState(() => _pricesIncludeVat = false),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          CheckboxListTile(
-                            title: const Text('Použiť DPH pre všetky položky', style: TextStyle(fontSize: 13)),
-                            value: _vatAppliesToAll,
-                            onChanged: (v) {
-                              setState(() => _vatAppliesToAll = v ?? false);
-                              _updateAllRowPrices();
-                            },
-                            controlAffinity: ListTileControlAffinity.leading,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          if (_vatAppliesToAll) ...[
+                              ],
+                            ),
+                            CheckboxListTile(
+                              title: const Text('Použiť DPH pre všetky položky', style: TextStyle(fontSize: 13)),
+                              value: _vatAppliesToAll,
+                              onChanged: (v) {
+                                setState(() => _vatAppliesToAll = v ?? false);
+                                _updateAllRowPrices();
+                              },
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ],
+                          if (_vatAppliesToAll && !_isTransfer) ...[
                             const SizedBox(height: 4),
                             SizedBox(
                               width: 80,
@@ -1072,6 +1441,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                   )
                 else
                   _buildItemsTable(),
+                if (_isWithCosts) ...[
+                  const SizedBox(height: 12),
+                  _buildAcquisitionCostsSection(),
+                  const SizedBox(height: 12),
+                  _buildCostSummarySection(),
+                ],
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -1140,6 +1515,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   }
 
   Widget _buildItemsTable() {
+    final withCosts = _isWithCosts;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: _borderColor),
@@ -1148,16 +1524,29 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(_radius),
         child: Table(
-          columnWidths: const {
-            0: FlexColumnWidth(2),
-            1: FlexColumnWidth(0.7),
-            2: FlexColumnWidth(0.6),
-            3: FlexColumnWidth(0.9),
-            4: FlexColumnWidth(0.5),
-            5: FlexColumnWidth(0.9),
-            6: FlexColumnWidth(0.8),
-            7: FixedColumnWidth(52),
-          },
+          columnWidths: withCosts
+              ? const {
+                  0: FlexColumnWidth(2),
+                  1: FlexColumnWidth(0.7),
+                  2: FlexColumnWidth(0.6),
+                  3: FlexColumnWidth(0.9),
+                  4: FlexColumnWidth(0.5),
+                  5: FlexColumnWidth(0.9),
+                  6: FlexColumnWidth(0.8),
+                  7: FlexColumnWidth(0.7),
+                  8: FlexColumnWidth(0.9),
+                  9: FixedColumnWidth(52),
+                }
+              : const {
+                  0: FlexColumnWidth(2),
+                  1: FlexColumnWidth(0.7),
+                  2: FlexColumnWidth(0.6),
+                  3: FlexColumnWidth(0.9),
+                  4: FlexColumnWidth(0.5),
+                  5: FlexColumnWidth(0.9),
+                  6: FlexColumnWidth(0.8),
+                  7: FixedColumnWidth(52),
+                },
           children: [
             TableRow(
               decoration: BoxDecoration(color: _fillColor),
@@ -1169,12 +1558,209 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 _tableHeader('DPH %'),
                 _tableHeader('Cena s DPH'),
                 _tableHeader('Spolu'),
+                if (withCosts) _tableHeader('Náklady'),
+                if (withCosts) _tableHeader('Skutočná nákupná cena'),
                 _tableHeader(''),
               ],
             ),
             ...List.generate(_rows.length, (i) => _buildTableRow(i)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAcquisitionCostsSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: _borderColor),
+        borderRadius: BorderRadius.circular(_radius),
+        color: const Color(0xFFF8FAFC),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Obstarávacie náklady',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _addAcquisitionCostRow,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Pridať náklad', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _costDistributionMethod,
+            decoration: const InputDecoration(
+              labelText: 'Rozpočítanie nákladov',
+              isDense: true,
+              contentPadding: _compactPadding,
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'by_value', child: Text('Podľa hodnoty')),
+              DropdownMenuItem(value: 'by_quantity', child: Text('Podľa množstva')),
+              DropdownMenuItem(value: 'by_weight', child: Text('Podľa hmotnosti')),
+              DropdownMenuItem(value: 'manual', child: Text('Manuálne')),
+            ],
+            onChanged: (v) => setState(() => _costDistributionMethod = v ?? 'by_value'),
+          ),
+          const SizedBox(height: 12),
+          ...List.generate(_acquisitionCostRows.length, (i) => _buildAcquisitionCostRow(i)),
+          const SizedBox(height: 8),
+          Text(
+            'Spolu obstarávacie náklady: ${_totalAcquisitionCostsWithVat().toStringAsFixed(2)} € (s DPH)',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcquisitionCostRow(int index) {
+    final r = _acquisitionCostRows[index];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: DropdownButtonFormField<String>(
+              value: r.costType,
+              isExpanded: true,
+              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
+              items: _costTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
+              onChanged: (v) => setState(() => r.costType = v ?? 'Iné'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: TextFormField(
+              controller: r.descriptionController,
+              decoration: const InputDecoration(labelText: 'Popis', isDense: true),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 90,
+            child: TextFormField(
+              controller: r.amountWithoutVatController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Suma bez DPH', isDense: true),
+              inputFormatters: [_DecimalInputFormatter()],
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 50,
+            child: TextFormField(
+              controller: r.vatPercentController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'DPH %', isDense: true),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: Text(
+                '${(_receiptService.calculateWithVat(double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0, int.tryParse(r.vatPercentController.text.trim()) ?? 0)).toStringAsFixed(2)} €',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextFormField(
+              controller: r.costSupplierController,
+              decoration: const InputDecoration(labelText: 'Dodávateľ nákladu', isDense: true),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 100,
+            child: TextFormField(
+              controller: r.documentNumberController,
+              decoration: const InputDecoration(labelText: 'Č. dokladu', isDense: true),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            onPressed: _acquisitionCostRows.length > 1 ? () => _removeAcquisitionCostRow(index) : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCostSummarySection() {
+    double goodsWithoutVat = 0;
+    double goodsWithVat = 0;
+    for (final row in _rows) {
+      if (row.product == null) continue;
+      final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+      if (qty <= 0) continue;
+      final priceWithout = double.tryParse(row.unitPriceWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+      final vat = _effectiveVatForRow(row);
+      goodsWithoutVat += qty * priceWithout;
+      goodsWithVat += qty * _receiptService.calculateWithVat(priceWithout, vat);
+    }
+    goodsWithoutVat = _roundPrice(goodsWithoutVat);
+    goodsWithVat = _roundPrice(goodsWithVat);
+    final costsWithoutVat = _totalAcquisitionCostsWithoutVat();
+    final costsWithVat = _totalAcquisitionCostsWithVat();
+    final totalVat = _roundPrice((goodsWithVat - goodsWithoutVat) + (costsWithVat - costsWithoutVat));
+    final grandTotal = _roundPrice(goodsWithVat + costsWithVat);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: _borderColor),
+        borderRadius: BorderRadius.circular(_radius),
+        color: const Color(0xFFF0FDF4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Zhrnutie', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 6),
+          _summaryRow('Suma tovaru bez DPH', '${goodsWithoutVat.toStringAsFixed(2)} €'),
+          _summaryRow('Suma obstarávacích nákladov bez DPH', '${costsWithoutVat.toStringAsFixed(2)} €'),
+          _summaryRow('Celková DPH', '${totalVat.toStringAsFixed(2)} €'),
+          _summaryRow('Celková suma s DPH', '${grandTotal.toStringAsFixed(2)} €', bold: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w600 : null)),
+          Text(value, style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w600 : null)),
+        ],
       ),
     );
   }
@@ -1200,6 +1786,105 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         : row.unitPriceWithoutVatController.text.trim().replaceAll(',', '.');
     final price = double.tryParse(priceStr) ?? 0;
     return (qty * price * 100).round() / 100;
+  }
+
+  /// Suma riadku s DPH (pre rozpočítanie obstarávacích nákladov podľa hodnoty).
+  double _rowTotalWithVat(_ReceiptItemRow row) {
+    if (row.product == null) return 0;
+    final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+    if (qty <= 0) return 0;
+    final priceWithVat = double.tryParse(
+      row.unitPriceWithVatController.text.trim().replaceAll(',', '.'),
+    ) ?? 0;
+    return _roundPrice(qty * priceWithVat);
+  }
+
+  /// Celková suma obstarávacích nákladov s DPH.
+  double _totalAcquisitionCostsWithVat() {
+    double sum = 0;
+    for (final r in _acquisitionCostRows) {
+      final without = double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+      final vat = int.tryParse(r.vatPercentController.text.trim()) ?? 0;
+      sum += _receiptService.calculateWithVat(without, vat);
+    }
+    return _roundPrice(sum);
+  }
+
+  /// Celková suma obstarávacích nákladov bez DPH.
+  double _totalAcquisitionCostsWithoutVat() {
+    double sum = 0;
+    for (final r in _acquisitionCostRows) {
+      sum += double.tryParse(r.amountWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+    }
+    return _roundPrice(sum);
+  }
+
+  /// Vráti zoznam alokovaných súm (s DPH) pre každý platný riadok položky (v poradí _rows).
+  List<double> _computeAllocatedCostPerItem() {
+    final validRows = <int>[];
+    final weights = <double>[];
+    final manualAmounts = <double>[];
+    for (var i = 0; i < _rows.length; i++) {
+      final row = _rows[i];
+      if (row.product == null) continue;
+      final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+      if (qty <= 0) continue;
+      validRows.add(i);
+      if (_costDistributionMethod == 'manual') {
+        manualAmounts.add(
+          double.tryParse(row.manualAllocatedCostController.text.trim().replaceAll(',', '.')) ?? 0,
+        );
+      } else if (_costDistributionMethod == 'by_value') {
+        weights.add(_rowTotalWithVat(row));
+      } else {
+        weights.add(qty.toDouble()); // by_quantity, by_weight (fallback)
+      }
+    }
+    final totalCost = _totalAcquisitionCostsWithVat();
+    if (totalCost <= 0 || validRows.isEmpty) {
+      return List.filled(validRows.length, 0.0);
+    }
+    if (_costDistributionMethod == 'manual') {
+      return manualAmounts;
+    }
+    final totalWeight = weights.fold<double>(0, (a, b) => a + b);
+    if (totalWeight <= 0) return List.filled(validRows.length, 0.0);
+    final allocated = weights.map((w) => _roundPrice(totalCost * (w / totalWeight))).toList();
+    // Korekcia zaokrúhlení: posledný = totalCost - sum(ostatných)
+    final sumAlloc = allocated.fold<double>(0, (a, b) => a + b);
+    if (allocated.isNotEmpty && (sumAlloc - totalCost).abs() > 0.00001) {
+      allocated[allocated.length - 1] = _roundPrice(totalCost - (sumAlloc - allocated.last));
+    }
+    return allocated;
+  }
+
+  /// Alokovaná suma pre riadok (index) – pre zobrazenie v tabuľke. Pri manuále sa berie z poľa.
+  double _getAllocatedCostForRow(int rowIndex) {
+    if (!_isWithCosts) return 0;
+    final validIndices = <int>[];
+    for (var i = 0; i < _rows.length; i++) {
+      if (_rows[i].product != null &&
+          (int.tryParse(_rows[i].qtyController.text.trim()) ?? 0) > 0) {
+        validIndices.add(i);
+      }
+    }
+    final alloc = _computeAllocatedCostPerItem();
+    final idx = validIndices.indexOf(rowIndex);
+    if (idx < 0 || idx >= alloc.length) return 0;
+    return alloc[idx];
+  }
+
+  /// Skutočná nákupná cena na jednotku (s DPH) pre riadok = (cena*Q + alokovaný náklad) / Q.
+  double _getTrueUnitPriceWithVatForRow(int rowIndex) {
+    final row = _rows[rowIndex];
+    if (row.product == null) return 0;
+    final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+    if (qty <= 0) return 0;
+    final priceWithVat = double.tryParse(
+      row.unitPriceWithVatController.text.trim().replaceAll(',', '.'),
+    ) ?? 0;
+    final alloc = _getAllocatedCostForRow(rowIndex);
+    return _roundPrice((priceWithVat * qty + alloc) / qty);
   }
 
   TableRow _buildTableRow(int index) {
@@ -1232,7 +1917,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       value: null,
                       child: Text('— Vyberte tovar —', style: TextStyle(fontSize: 12)),
                     ),
-                    ..._products.map(
+                    ..._productsForRows.map(
                       (p) => DropdownMenuItem(
                         value: p,
                         child: Text(
@@ -1259,9 +1944,18 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         Padding(
           padding: _compactPaddingTiny,
           child: Center(
-            child: Text(
-              hasProduct ? '${row.product!.qty} ${row.unit}' : '—',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            child: Builder(
+              builder: (_) {
+                if (!hasProduct) return const Text('—', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)));
+                if (_selectedWarehouse == null) return const Text('—', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)));
+                final inWarehouse = _products.where((p) =>
+                    p.warehouseId == _selectedWarehouse!.id && p.plu == row.product!.plu).toList();
+                final qty = inWarehouse.isNotEmpty ? inWarehouse.first.qty : 0;
+                return Text(
+                  '$qty ${row.unit}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                );
+              },
             ),
           ),
         ),
@@ -1365,6 +2059,58 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             ),
           ),
         ),
+        if (_isWithCosts)
+          Padding(
+            padding: _compactPaddingTiny,
+            child: Center(
+              child: _costDistributionMethod == 'manual'
+                  ? TextFormField(
+                      controller: row.manualAllocatedCostController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(color: _borderColor),
+                        ),
+                      ),
+                      inputFormatters: [_DecimalInputFormatter()],
+                    )
+                  : Text(
+                      '${_getAllocatedCostForRow(index).toStringAsFixed(2)} €',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+            ),
+          ),
+        if (_isWithCosts)
+          Padding(
+            padding: _compactPaddingTiny,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF22C55E), width: 1),
+              ),
+              child: Center(
+                child: Text(
+                  hasProduct && (int.tryParse(row.qtyController.text.trim()) ?? 0) > 0
+                      ? '${_getTrueUnitPriceWithVatForRow(index).toStringAsFixed(2)} €'
+                      : '—',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF166534),
+                  ),
+                ),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: IconButton(

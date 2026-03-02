@@ -39,6 +39,8 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
   Map<String, String> _movementTypeNames = {};
   int? _filterWarehouseId;
   bool _isLoading = true;
+  String? _currentUserUsername;
+  String? _currentUserRole;
 
   @override
   void initState() {
@@ -46,6 +48,14 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     _loadWarehouses();
     _loadMovementTypes();
     _loadReceipts();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) {
+        setState(() {
+          _currentUserUsername = prefs.getString('current_user_username');
+          _currentUserRole = prefs.getString('current_user_role');
+        });
+      }
+    });
   }
 
   Future<void> _loadWarehouses() async {
@@ -114,13 +124,195 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
 
   Future<void> _approveReceipt(InboundReceipt receipt) async {
     if (receipt.id == null || receipt.isApproved) return;
-    await _receiptService.approveReceipt(receipt.id!);
+    String? approverName;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      approverName = prefs.getString('current_user_fullname') ?? prefs.getString('current_user_username');
+    } catch (_) {}
+    await _receiptService.approveReceipt(receipt.id!, approverUsername: approverName);
     if (mounted) {
       _loadReceipts();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Príjemka bola schválená'),
           backgroundColor: Colors.teal,
+        ),
+      );
+    }
+  }
+
+  Future<void> _submitForApproval(InboundReceipt receipt) async {
+    if (receipt.id == null || receipt.isPendingApproval || receipt.isApproved) return;
+    String? creatorName;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      creatorName = prefs.getString('current_user_fullname') ?? prefs.getString('current_user_username') ?? 'Používateľ';
+    } catch (_) {
+      creatorName = 'Používateľ';
+    }
+    await _receiptService.submitForApproval(receipt.id!, creatorName);
+    if (mounted) {
+      _loadReceipts();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Príjemka bola odoslaná na schválenie'), backgroundColor: Colors.teal),
+      );
+    }
+  }
+
+  Future<void> _recallReceipt(InboundReceipt receipt) async {
+    if (receipt.id == null || !receipt.isPendingApproval) return;
+    String? creatorName;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      creatorName = prefs.getString('current_user_fullname') ?? prefs.getString('current_user_username') ?? 'Používateľ';
+    } catch (_) {
+      creatorName = 'Používateľ';
+    }
+    await _receiptService.recallReceipt(receipt.id!, creatorName);
+    if (mounted) {
+      _loadReceipts();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Príjemka bola stiahnutá zo schválenia')),
+      );
+    }
+  }
+
+  Future<void> _rejectReceipt(InboundReceipt receipt) async {
+    if (receipt.id == null || !receipt.isPendingApproval) return;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Zamietnuť príjemku'),
+          content: TextField(
+            controller: c,
+            decoration: const InputDecoration(
+              labelText: 'Dôvod zamietnutia',
+              hintText: 'Zadajte dôvod...',
+            ),
+            maxLines: 2,
+            onSubmitted: (_) => Navigator.pop(ctx, c.text.trim()),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zrušiť')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim().isEmpty ? null : c.text.trim()),
+              child: const Text('Zamietnuť'),
+            ),
+          ],
+        );
+      },
+    );
+    if (reason == null && mounted) return;
+    if (reason != null) {
+      await _receiptService.rejectReceipt(receipt.id!, reason);
+      if (mounted) {
+        _loadReceipts();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Príjemka bola zamietnutá'), backgroundColor: Colors.orange),
+        );
+      }
+    }
+  }
+
+  Future<void> _reverseReceipt(InboundReceipt receipt) async {
+    if (receipt.id == null) return;
+    final isReported = receipt.stockApplied ||
+        receipt.isApproved ||
+        receipt.status == InboundReceiptStatus.vykazana;
+
+    if (!isReported) {
+      // Príjemka ešte nebola vykázaná – len zrušenie (žiadny vplyv na sklad)
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Zrušiť príjemku'),
+          content: const Text(
+            'Príjemka ešte nebola vykázaná. Naozaj ju chcete zrušiť? Táto akcia len zmení jej stav na zrušená.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nie')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Áno, zrušiť')),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
+      await _receiptService.cancelReceipt(receipt.id!);
+      if (mounted) {
+        _loadReceipts();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Príjemka bola zrušená'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    // Vykázaná príjemka – výber: storno s odpočítaním zo skladu alebo bez
+    String? userName;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      userName = prefs.getString('current_user_fullname') ?? prefs.getString('current_user_username');
+    } catch (_) {}
+    if (userName == null && mounted) return;
+
+    final result = await showDialog<_ReverseChoice>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Stornovať príjemku'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Príjemka už bola vykázaná. Ako ju chcete stornovať?',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: c,
+                  decoration: const InputDecoration(
+                    labelText: 'Dôvod stornovania',
+                    hintText: 'Zadajte dôvod...',
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zrušiť')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _ReverseChoice(reason: c.text.trim(), deductFromStock: false)),
+              child: const Text('Stornovať bez odpočítania zo skladu'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, _ReverseChoice(reason: c.text.trim(), deductFromStock: true)),
+              child: const Text('Stornovať s odpočítaním zo skladu'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    await _receiptService.reverseReceipt(
+      receipt.id!,
+      userName!,
+      result.reason.isEmpty ? 'Stornované' : result.reason,
+      deductFromStock: result.deductFromStock,
+    );
+    if (mounted) {
+      _loadReceipts();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.deductFromStock
+              ? 'Príjemka bola stornovaná a množstvá boli odpočítané zo skladu'
+              : 'Príjemka bola stornovaná (bez zmeny skladu)'),
+          backgroundColor: Colors.orange,
         ),
       );
     }
@@ -535,6 +727,12 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
                     onApprove: _approveReceipt,
                     onEdit: _openEditModal,
                     onPrintPdf: _printReceiptPdf,
+                    onSubmit: _submitForApproval,
+                    onRecall: _recallReceipt,
+                    onReject: _rejectReceipt,
+                    onReverse: _reverseReceipt,
+                    currentUserUsername: _currentUserUsername,
+                    currentUserRole: _currentUserRole,
                   ),
             ),
           ],
@@ -553,6 +751,12 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
       ),
     );
   }
+}
+
+class _ReverseChoice {
+  final String reason;
+  final bool deductFromStock;
+  _ReverseChoice({required this.reason, required this.deductFromStock});
 }
 
 String _formatRowPrice(double? value) =>

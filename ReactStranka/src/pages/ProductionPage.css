@@ -1,8 +1,57 @@
+/* Výroba – šarže: tmavý štýl podľa dizajnu (bg #111114, karty #212124, akcent oranžový) */
+.production-page-wrap {
+  --bg-page: #111114;
+  --bg-card: #212124;
+  --border: rgba(255, 193, 61, 0.25);
+  --accent: #ffc107;
+  --text: #ffffff;
+  --text-muted: #9ca3af;
+}
+
+.production-page-wrap.dashboard-page {
+  background: var(--bg-page);
+}
+
+.production-page-wrap .dashboard-header {
+  background: rgba(33, 33, 36, 0.95);
+  border-bottom: 1px solid var(--border);
+}
+
+.production-page-wrap .dashboard-back {
+  color: var(--accent);
+}
+
+.production-page-wrap .dashboard-logo-label.production-logo-text {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 1.25rem;
+}
+
+.production-page-wrap .btn-logout {
+  background: rgba(33, 33, 36, 0.9);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.production-page-wrap .btn-logout:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+}
+
+.production-page-wrap .dashboard-overview-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1.25rem;
+}
+
 .production-date-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
+  flex-wrap: wrap;
 }
 
 .production-date-label {
@@ -14,16 +63,17 @@
   padding: 0.5rem 0.75rem;
   font-size: 1rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
+  min-width: 140px;
 }
 
 .production-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 1rem 0;
+  margin: 0 0 1.5rem 0;
 }
 
 .production-list-item {
@@ -36,7 +86,7 @@
   width: 100%;
   padding: 1rem 1.25rem;
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   color: var(--text);
   font-family: inherit;
@@ -47,21 +97,24 @@
 
 .production-list-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(255, 193, 61, 0.2);
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.2);
 }
 
 .production-list-type {
   font-weight: 600;
   flex: 1;
+  color: var(--text);
 }
 
 .production-list-qty {
-  color: var(--text-muted);
+  color: var(--text);
   margin-right: 0.5rem;
 }
 
 .production-list-arrow {
   color: var(--accent);
+  font-size: 1.1rem;
+  margin-left: 0.25rem;
 }
 
 .production-empty {
@@ -73,13 +126,36 @@
   margin-bottom: 1rem;
 }
 
+.production-error-box {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  color: #fca5a5;
+}
+
+/* Tlačidlo „+ Pridať šaržu” – pill, oranžový obrys a text */
 .production-add-btn {
   display: block;
   width: 100%;
   max-width: 320px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1rem 1.5rem;
   font-weight: 600;
+  font-size: 1rem;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.production-add-btn:hover {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .production-detail-qr {

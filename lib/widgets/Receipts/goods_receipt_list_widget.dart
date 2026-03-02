@@ -11,6 +11,12 @@ class GoodsReceiptList extends StatelessWidget {
   final void Function(InboundReceipt receipt)? onApprove;
   final void Function(InboundReceipt receipt)? onEdit;
   final void Function(InboundReceipt receipt)? onPrintPdf;
+  final void Function(InboundReceipt receipt)? onSubmit;
+  final void Function(InboundReceipt receipt)? onRecall;
+  final void Function(InboundReceipt receipt)? onReject;
+  final void Function(InboundReceipt receipt)? onReverse;
+  final String? currentUserUsername;
+  final String? currentUserRole;
 
   const GoodsReceiptList({
     super.key,
@@ -21,6 +27,12 @@ class GoodsReceiptList extends StatelessWidget {
     this.onApprove,
     this.onEdit,
     this.onPrintPdf,
+    this.onSubmit,
+    this.onRecall,
+    this.onReject,
+    this.onReverse,
+    this.currentUserUsername,
+    this.currentUserRole,
   });
 
   @override
@@ -47,6 +59,12 @@ class GoodsReceiptList extends StatelessWidget {
                 onApprove: onApprove,
                 onEdit: onEdit,
                 onPrintPdf: onPrintPdf,
+                onSubmit: onSubmit,
+                onRecall: onRecall,
+                onReject: onReject,
+                onReverse: onReverse,
+                currentUserUsername: currentUserUsername,
+                currentUserRole: currentUserRole,
               ),
             ),
           ),
@@ -114,6 +132,12 @@ class GoodsReceiptCard extends StatelessWidget {
   final void Function(InboundReceipt receipt)? onApprove;
   final void Function(InboundReceipt receipt)? onEdit;
   final void Function(InboundReceipt receipt)? onPrintPdf;
+  final void Function(InboundReceipt receipt)? onSubmit;
+  final void Function(InboundReceipt receipt)? onRecall;
+  final void Function(InboundReceipt receipt)? onReject;
+  final void Function(InboundReceipt receipt)? onReverse;
+  final String? currentUserUsername;
+  final String? currentUserRole;
 
   const GoodsReceiptCard({
     super.key,
@@ -123,6 +147,12 @@ class GoodsReceiptCard extends StatelessWidget {
     this.onApprove,
     this.onEdit,
     this.onPrintPdf,
+    this.onSubmit,
+    this.onRecall,
+    this.onReject,
+    this.onReverse,
+    this.currentUserUsername,
+    this.currentUserRole,
   });
 
   @override
@@ -241,10 +271,22 @@ class GoodsReceiptCard extends StatelessWidget {
               _buildChip(
                 receipt.isDraft
                     ? 'Rozpracovaný'
-                    : (receipt.isApproved ? 'Schválená' : 'Vykázaná'),
+                    : receipt.isPendingApproval
+                        ? 'Čaká na schválenie'
+                        : receipt.isRejected
+                            ? 'Zamietnutá'
+                            : receipt.isReversed
+                                ? 'Stornovaná'
+                                : (receipt.isApproved ? 'Schválená' : 'Vykázaná'),
                 receipt.isDraft
                     ? Colors.orange
-                    : (receipt.isApproved ? Colors.teal : Colors.blue),
+                    : receipt.isPendingApproval
+                        ? Colors.amber
+                        : receipt.isRejected
+                            ? Colors.red
+                            : receipt.isReversed
+                                ? Colors.grey
+                                : (receipt.isApproved ? Colors.teal : Colors.blue),
               ),
               if (movementTypeNames.isNotEmpty &&
                   receipt.movementTypeCode.isNotEmpty)
@@ -258,67 +300,128 @@ class GoodsReceiptCard extends StatelessWidget {
             ],
           ),
           if ((isVykazana && (onApprove != null || onEdit != null)) ||
-              onPrintPdf != null) ...[
+              onPrintPdf != null ||
+              onSubmit != null ||
+              onRecall != null ||
+              onReject != null ||
+              onReverse != null) ...[
             const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
               children: [
                 if (onPrintPdf != null)
                   TextButton.icon(
                     onPressed: () => onPrintPdf!(receipt),
                     icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-                    label: const Text(
-                      'Tlačiť PDF',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    label: const Text('Tlačiť PDF', style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-                if (isVykazana && onEdit != null) ...[
-                  if (onPrintPdf != null) const SizedBox(width: 4),
+                if (isVykazana && onEdit != null)
                   TextButton.icon(
                     onPressed: () => onEdit!(receipt),
                     icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text(
-                      'Upraviť',
-                      style: TextStyle(fontSize: 12),
+                    label: Text(
+                      receipt.isRejected ? 'Upraviť a znovu odoslať' : 'Upraviť',
+                      style: const TextStyle(fontSize: 12),
                     ),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-                ],
-                if (isVykazana && onApprove != null && !receipt.isDraft) ...[
-                  const SizedBox(width: 4),
+                if (receipt.isPendingApproval &&
+                    (currentUserRole == null || currentUserRole == 'manager' || currentUserRole == 'admin') &&
+                    onApprove != null)
                   FilledButton.icon(
                     onPressed: () => onApprove!(receipt),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
-                    label: const Text(
-                      'Schváliť',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    label: const Text('Schváliť', style: TextStyle(fontSize: 12)),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.teal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-                ],
+                if (receipt.isPendingApproval &&
+                    (currentUserRole == null || currentUserRole == 'manager' || currentUserRole == 'admin') &&
+                    onReject != null)
+                  TextButton.icon(
+                    onPressed: () => onReject!(receipt),
+                    icon: const Icon(Icons.cancel_outlined, size: 16),
+                    label: const Text('Zamietnuť', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                if ((receipt.isDraft || receipt.status == InboundReceiptStatus.vykazana) &&
+                    (receipt.username == null || receipt.username == currentUserUsername) &&
+                    onSubmit != null)
+                  FilledButton.icon(
+                    onPressed: () => onSubmit!(receipt),
+                    icon: const Icon(Icons.send_outlined, size: 16),
+                    label: const Text('Odoslať na schválenie', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                if (receipt.isDraft && onApprove != null)
+                  FilledButton.icon(
+                    onPressed: () => onApprove!(receipt),
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: const Text('Vykázať príjem', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                if (receipt.isPendingApproval &&
+                    (receipt.username == null || receipt.username == currentUserUsername) &&
+                    onRecall != null)
+                  TextButton.icon(
+                    onPressed: () => onRecall!(receipt),
+                    icon: const Icon(Icons.undo_outlined, size: 16),
+                    label: const Text('Stiahnuť', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                if (receipt.status != InboundReceiptStatus.reversed &&
+                    receipt.status != InboundReceiptStatus.cancelled &&
+                    onReverse != null)
+                  TextButton.icon(
+                    onPressed: () => onReverse!(receipt),
+                    icon: const Icon(Icons.replay_outlined, size: 16),
+                    label: Text(
+                      receipt.stockApplied || receipt.isApproved || receipt.status == InboundReceiptStatus.vykazana
+                          ? 'Stornovať'
+                          : 'Zrušiť',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
               ],
             ),
           ],

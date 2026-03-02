@@ -4,13 +4,15 @@ import '../profile/user_info_widget.dart';
 import '../profile/user_options_sheet_widget.dart';
 import 'header_actions_widget.dart';
 import '../Time/time_display_widget.dart';
-import '../notifications/notifications_sheet_widget.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../screens/Settings/settings_page.dart';
 import '../../screens/Search/search_screen.dart';
 import '../../screens/Transport/transport_calculator_screen.dart';
 
+const Color _kHomeAppBarBg = Color(0xFF212124);
+const Color _kHomeAccent = Color(0xFFFFC107);
+const Color _kHomeAppBarText = Color(0xFFFFFFFF);
 
 class HomeAppBar extends StatelessWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -18,6 +20,8 @@ class HomeAppBar extends StatelessWidget {
   final String currentRole;
   final ValueChanged<String> onRoleChanged;
   final RouteObserver<ModalRoute<void>>? routeObserver;
+  final int notificationUnreadCount;
+  final VoidCallback? onNotificationTap;
 
   const HomeAppBar({
     super.key,
@@ -26,6 +30,8 @@ class HomeAppBar extends StatelessWidget {
     required this.currentRole,
     required this.onRoleChanged,
     this.routeObserver,
+    this.notificationUnreadCount = 0,
+    this.onNotificationTap,
   });
 
   @override
@@ -35,18 +41,16 @@ class HomeAppBar extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.topRight,
-              colors: [
-                const Color(0xFF4F46E5).withOpacity(0.9),
-                const Color(0xFF6366F1).withOpacity(0.9),
-                const Color(0xFF818CF8).withOpacity(0.9),
-              ],
+            color: _kHomeAppBarBg.withOpacity(0.95),
+            border: Border(
+              bottom: BorderSide(
+                color: _kHomeAccent.withOpacity(0.25),
+                width: 1,
+              ),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withOpacity(0.2),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -108,14 +112,8 @@ class HomeAppBar extends StatelessWidget {
                   TimeDisplayWidget(routeObserver: routeObserver),
                   const SizedBox(width: 12),
                   HeaderActionsWidget(
-                    notificationCount: 3,
-                    onNotificationTap: () {
-                      showDialog(
-                        context: context,
-                        barrierColor: Colors.black.withOpacity(0.5),
-                        builder: (context) => const NotificationsSheet(),
-                      );
-                    },
+                    notificationCount: notificationUnreadCount,
+                    onNotificationTap: onNotificationTap ?? () {},
                     onSettingsTap: () {
                       Navigator.push(
                         context,
@@ -174,17 +172,17 @@ class _GlassIconButton extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(18),
-            child: Container(
+              child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1.5,
+                  color: _kHomeAccent.withOpacity(0.3),
+                  width: 1,
                 ),
               ),
-              child: Icon(icon, color: Colors.white, size: 24),
+              child: Icon(icon, color: _kHomeAppBarText, size: 24),
             ),
           ),
         ),

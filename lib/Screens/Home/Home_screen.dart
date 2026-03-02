@@ -8,6 +8,8 @@ import '../../models/user.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
 import '../../services/sync_check_service.dart';
+import '../../services/Notifications/notification_service.dart';
+import '../../screens/Notifications/notification_center_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final User user;
@@ -22,14 +24,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final DatabaseService _db = DatabaseService();
+  final NotificationService _notificationService = NotificationService();
   late String _currentRole;
   StreamSubscription<void>? _syncSubscription;
+  int _notificationUnreadCount = 0;
 
   @override
   void initState() {
     super.initState();
     _currentRole = 'user';
     _persistCurrentUser();
+    _refreshNotificationCount();
     WidgetsBinding.instance.addObserver(this);
     SyncCheckService.instance.start();
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
@@ -147,24 +152,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString('current_user_fullname', widget.user.fullName);
       prefs.setString('current_user_username', widget.user.username);
+      prefs.setString('current_user_role', widget.user.role);
     });
   }
+
+  Future<void> _refreshNotificationCount() async {
+    final c = await _notificationService.getUnreadCount(widget.user.username);
+    if (mounted) setState(() => _notificationUnreadCount = c);
+  }
+
+  static const Color _homeBgDark = Color(0xFF111114);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
+      backgroundColor: _homeBgDark,
       drawerScrimColor: Colors.black54,
       drawer: AppDrawer(userRole: _currentRole),
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(80),
-        child: HomeAppBar(
+          child: HomeAppBar(
           scaffoldKey: _scaffoldKey,
           user: widget.user,
           currentRole: _currentRole,
           onRoleChanged: (newRole) => setState(() => _currentRole = newRole),
           routeObserver: widget.routeObserver,
+          notificationUnreadCount: _notificationUnreadCount,
+          onNotificationTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationCenterScreen(),
+              ),
+            );
+            _refreshNotificationCount();
+          },
         ),
       ),
       body: RepaintBoundary(

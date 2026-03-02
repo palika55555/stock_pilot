@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import 'company_edit_screen.dart';
 import 'receipt_pdf_style_screen.dart';
 import 'product_kinds_screen.dart';
+import 'notification_settings_screen.dart';
 
 class SettingsPage extends StatefulWidget {
   /// Rola prihláseného používateľa ('admin' alebo 'user'). Určuje napr. zobrazenie položky „Vymazať dáta z DB”.
@@ -212,6 +213,25 @@ class _SettingsPageState extends State<SettingsPage> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CompanyEditScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            _buildSection(
+              title: 'Notifikácie',
+              icon: Icons.notifications_active_outlined,
+              children: [
+                _buildListTile(
+                  icon: Icons.settings_suggest_outlined,
+                  title: 'Nastavenia notifikácií',
+                  trailing: 'Tiché hodiny, pripomienky',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationSettingsScreen(),
                       ),
                     );
                   },
