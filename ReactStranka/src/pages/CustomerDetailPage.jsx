@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomerDetailPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
@@ -27,16 +28,12 @@ export default function CustomerDetailPage() {
   const [form, setForm] = useState({ name: '', ico: '', email: '', address: '', city: '', postal_code: '', dic: '', ic_dph: '', default_vat_rate: 20, is_active: true })
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -45,7 +42,7 @@ export default function CustomerDetailPage() {
     async function fetchCustomer() {
       try {
         const res = await fetch(`${API_BASE_FOR_CALLS}/customers/${id}`, {
-          headers: auth?.token ? { Authorization: auth.token } : {},
+          headers: getAuthHeaders(auth),
         })
         if (res.status === 404) {
           if (!cancelled) setError('Zákazník nebol nájdený')
@@ -85,10 +82,7 @@ export default function CustomerDetailPage() {
     try {
       const res = await fetch(`${API_BASE_FOR_CALLS}/customers/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(auth?.token ? { Authorization: auth.token } : {}),
-        },
+        headers: getAuthHeaders(auth),
         body: JSON.stringify({
           name: form.name.trim(),
           ico: form.ico.trim(),

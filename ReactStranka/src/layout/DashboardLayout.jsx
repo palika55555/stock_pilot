@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders, clearAuth } from '../utils/auth'
 import './DashboardLayout.css'
 
 const NAV_ITEMS = [
@@ -15,21 +16,6 @@ const NAV_ITEMS = [
   { path: '/dashboard', label: 'Štatistiky', icon: '📊' },
   { path: '/dashboard', label: 'Nastavenia', icon: '⚙' },
 ]
-
-function getAuth() {
-  try {
-    const raw = localStorage.getItem('stockpilot_auth')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function authHeader(auth) {
-  if (!auth?.token) return {}
-  const t = auth.token
-  return { Authorization: t.startsWith('Bearer ') ? t : `Bearer ${t}` }
-}
 
 function formatSyncAgo(ts) {
   if (!ts) return ''
@@ -58,7 +44,7 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     if (!auth?.token) return
-    const headers = authHeader(auth)
+    const headers = getAuthHeaders(auth)
     fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
       .then((r) => {
         if (r.status === 401) { navigate('/', { replace: true }); return {} }
@@ -81,7 +67,7 @@ export default function DashboardLayout() {
   const handleSyncClick = () => {
     setSyncStatus((s) => ({ ...s, loading: true }))
     refreshNotifications()
-    const headers = authHeader(auth)
+    const headers = getAuthHeaders(auth)
     fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
       .then((r) => (r.ok ? r.json() : {}))
       .then((d) => setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false }))
@@ -89,7 +75,7 @@ export default function DashboardLayout() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('stockpilot_auth')
+    clearAuth()
     navigate('/', { replace: true })
   }
 

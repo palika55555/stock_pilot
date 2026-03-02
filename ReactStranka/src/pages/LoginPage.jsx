@@ -22,9 +22,11 @@ export default function LoginPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {
+        // Backend returns accessToken, refreshToken, user (not "token")
         const auth = {
-          token: data.token,
-          user: data.user || { fullName: username, username, role: 'user' },
+          user: data.user || { id: null, fullName: username, username, role: 'user', email: '' },
+          token: data.accessToken,
+          refreshToken: data.refreshToken ?? null,
         }
         localStorage.setItem('stockpilot_auth', JSON.stringify(auth))
         setMessage({

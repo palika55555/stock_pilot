@@ -12,24 +12,16 @@ import ProductionBatchFormPage from './pages/ProductionBatchFormPage'
 import ProductionBatchDetailPage from './pages/ProductionBatchDetailPage'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
+import { getAuth } from './utils/auth'
 import './App.css'
-
-function getAuth() {
-  try {
-    const raw = localStorage.getItem('stockpilot_auth')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
 
 function PrivateRoute({ children }) {
   const [auth, setAuth] = useState(getAuth())
   useEffect(() => {
-    const a = getAuth()
-    setAuth(a)
+    setAuth(getAuth())
   }, [])
-  if (!auth) return <Navigate to="/" replace />
+  // Require both auth object and token so we redirect if only user was saved (old bug)
+  if (!auth || !auth.token) return <Navigate to="/" replace />
   return <NotificationProvider auth={auth}>{children}</NotificationProvider>
 }
 

@@ -4,6 +4,7 @@ import './DashboardPage.css'
 import './CustomersPage.css'
 import './ProductionPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 function formatDate(d) {
   if (!d) return ''
@@ -37,16 +38,12 @@ export default function ProductionPage() {
   const [apiError, setApiError] = useState(null)
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -61,7 +58,7 @@ export default function ProductionPage() {
       const r = rangeMode === 'month' ? dateRange(31) : dateRange(365)
       url += `?from=${r.from}&to=${r.to}`
     }
-    fetch(url, { headers: { Authorization: auth.token } })
+    fetch(url, { headers: getAuthHeaders(auth) })
       .then((res) => {
         if (!res.ok) {
           if (!cancelled) setApiError(res.status === 503 ? 'Backend alebo databáza nie sú dostupné.' : `Chyba ${res.status}. Skúste obnoviť alebo synchronizovať z aplikácie.`)

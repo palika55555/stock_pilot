@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 export default function CustomersPage() {
   const navigate = useNavigate()
@@ -12,16 +13,12 @@ export default function CustomersPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -30,7 +27,7 @@ export default function CustomersPage() {
     async function fetchCustomers() {
       try {
         const res = await fetch(`${API_BASE_FOR_CALLS}/customers`, {
-          headers: auth?.token ? { Authorization: auth.token } : {},
+          headers: getAuthHeaders(auth),
         })
         if (!res.ok) throw new Error('Načítanie zlyhalo')
         const data = await res.json()

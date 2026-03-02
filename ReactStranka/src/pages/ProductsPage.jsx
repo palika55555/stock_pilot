@@ -4,6 +4,7 @@ import './DashboardPage.css'
 import './CustomersPage.css'
 import './ProductsPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 export default function ProductsPage() {
   const navigate = useNavigate()
@@ -14,16 +15,12 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -35,7 +32,7 @@ export default function ProductsPage() {
           ? `${API_BASE_FOR_CALLS}/products?search=${encodeURIComponent(search)}`
           : `${API_BASE_FOR_CALLS}/products`
         const res = await fetch(url, {
-          headers: auth?.token ? { Authorization: auth.token } : {},
+          headers: getAuthHeaders(auth),
         })
         if (!res.ok) throw new Error('Načítanie zlyhalo')
         const data = await res.json()

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 import './ScanProductPage.css'
 
 const BARCODE_FORMATS = [
@@ -35,23 +36,19 @@ export default function ScanProductPage() {
   const containerId = 'scan-product-reader'
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   const fetchProductByBarcode = useCallback(async (code) => {
     if (!auth?.token) return null
     const res = await fetch(
       `${API_BASE_FOR_CALLS}/products/by-barcode?code=${encodeURIComponent(code)}`,
-      { headers: { Authorization: auth.token } }
+      { headers: getAuthHeaders(auth) }
     )
     if (res.status === 404) return 'not_found'
     if (!res.ok) throw new Error('API chyba')
@@ -79,10 +76,10 @@ export default function ScanProductPage() {
       setBatchResult(null)
       setPalletResult(null)
       if (bp.type === 'batch' && bp.id) {
-        fetch(`${API_BASE_FOR_CALLS}/batches/${bp.id}`, { headers: { Authorization: auth.token } })
+        fetch(`${API_BASE_FOR_CALLS}/batches/${bp.id}`, { headers: getAuthHeaders(auth) })
           .then((r) => {
             if (r.ok) return r.json()
-            if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/batches/by-local/${bp.id}`, { headers: { Authorization: auth.token } }).then((r2) => (r2.ok ? r2.json() : null))
+            if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/batches/by-local/${bp.id}`, { headers: getAuthHeaders(auth) }).then((r2) => (r2.ok ? r2.json() : null))
             return null
           })
           .then((data) => { setBatchResult(data || { notFound: true }) })
@@ -90,15 +87,15 @@ export default function ScanProductPage() {
       }
       if (bp.type === 'pallet' && bp.id) {
         const fetchPallet = () =>
-          fetch(`${API_BASE_FOR_CALLS}/pallets/${bp.id}`, { headers: { Authorization: auth.token } })
+          fetch(`${API_BASE_FOR_CALLS}/pallets/${bp.id}`, { headers: getAuthHeaders(auth) })
             .then((r) => {
               if (r.ok) return r.json()
-              if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/pallets/by-local/${bp.id}`, { headers: { Authorization: auth.token } }).then((r2) => (r2.ok ? r2.json() : null))
+              if (r.status === 404) return fetch(`${API_BASE_FOR_CALLS}/pallets/by-local/${bp.id}`, { headers: getAuthHeaders(auth) }).then((r2) => (r2.ok ? r2.json() : null))
               return null
             })
         Promise.all([
           fetchPallet(),
-          fetch(`${API_BASE_FOR_CALLS}/customers`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : [])),
+          fetch(`${API_BASE_FOR_CALLS}/customers`, { headers: getAuthHeaders(auth) }).then((r) => (r.ok ? r.json() : [])),
         ])
           .then(([pallet, customers]) => {
             setPalletResult(pallet ? { pallet, customers: Array.isArray(customers) ? customers : [] } : { notFound: true, customers: Array.isArray(customers) ? customers : [] })
@@ -179,7 +176,7 @@ export default function ScanProductPage() {
     const url = search
       ? `${API_BASE_FOR_CALLS}/products?search=${encodeURIComponent(assignSearch)}`
       : `${API_BASE_FOR_CALLS}/products`
-    fetch(url, { headers: { Authorization: auth.token } })
+    fetch(url, { headers: getAuthHeaders(auth) })
       .then((res) => res.ok ? res.json() : [])
       .then((list) => { if (!cancelled) setProductsList(Array.isArray(list) ? list : []) })
       .catch(() => { if (!cancelled) setProductsList([]) })
@@ -209,7 +206,7 @@ export default function ScanProductPage() {
     setPalletAssigning(true)
     fetch(`${API_BASE_FOR_CALLS}/pallets/${pid}/assign`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: auth.token },
+      headers: getAuthHeaders(auth),
       body: JSON.stringify({ customer_id: cid }),
     })
       .then((r) => {
@@ -229,7 +226,7 @@ export default function ScanProductPage() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: auth.token,
+        ...getAuthHeaders(auth),
       },
       body: JSON.stringify({ ean: lastScanned }),
     })

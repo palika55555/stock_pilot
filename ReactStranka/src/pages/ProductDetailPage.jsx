@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './ProductDetailPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders, clearAuth } from '../utils/auth'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
@@ -23,16 +24,12 @@ export default function ProductDetailPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -42,7 +39,7 @@ export default function ProductDetailPage() {
       try {
         const res = await fetch(
           `${API_BASE_FOR_CALLS}/products/${encodeURIComponent(uniqueId)}`,
-          { headers: auth?.token ? { Authorization: auth.token } : {} }
+          { headers: getAuthHeaders(auth) }
         )
         if (res.status === 404) {
           if (!cancelled) setError('Produkt nebol nájdený')
@@ -62,7 +59,7 @@ export default function ProductDetailPage() {
   }, [auth, uniqueId])
 
   const handleLogout = () => {
-    localStorage.removeItem('stockpilot_auth')
+    clearAuth()
     navigate('/', { replace: true })
   }
 

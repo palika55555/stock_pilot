@@ -4,6 +4,7 @@ import './DashboardPage.css'
 import './CustomersPage.css'
 import './ProductionPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 const DEFAULT_PRODUCT_TYPES = ['Zamková dlažba', 'Tvárnice', 'Obrubníky', 'Dlažobné kostky', 'Iné']
 
@@ -37,16 +38,12 @@ export default function ProductionBatchFormPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
     if (date) setProductionDate(date)
   }, [navigate, date])
 
@@ -82,10 +79,7 @@ export default function ProductionBatchFormPage() {
     }
     fetch(`${API_BASE_FOR_CALLS}/batches`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: auth.token,
-      },
+      headers: getAuthHeaders(auth),
       body: JSON.stringify(body),
     })
       .then((res) => {

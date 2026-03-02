@@ -5,6 +5,7 @@ import './DashboardPage.css'
 import './CustomersPage.css'
 import './ProductionPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 const QR_PREFIX = 'STOCKPILOT_BATCH:'
 
@@ -30,10 +31,11 @@ export default function ProductionBatchDetailPage() {
 
   const load = () => {
     if (!auth?.token || !id) return
+    const headers = getAuthHeaders(auth)
     Promise.all([
-      fetch(`${API_BASE_FOR_CALLS}/batches/${id}`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : null)),
-      fetch(`${API_BASE_FOR_CALLS}/batches/${id}/recipe`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : [])),
-      fetch(`${API_BASE_FOR_CALLS}/batches/${id}/pallets`, { headers: { Authorization: auth.token } }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE_FOR_CALLS}/batches/${id}`, { headers }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${API_BASE_FOR_CALLS}/batches/${id}/recipe`, { headers }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE_FOR_CALLS}/batches/${id}/pallets`, { headers }).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(([b, rec, pal]) => {
         setBatch(b || null)
@@ -52,16 +54,12 @@ export default function ProductionBatchDetailPage() {
   }
 
   useEffect(() => {
-    const raw = localStorage.getItem('stockpilot_auth')
-    if (!raw) {
+    const a = getAuth()
+    if (!a?.token) {
       navigate('/', { replace: true })
       return
     }
-    try {
-      setAuth(JSON.parse(raw))
-    } catch {
-      navigate('/', { replace: true })
-    }
+    setAuth(a)
   }, [navigate])
 
   useEffect(() => {
@@ -85,10 +83,7 @@ export default function ProductionBatchDetailPage() {
     setCreatingPallets(true)
     fetch(`${API_BASE_FOR_CALLS}/batches/${id}/pallets`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: auth.token,
-      },
+      headers: getAuthHeaders(auth),
       body: JSON.stringify({ pieces_per_pallet: qty, count }),
     })
       .then((r) => {

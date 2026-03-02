@@ -3,21 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import './DashboardPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
-
-function getAuth() {
-  try {
-    const raw = localStorage.getItem('stockpilot_auth')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function authHeader(auth) {
-  if (!auth?.token) return {}
-  const t = auth.token
-  return { Authorization: t.startsWith('Bearer ') ? t : `Bearer ${t}` }
-}
+import { getAuth, getAuthHeaders } from '../utils/auth'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -93,7 +79,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!auth?.token) return
     let cancelled = false
-    const headers = authHeader(auth)
+    const headers = getAuthHeaders(auth)
     Promise.all([
       fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return {} }; return r.ok ? r.json() : {} }),
       fetch(`${API_BASE_FOR_CALLS}/batches?limit=10`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return [] }; return r.ok ? r.json() : [] }),
