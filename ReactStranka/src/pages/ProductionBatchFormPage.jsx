@@ -104,18 +104,9 @@ export default function ProductionBatchFormPage() {
   if (!auth) return null
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')}>
-            ←
-          </button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content">
       <main className="dashboard-main customers-main">
+        <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')} style={{ marginBottom: '0.5rem' }}>← Späť na výrobu</button>
         <h2 className="dashboard-overview-title">Nová šarža</h2>
 
         <form onSubmit={handleSubmit}>

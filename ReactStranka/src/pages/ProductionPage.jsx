@@ -83,23 +83,9 @@ export default function ProductionPage() {
   if (!auth) return null
 
   return (
-    <div className="dashboard-page production-page-wrap">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">
-            ←
-          </button>
-          <span className="dashboard-logo-label production-logo-text">STOCK PILOT</span>
-        </div>
-        <div className="dashboard-user">
-          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Administrátor'}</span>
-          <button type="button" className="btn-logout" onClick={() => { localStorage.removeItem('stockpilot_auth'); navigate('/', { replace: true }) }}>
-            Odhlásiť sa
-          </button>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content production-page-wrap">
       <main className="dashboard-main customers-main">
+        <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} style={{ marginBottom: '0.5rem' }}>← Späť na prehľad</button>
         <h2 className="dashboard-overview-title">Výroba – šarže</h2>
 
         <div className="production-date-row" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>

@@ -4,19 +4,14 @@ import '../models/user.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
 import 'Database/database_service.dart';
+import 'auth_storage_service.dart';
 
 /// Backend API pre sync do PostgreSQL (zákazníci, produkty, login).
-/// Všetky volania (dotahovanie zákazníkov, sync produktov, login) používajú rovnakú _apiBase.
-/// Pre Coolify/Raspberry zmeň kBackendApiBase na URL svojho backendu (bez koncového lomítka).
+/// JWT: access token v pamäti + secure storage, refresh token len v secure storage.
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
-
-/// Tajný path prefix pre API – musí zodpovedať API_PATH_PREFIX na serveri (obfuskovácia endpointov).
 const String kApiPathPrefix = 'sp-9f2a4e1b';
-
-/// Jedna base URL pre všetky endpointy: auth, customers, products, sync.
 String get _apiBase => '$kBackendApiBase/api/$kApiPathPrefix';
 
-/// Token z posledného úspešného prihlásenia na backend – používa sa pre GET /customers v apke.
 String? _backendToken;
 
 void setBackendToken(String? token) {
@@ -24,6 +19,61 @@ void setBackendToken(String? token) {
 }
 
 String? getBackendToken() => _backendToken;
+
+/// Authorization header value for API: "Bearer <jwt>"
+String _bearer(String? token) =>
+    (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
+
+/// Save JWT tokens to secure storage and set in-memory access token.
+Future<void> saveTokensAndSet(String accessToken, String refreshToken) async {
+  await AuthStorageService.instance.saveTokens(
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+  );
+  _backendToken = accessToken;
+}
+
+/// Clear secure storage and in-memory token (call on logout).
+Future<void> clearTokensAndToken() async {
+  await AuthStorageService.instance.clearTokens();
+  _backendToken = null;
+}
+
+/// Restore access token from secure storage (e.g. after app restart).
+Future<String?> getBackendTokenAsync() async {
+  if (_backendToken != null && _backendToken!.isNotEmpty) return _backendToken;
+  final stored = await AuthStorageService.instance.getAccessToken();
+  if (stored != null && stored.isNotEmpty) {
+    _backendToken = stored;
+    return stored;
+  }
+  return null;
+}
+
+/// Use refresh token to get new access token. Saves and sets new tokens. Returns new access or null.
+Future<String?> refreshAccessToken() async {
+  final refresh = await AuthStorageService.instance.getRefreshToken();
+  if (refresh == null || refresh.isEmpty) return null;
+  try {
+    final uri = Uri.parse('$_apiBase/auth/refresh');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refreshToken': refresh}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    final access = map?['accessToken'] as String?;
+    final newRefresh = map?['refreshToken'] as String?;
+    if (access != null && access.isNotEmpty) {
+      await saveTokensAndSet(access, newRefresh ?? refresh);
+      return access;
+    }
+  } catch (_) {}
+  return null;
+}
 
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
 /// Volaj po úspešnom lokálnom prihlásení. Počkaj na dokončenie, aby backend login potom našiel toho istého používateľa.
@@ -65,7 +115,7 @@ void syncCustomersToBackend(List<Customer> customers) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json', 'Authorization': token},
+        headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
         body: body,
       )
       .timeout(const Duration(seconds: 10))
@@ -93,29 +143,34 @@ void syncProductsToBackend(List<Product> products) {
   http
       .post(
         uri,
-        headers: {'Content-Type': 'application/json', 'Authorization': token},
+        headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
         body: body,
       )
       .timeout(const Duration(seconds: 15))
       .ignore();
 }
 
-/// Prihlásenie na backend (rovnaké údaje ako lokálne) – vráti token alebo null pri chybe.
-/// Token potom použite pre [fetchCustomersFromBackendWithToken].
-Future<String?> fetchBackendToken(String username, String password) async {
+/// Prihlásenie na backend – JWT. Uloží access + refresh do secure storage a nastaví in-memory token.
+/// [rememberMe] => access token 7 dní, inak 24h. Vráti accessToken alebo null.
+Future<String?> fetchBackendToken(String username, String password, {bool rememberMe = false}) async {
   try {
     final uri = Uri.parse('$_apiBase/auth/login');
     final res = await http
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'username': username, 'password': password, 'rememberMe': rememberMe}),
         )
         .timeout(const Duration(seconds: 10));
     if (res.statusCode != 200) return null;
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
-    final token = map?['token'] as String?;
-    return token != null && token.isNotEmpty ? token : null;
+    final access = map?['accessToken'] as String?;
+    final refresh = map?['refreshToken'] as String?;
+    if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
+      await saveTokensAndSet(access, refresh);
+      return access;
+    }
+    return null;
   } catch (_) {
     return null;
   }
@@ -132,7 +187,7 @@ Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? to
   try {
     final uri = Uri.parse('$_apiBase/products');
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (token != null && token.isNotEmpty) headers['Authorization'] = token;
+    if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
     final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final list = jsonDecode(res.body) as List<dynamic>?;
@@ -150,7 +205,7 @@ Future<List<Map<String, dynamic>>?> fetchCustomersFromBackendWithToken(String? t
   try {
     final uri = Uri.parse('$_apiBase/customers');
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (token != null && token.isNotEmpty) headers['Authorization'] = token;
+    if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
     final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final list = jsonDecode(res.body) as List<dynamic>?;
@@ -208,7 +263,7 @@ Future<void> syncBatchesToBackend() async {
     final res = await http
         .post(
           uri,
-          headers: {'Content-Type': 'application/json', 'Authorization': token},
+          headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
           body: jsonEncode({'batches': batchPayloads, 'pallets': palletPayloads}),
         )
         .timeout(const Duration(seconds: 15));
@@ -228,7 +283,7 @@ Future<List<Map<String, dynamic>>?> fetchBatchesFromBackendWithToken(String? tok
   try {
     final uri = Uri.parse('$_apiBase/batches/sync?from=2020-01-01&to=2099-12-31');
     final res = await http
-        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': token})
+        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
@@ -240,11 +295,13 @@ Future<List<Map<String, dynamic>>?> fetchBatchesFromBackendWithToken(String? tok
   }
 }
 
-/// Kontrola či boli na webe zmeny (GET /api/sync/check). Používa [SyncCheckService].
-Future<Map<String, dynamic>?> fetchSyncCheck() async {
+/// Kontrola či boli na webe zmeny (GET /api/sync/check). Vyžaduje [token] – bez neho backend vracia 401.
+Future<Map<String, dynamic>?> fetchSyncCheck({String? token}) async {
   try {
     final uri = Uri.parse('$_apiBase/sync/check');
-    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 8));
     if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
     return map;

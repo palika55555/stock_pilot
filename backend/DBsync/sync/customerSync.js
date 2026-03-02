@@ -1,15 +1,17 @@
 /**
- * Sync zákazníkov z Flutter (SQLite) do PostgreSQL – upsert podľa local_id (Flutter id).
+ * Sync zákazníkov z Flutter (SQLite) do PostgreSQL – upsert podľa local_id (Flutter id), izolované podľa user_id.
  * @param {import('pg').Pool} pool
- * @param {object} body - { customers: Array<{ id, name, ico, email?, address?, city?, postal_code?, dic?, ic_dph?, default_vat_rate?, is_active? }> }
+ * @param {object} body - { customers: Array<{ id, name, ico, ... }> }
+ * @param {number} userId - ID prihláseného používateľa (z tokenu)
  * @returns {Promise<{ ok: boolean, count?: number, error?: string }>}
  */
-async function syncCustomers(pool, body) {
+async function syncCustomers(pool, body, userId) {
   if (!pool) return { ok: false, error: 'Databáza nie je k dispozícii' };
+  if (!userId || userId < 1) return { ok: false, error: 'Chýba user_id (token)' };
   const list = Array.isArray(body?.customers) ? body.customers : [];
   const client = await pool.connect();
   try {
-    await client.query('DELETE FROM customers');
+    await client.query('DELETE FROM customers WHERE user_id = $1', [userId]);
     let count = 0;
     for (const c of list) {
       const localId = c.id != null ? Number(c.id) : null;
@@ -25,9 +27,9 @@ async function syncCustomers(pool, body) {
       const defaultVatRate = c.default_vat_rate != null ? Number(c.default_vat_rate) : 20;
       const isActive = c.is_active !== 0 && c.is_active !== false ? 1 : 0;
       await client.query(
-        `INSERT INTO customers (local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [localId, name, ico, email, address, city, postalCode, dic, icDph, defaultVatRate, isActive]
+        `INSERT INTO customers (user_id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [userId, localId, name, ico, email, address, city, postalCode, dic, icDph, defaultVatRate, isActive]
       );
       count++;
     }

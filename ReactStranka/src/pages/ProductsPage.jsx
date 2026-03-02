@@ -50,34 +50,15 @@ export default function ProductsPage() {
     return () => { cancelled = true }
   }, [auth, search])
 
-  const handleLogout = () => {
-    localStorage.removeItem('stockpilot_auth')
-    navigate('/', { replace: true })
-  }
-
   if (!auth) return null
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">
-            ←
-          </button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
-        </div>
-        <div className="dashboard-user">
-          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Používateľ'}</span>
-          <span className="dashboard-user-role">{auth.user?.role || 'user'}</span>
-          <button type="button" className="btn-logout" onClick={handleLogout}>
-            Odhlásiť sa
-          </button>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content">
       <main className="dashboard-main customers-main">
-        <h2 className="dashboard-overview-title">Produkty</h2>
+        <div className="dashboard-content-header">
+          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">← Späť</button>
+          <h2 className="dashboard-overview-title">Produkty</h2>
+        </div>
 
         <div className="products-search-wrap">
           <input
@@ -125,10 +106,6 @@ export default function ProductsPage() {
           </ul>
         )}
       </main>
-
-      <footer className="dashboard-footer">
-        Stock Pilot &copy; {new Date().getFullYear()}
-      </footer>
     </div>
   )
 }

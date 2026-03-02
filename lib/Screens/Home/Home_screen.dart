@@ -8,6 +8,7 @@ import '../../models/user.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
 import '../../services/sync_check_service.dart';
+import '../../services/sync_service.dart';
 import '../../services/Notifications/notification_service.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 
@@ -37,11 +38,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _refreshNotificationCount();
     WidgetsBinding.instance.addObserver(this);
     SyncCheckService.instance.start();
+    SyncService.startSync(widget.user.id?.toString() ?? '0');
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
       if (!mounted) return;
       _showSyncNeededSnackBar();
     });
-    // Automatická synchronizácia produktov s webom (push na web + pull EAN) – ticho na pozadí
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncProductsWithBackend());
   }
 
@@ -50,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _syncSubscription?.cancel();
     SyncCheckService.instance.stop();
+    SyncService.stopSync();
     super.dispose();
   }
 

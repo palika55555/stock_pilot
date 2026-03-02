@@ -9,6 +9,7 @@ const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
 const { syncCustomers } = require('./DBsync/sync/customerSync');
 const { syncProducts } = require('./DBsync/sync/productSync');
+const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -26,6 +27,11 @@ if (pool) {
 
 // Časová pečiatka zmien zákazníkov (web alebo sync) – Flutter periodicky kontroluje a zobrazí notifikáciu
 let lastCustomersUpdatedAt = 0;
+// Posledná úspešná synchronizácia (akákoľvek sync) – pre dashboard a notifikácie
+let lastSyncAt = 0;
+
+// Po migrácii 009: true ak sú dáta priradené používateľom; false ak treba manuálnu migráciu (viac používateľov)
+let dataIsolationMigrated = true;
 
 function getDbHostname() {
   if (!databaseUrl) return null;
@@ -85,17 +91,25 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Middleware na overenie Bearer tokenu – nepustí nikoho bez platného Authorization headeru
+// Middleware: verify JWT (Bearer <accessToken>) and set req.userId, req.userEmail, req.userRole
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-
-  if (!authHeader || !authHeader.startsWith('Bearer-')) {
-    console.warn(`[security] Nepovolený prístup zablokovaný na: ${req.originalUrl}`);
+  if (!authHeader || typeof authHeader !== 'string') {
     return res.status(401).json({ error: 'Prístup zamietnutý. Vyžaduje sa prihlásenie.' });
   }
-
-  // V budúcne môžeš overovať platnosť tokenu v DB alebo JWT; zatiaľ stačí prítomnosť Bearer- tokenu
-  next();
+  const trimmed = authHeader.trim();
+  // Accept "Bearer <jwt>"
+  if (trimmed.startsWith('Bearer ')) {
+    const token = trimmed.slice(7).trim();
+    const decoded = verifyAccessToken(token);
+    if (decoded) {
+      req.userId = decoded.userId;
+      req.userEmail = decoded.email;
+      req.userRole = decoded.role;
+      return next();
+    }
+  }
+  return res.status(401).json({ error: 'Neplatný alebo expirovaný token.' });
 };
 
 // API router – všetky endpointy sú pod /api/:API_PATH_PREFIX/ (napr. /api/sp-9f2a4e1b/auth/login)
@@ -104,11 +118,18 @@ const apiRouter = express.Router();
 // Preflight (OPTIONS) neposiela Authorization – musí prejsť, aby prehliadač potom poslal skutočný request
 apiRouter.options('*', (req, res) => res.sendStatus(204));
 
-// Všetko okrem /auth/* vyžaduje token
+// Všetko okrem /auth/login, /auth/refresh, /auth/sync-user vyžaduje JWT
 apiRouter.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
+  if (req.path === '/auth/login' || req.path === '/auth/refresh' || req.path === '/auth/sync-user') return next();
   if (req.path.startsWith('/auth')) return next();
   authenticateToken(req, res, next);
+});
+
+// Header pre klienta: X-Data-Isolation-Warning: true ak treba manuálnu migráciu
+apiRouter.use((req, res, next) => {
+  res.setHeader('X-Data-Isolation-Warning', dataIsolationMigrated ? 'false' : 'true');
+  next();
 });
 
 // Uptime od štartu procesu (sekundy)
@@ -187,9 +208,9 @@ app.get('/health/db-tables', async (req, res) => {
   }
 });
 
-// --- API: Auth (rovnaká logika ako Flutter login_page – username + password z DB) ---
+// --- API: Auth – JWT (access 24h, refresh 30d; rememberMe => access 7d) ---
 apiRouter.post('/auth/login', async (req, res) => {
-  const { username, password } = req.body || {};
+  const { username, password, rememberMe } = req.body || {};
   if (!username || !password) {
     return res.status(401).json({
       success: false,
@@ -216,11 +237,16 @@ apiRouter.post('/auth/login', async (req, res) => {
         error: 'Nesprávny login alebo heslo',
       });
     }
-    const token = `Bearer-${Buffer.from(String(user.id)).toString('base64')}-${Date.now()}`;
+    const tokens = signTokens(
+      { userId: user.id, email: user.email || '', role: user.role || 'user' },
+      !!rememberMe
+    );
     console.log('[auth] Login OK:', user.username);
     res.status(200).json({
       success: true,
-      token,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.accessExpiresIn,
       user: {
         id: user.id,
         username: user.username,
@@ -238,6 +264,44 @@ apiRouter.post('/auth/login', async (req, res) => {
   }
 });
 
+// --- Refresh access token using refresh token (body: { refreshToken }) ---
+apiRouter.post('/auth/refresh', async (req, res) => {
+  const { refreshToken } = req.body || {};
+  if (!refreshToken) {
+    return res.status(401).json({ success: false, error: 'Chýba refresh token.' });
+  }
+  const decoded = verifyRefreshToken(refreshToken);
+  if (!decoded) {
+    return res.status(401).json({ success: false, error: 'Neplatný alebo expirovaný refresh token.' });
+  }
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, email, role FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ success: false, error: 'Používateľ neexistuje.' });
+    }
+    const u = rows[0];
+    const tokens = signTokens(
+      { userId: u.id, email: u.email || '', role: u.role || 'user' },
+      false
+    );
+    res.status(200).json({
+      success: true,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.accessExpiresIn,
+    });
+  } catch (err) {
+    console.error('[auth] Refresh error:', err.message);
+    res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
 // --- Sync používateľa z Flutter (SQLite) do PostgreSQL – služba v DBsync/sync ---
 apiRouter.post('/auth/sync-user', async (req, res) => {
   if (!pool || !poolReady) {
@@ -252,7 +316,7 @@ apiRouter.post('/auth/sync-user', async (req, res) => {
   res.status(200).json({ success: true, message: 'Používateľ zosynchronizovaný' });
 });
 
-// --- API: Stocks (PostgreSQL) ---
+// --- API: Stocks (PostgreSQL) – per user ---
 apiRouter.get('/stocks', async (req, res) => {
   if (!pool || !poolReady) {
     console.error('[GET /api/stocks] Database not available');
@@ -260,7 +324,8 @@ apiRouter.get('/stocks', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      'SELECT id, symbol, price, created_at FROM stocks ORDER BY created_at DESC'
+      'SELECT id, symbol, price, created_at FROM stocks WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.userId]
     );
     console.log('[GET /api/stocks] returned', rows.length, 'rows');
     res.json(rows);
@@ -290,8 +355,8 @@ apiRouter.post('/stocks', async (req, res) => {
     const {
       rows: [row],
     } = await pool.query(
-      'INSERT INTO stocks (symbol, price) VALUES ($1, $2) RETURNING id, symbol, price, created_at',
-      [symbol.toString().trim(), priceNum]
+      'INSERT INTO stocks (user_id, symbol, price) VALUES ($1, $2, $3) RETURNING id, symbol, price, created_at',
+      [req.userId, symbol.toString().trim(), priceNum]
     );
     console.log('[POST /api/stocks] created id=', row?.id, 'symbol=', row?.symbol);
     res.status(201).json(row);
@@ -301,41 +366,44 @@ apiRouter.post('/stocks', async (req, res) => {
   }
 });
 
-// --- Sync produktov z Flutter do PostgreSQL (DBsync/sync) ---
+// --- Sync produktov z Flutter do PostgreSQL (DBsync/sync) – per user ---
 apiRouter.post('/sync/products', async (req, res) => {
   const received = Array.isArray(req.body?.products) ? req.body.products.length : 0;
   console.log('[sync] Products request received:', received, 'items');
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncProducts(pool, req.body);
+  const result = await syncProducts(pool, req.body, req.userId);
   if (!result.ok) {
     console.error('[sync] Products failed:', result.error);
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
+  lastSyncAt = Date.now();
   console.log('[sync] Products OK, saved:', result.count);
   res.status(200).json({ success: true, count: result.count });
 });
 
-// --- Sync zákazníkov z Flutter do PostgreSQL (DBsync/sync) ---
+// --- Sync zákazníkov z Flutter do PostgreSQL (DBsync/sync) – per user ---
 apiRouter.post('/sync/customers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncCustomers(pool, req.body);
+  const result = await syncCustomers(pool, req.body, req.userId);
   if (!result.ok) {
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
   lastCustomersUpdatedAt = Date.now();
+  lastSyncAt = Date.now();
   console.log('[sync] Customers OK:', result.count);
   res.status(200).json({ success: true, count: result.count });
 });
 
-// --- Sync šarží a paliet z Flutter do PostgreSQL (SELECT + UPDATE/INSERT, žiadne ON CONFLICT) ---
+// --- Sync šarží a paliet z Flutter do PostgreSQL – per user ---
 apiRouter.post('/sync/batches', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
+  const userId = req.userId;
   const batches = Array.isArray(req.body?.batches) ? req.body.batches : [];
   const pallets = Array.isArray(req.body?.pallets) ? req.body.pallets : [];
   const client = await pool.connect();
@@ -351,7 +419,7 @@ apiRouter.post('/sync/batches', async (req, res) => {
       const createdAt = b.created_at || null;
       const costTotal = b.cost_total != null ? parseFloat(b.cost_total) : null;
       const revenueTotal = b.revenue_total != null ? parseFloat(b.revenue_total) : null;
-      const existing = await client.query('SELECT id FROM production_batches WHERE local_id = $1', [localId]);
+      const existing = await client.query('SELECT id FROM production_batches WHERE user_id = $1 AND local_id = $2', [userId, localId]);
       let backendBatchId;
       if (existing.rows.length > 0) {
         backendBatchId = existing.rows[0].id;
@@ -361,8 +429,8 @@ apiRouter.post('/sync/batches', async (req, res) => {
         );
       } else {
         const ins = await client.query(
-          `INSERT INTO production_batches (local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total) VALUES ($1, $2, $3, $4, $5, $6::timestamp, $7, $8) RETURNING id`,
-          [localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal]
+          `INSERT INTO production_batches (user_id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, $8, $9) RETURNING id`,
+          [userId, localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal]
         );
         backendBatchId = ins.rows[0]?.id;
       }
@@ -391,22 +459,23 @@ apiRouter.post('/sync/batches', async (req, res) => {
       const status = (p.status || 'Na sklade').toString().trim();
       let backendCustomerId = null;
       if (p.customer_id != null) {
-        const cust = await client.query('SELECT id FROM customers WHERE local_id = $1', [Number(p.customer_id)]);
+        const cust = await client.query('SELECT id FROM customers WHERE user_id = $1 AND local_id = $2', [userId, Number(p.customer_id)]);
         if (cust.rows[0]) backendCustomerId = cust.rows[0].id;
       }
-      const existingPallet = await client.query('SELECT id FROM pallets WHERE local_id = $1', [localId]);
+      const existingPallet = await client.query('SELECT id FROM pallets WHERE user_id = $1 AND local_id = $2', [userId, localId]);
       if (existingPallet.rows.length > 0) {
         await client.query(
-          `UPDATE pallets SET batch_id = $1, product_type = $2, quantity = $3, customer_id = $4, status = $5 WHERE local_id = $6`,
-          [backendBatchId, productType, quantity, backendCustomerId, status, localId]
+          `UPDATE pallets SET batch_id = $1, product_type = $2, quantity = $3, customer_id = $4, status = $5 WHERE user_id = $6 AND local_id = $7`,
+          [backendBatchId, productType, quantity, backendCustomerId, status, userId, localId]
         );
       } else {
         await client.query(
-          `INSERT INTO pallets (local_id, batch_id, product_type, quantity, customer_id, status) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [localId, backendBatchId, productType, quantity, backendCustomerId, status]
+          `INSERT INTO pallets (user_id, local_id, batch_id, product_type, quantity, customer_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [userId, localId, backendBatchId, productType, quantity, backendCustomerId, status]
         );
       }
     }
+    lastSyncAt = Date.now();
     console.log('[sync] Batches OK:', batches.length);
     res.status(200).json({ success: true, count: batches.length });
   } catch (err) {
@@ -417,7 +486,7 @@ apiRouter.post('/sync/batches', async (req, res) => {
   }
 });
 
-// --- API: Zákazníci (zoznam a detail) ---
+// --- API: Zákazníci (zoznam a detail) – per user ---
 apiRouter.get('/customers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
@@ -425,7 +494,8 @@ apiRouter.get('/customers', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
-       FROM customers ORDER BY name ASC`
+       FROM customers WHERE user_id = $1 ORDER BY name ASC`,
+      [req.userId]
     );
     res.json(rows);
   } catch (err) {
@@ -445,8 +515,8 @@ apiRouter.get('/customers/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
-       FROM customers WHERE id = $1`,
-      [id]
+       FROM customers WHERE user_id = $1 AND id = $2`,
+      [req.userId, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Zákazník nebol nájdený' });
@@ -477,7 +547,7 @@ apiRouter.put('/customers/:id', async (req, res) => {
       `UPDATE customers SET
         name = $1, ico = $2, email = $3, address = $4, city = $5, postal_code = $6,
         dic = $7, ic_dph = $8, default_vat_rate = $9, is_active = $10
-       WHERE id = $11`,
+       WHERE user_id = $11 AND id = $12`,
       [
         nameVal,
         icoVal,
@@ -489,6 +559,7 @@ apiRouter.put('/customers/:id', async (req, res) => {
         ic_dph != null ? String(ic_dph).trim() || null : null,
         default_vat_rate != null ? parseInt(default_vat_rate, 10) : 20,
         is_active !== undefined && is_active !== null ? (is_active ? 1 : 0) : 1,
+        req.userId,
         id,
       ]
     );
@@ -496,8 +567,8 @@ apiRouter.put('/customers/:id', async (req, res) => {
       return res.status(404).json({ error: 'Zákazník nebol nájdený' });
     }
     const { rows } = await pool.query(
-      'SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active FROM customers WHERE id = $1',
-      [id]
+      'SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active FROM customers WHERE user_id = $1 AND id = $2',
+      [req.userId, id]
     );
     lastCustomersUpdatedAt = Date.now();
     res.json(rows[0]);
@@ -509,10 +580,13 @@ apiRouter.put('/customers/:id', async (req, res) => {
 
 // --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
 apiRouter.get('/sync/check', (_req, res) => {
-  res.json({ customers_updated_at: lastCustomersUpdatedAt });
+  res.json({
+    customers_updated_at: lastCustomersUpdatedAt,
+    last_sync_at: lastSyncAt,
+  });
 });
 
-// --- API: Produkty (pre webové skenovanie a priradenie EAN) ---
+// --- API: Produkty (pre webové skenovanie a priradenie EAN) – per user ---
 apiRouter.get('/products/by-barcode', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
@@ -525,10 +599,10 @@ apiRouter.get('/products/by-barcode', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
        FROM products
-       WHERE (ean IS NOT NULL AND ean = $1) OR plu = $1
+       WHERE user_id = $1 AND ((ean IS NOT NULL AND ean = $2) OR plu = $2)
        GROUP BY unique_id, name, plu, ean, unit
        LIMIT 1`,
-      [code]
+      [req.userId, code]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený', code });
@@ -547,12 +621,12 @@ apiRouter.get('/products', async (req, res) => {
   const search = (req.query.search ?? '').toString().trim().toLowerCase();
   try {
     let query = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
-      FROM products GROUP BY unique_id, name, plu, ean, unit`;
-    const params = [];
+      FROM products WHERE user_id = $1 GROUP BY unique_id, name, plu, ean, unit`;
+    const params = [req.userId];
     if (search) {
       params.push(`%${search}%`);
       query = `SELECT * FROM (${query}) AS agg
-        WHERE LOWER(name) LIKE $1 OR plu LIKE $1 OR (ean IS NOT NULL AND LOWER(ean) LIKE $1)`;
+        WHERE LOWER(name) LIKE $2 OR plu LIKE $2 OR (ean IS NOT NULL AND LOWER(ean) LIKE $2)`;
     }
     query += ' ORDER BY name ASC LIMIT 200';
     const { rows } = await pool.query(query, params);
@@ -574,9 +648,9 @@ apiRouter.get('/products/:uniqueId', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
-       FROM products WHERE unique_id = $1
+       FROM products WHERE user_id = $1 AND unique_id = $2
        GROUP BY unique_id, name, plu, ean, unit`,
-      [uniqueId]
+      [req.userId, uniqueId]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený' });
@@ -600,15 +674,15 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
   const eanVal = ean != null ? String(ean).trim() || null : null;
   try {
     const { rowCount } = await pool.query(
-      'UPDATE products SET ean = $1 WHERE unique_id = $2',
-      [eanVal, uniqueId]
+      'UPDATE products SET ean = $1 WHERE user_id = $2 AND unique_id = $3',
+      [eanVal, req.userId, uniqueId]
     );
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený' });
     }
     const { rows } = await pool.query(
-      'SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE unique_id = $1 GROUP BY unique_id, name, plu, ean, unit',
-      [uniqueId]
+      'SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE user_id = $1 AND unique_id = $2 GROUP BY unique_id, name, plu, ean, unit',
+      [req.userId, uniqueId]
     );
     res.json(rows[0] || { unique_id: uniqueId, ean: eanVal });
   } catch (err) {
@@ -617,8 +691,7 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
   }
 });
 
-// --- API: Výroba – šarže a palety ---
-// Pre synchronizáciu do aplikácie: vráti všetky šarže s receptami a paletami (ako zákazníci – app nahradí lokálne dáta).
+// --- API: Výroba – šarže a palety – per user ---
 apiRouter.get('/batches/sync', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const from = (req.query.from || '2020-01-01').toString().trim();
@@ -626,8 +699,8 @@ apiRouter.get('/batches/sync', async (req, res) => {
   try {
     const batchRows = await pool.query(
       `SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total
-       FROM production_batches WHERE production_date >= $1 AND production_date <= $2 ORDER BY production_date DESC, created_at DESC`,
-      [from, to]
+       FROM production_batches WHERE user_id = $1 AND production_date >= $2 AND production_date <= $3 ORDER BY production_date DESC, created_at DESC`,
+      [req.userId, from, to]
     );
     const batches = [];
     for (const b of batchRows.rows) {
@@ -671,17 +744,19 @@ apiRouter.get('/batches', async (req, res) => {
   const date = (req.query.date || '').toString().trim();
   const from = (req.query.from || '').toString().trim();
   const to = (req.query.to || '').toString().trim();
+  const limit = Math.min(parseInt(req.query.limit, 10) || 0, 200);
   try {
-    let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches';
-    const params = [];
+    let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1';
+    const params = [req.userId];
     if (date) {
-      query += ' WHERE production_date = $1';
+      query += ' AND production_date = $2';
       params.push(date);
     } else if (from && to) {
-      query += ' WHERE production_date >= $1 AND production_date <= $2';
+      query += ' AND production_date >= $2 AND production_date <= $3';
       params.push(from, to);
     }
     query += ' ORDER BY production_date DESC, created_at DESC';
+    if (limit > 0) query += ` LIMIT ${limit}`;
     const { rows } = await pool.query(query, params);
     res.json(rows.map((r) => ({
       id: r.id,
@@ -711,9 +786,10 @@ apiRouter.post('/batches', async (req, res) => {
   const qty = parseInt(quantity_produced, 10) || 0;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO production_batches (production_date, product_type, quantity_produced, notes, cost_total, revenue_total)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total`,
+      `INSERT INTO production_batches (user_id, production_date, product_type, quantity_produced, notes, cost_total, revenue_total)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total`,
       [
+        req.userId,
         dateVal,
         typeVal,
         qty,
@@ -757,8 +833,8 @@ apiRouter.get('/batches/by-local/:localId', async (req, res) => {
   if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE local_id = $1',
-      [localId]
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND local_id = $2',
+      [req.userId, localId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const r = rows[0];
@@ -784,8 +860,8 @@ apiRouter.get('/batches/:id', async (req, res) => {
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE id = $1',
-      [id]
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND id = $2',
+      [req.userId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const r = rows[0];
@@ -811,8 +887,8 @@ apiRouter.get('/batches/:id/recipe', async (req, res) => {
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, batch_id, material_name, quantity, unit FROM production_batch_recipe WHERE batch_id = $1 ORDER BY id ASC',
-      [id]
+      'SELECT r.id, r.batch_id, r.material_name, r.quantity, r.unit FROM production_batch_recipe r INNER JOIN production_batches b ON b.id = r.batch_id WHERE b.user_id = $1 AND r.batch_id = $2 ORDER BY r.id ASC',
+      [req.userId, id]
     );
     res.json(rows.map((r) => ({ id: r.id, batch_id: r.batch_id, material_name: r.material_name, quantity: Number(r.quantity), unit: r.unit || 'kg' })));
   } catch (err) {
@@ -827,8 +903,8 @@ apiRouter.get('/batches/:id/pallets', async (req, res) => {
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE batch_id = $1 ORDER BY id ASC',
-      [id]
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND batch_id = $2 ORDER BY id ASC',
+      [req.userId, id]
     );
     res.json(
       rows.map((r) => ({
@@ -859,8 +935,8 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
   }
   try {
     const batchRes = await pool.query(
-      'SELECT id, product_type, quantity_produced FROM production_batches WHERE id = $1',
-      [batchId]
+      'SELECT id, product_type, quantity_produced FROM production_batches WHERE user_id = $1 AND id = $2',
+      [req.userId, batchId]
     );
     if (batchRes.rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const batch = batchRes.rows[0];
@@ -871,8 +947,8 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
     const created = [];
     for (let i = 0; i < count; i++) {
       const { rows } = await pool.query(
-        `INSERT INTO pallets (batch_id, product_type, quantity, status) VALUES ($1, $2, $3, 'Na sklade') RETURNING id, batch_id, product_type, quantity, status, created_at`,
-        [batchId, batch.product_type, qty]
+        `INSERT INTO pallets (user_id, batch_id, product_type, quantity, status) VALUES ($1, $2, $3, $4, 'Na sklade') RETURNING id, batch_id, product_type, quantity, status, created_at`,
+        [req.userId, batchId, batch.product_type, qty]
       );
       if (rows[0]) created.push(rows[0]);
     }
@@ -899,8 +975,8 @@ apiRouter.get('/pallets/by-local/:localId', async (req, res) => {
   if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE local_id = $1',
-      [localId]
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND local_id = $2',
+      [req.userId, localId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     const r = rows[0];
@@ -925,8 +1001,8 @@ apiRouter.get('/pallets/:id', async (req, res) => {
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
     const { rows } = await pool.query(
-      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE id = $1',
-      [id]
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND id = $2',
+      [req.userId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     const r = rows[0];
@@ -953,16 +1029,16 @@ apiRouter.put('/pallets/:id/assign', async (req, res) => {
     return res.status(400).json({ error: 'customer_id je povinný' });
   }
   try {
-    const palletRes = await pool.query('SELECT id, status FROM pallets WHERE id = $1', [palletId]);
+    const palletRes = await pool.query('SELECT id, status FROM pallets WHERE user_id = $1 AND id = $2', [req.userId, palletId]);
     if (palletRes.rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     if (palletRes.rows[0].status === 'U zákazníka') {
       return res.status(400).json({ error: 'Paleta je už priradená zákazníkovi' });
     }
-    const custRes = await pool.query('SELECT id, pallet_balance FROM customers WHERE id = $1', [customerId]);
+    const custRes = await pool.query('SELECT id, pallet_balance FROM customers WHERE user_id = $1 AND id = $2', [req.userId, customerId]);
     if (custRes.rows.length === 0) return res.status(404).json({ error: 'Zákazník nebol nájdený' });
-    await pool.query("UPDATE pallets SET customer_id = $1, status = 'U zákazníka' WHERE id = $2", [customerId, palletId]);
+    await pool.query("UPDATE pallets SET customer_id = $1, status = 'U zákazníka' WHERE user_id = $2 AND id = $3", [customerId, req.userId, palletId]);
     const newBalance = (Number(custRes.rows[0].pallet_balance) || 0) + 1;
-    await pool.query('UPDATE customers SET pallet_balance = $1 WHERE id = $2', [newBalance, customerId]);
+    await pool.query('UPDATE customers SET pallet_balance = $1 WHERE user_id = $2 AND id = $3', [newBalance, req.userId, customerId]);
     res.json({ success: true, message: 'Paleta priradená zákazníkovi' });
   } catch (err) {
     console.error('[PUT /api/pallets/:id/assign]', err.message);
@@ -970,7 +1046,7 @@ apiRouter.put('/pallets/:id/assign', async (req, res) => {
   }
 });
 
-// --- API: Dashboard štatistiky – čítanie z PostgreSQL (customers už sync, zvyšok 0 kým nie sú tabuľky) ---
+// --- API: Dashboard štatistiky – per user ---
 apiRouter.get('/dashboard/stats', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
@@ -978,19 +1054,37 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   try {
     let customers = 0;
     let products = 0;
+    let lowStockCount = 0;
     try {
-      const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers');
+      const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers WHERE user_id = $1', [req.userId]);
       customers = r.rows[0]?.count ?? 0;
     } catch (_) {}
     try {
-      const r = await pool.query('SELECT COUNT(DISTINCT unique_id)::int AS count FROM products');
+      const r = await pool.query('SELECT COUNT(DISTINCT unique_id)::int AS count FROM products WHERE user_id = $1', [req.userId]);
       products = r.rows[0]?.count ?? 0;
     } catch (_) {}
+    try {
+      const r = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM (
+          SELECT unique_id FROM products WHERE user_id = $1 GROUP BY unique_id HAVING SUM(qty) < 5
+        ) AS low`,
+        [req.userId]
+      );
+      lowStockCount = r.rows[0]?.count ?? 0;
+    } catch (_) {}
     const stats = {
-      products,
-      orders: 0,
-      customers,
+      products_count: products,
+      products: products,
+      customers_count: customers,
+      customers: customers,
+      total_sales: 0,
       revenue: 0,
+      low_stock_count: lowStockCount,
+      products_trend_week: 0,
+      customers_trend_week: 0,
+      sales_trend_week: 0,
+      last_sync_at: lastSyncAt,
+      orders: 0,
       inboundCount: 0,
       outboundCount: 0,
       quotesCount: 0,
@@ -1001,6 +1095,43 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   } catch (err) {
     console.error('[GET /api/dashboard/stats]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Admin: manuálne priradenie záznamov používateľovi (ak bolo viac používateľov pred migráciou) ---
+apiRouter.post('/admin/migrate-user-data', async (req, res) => {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Len administrátor.' });
+  }
+  const { recordType, recordIds, targetUserId, markComplete } = req.body || {};
+  if (!recordType || !Array.isArray(recordIds) || recordIds.length === 0 || !targetUserId) {
+    return res.status(400).json({ error: 'recordType, recordIds (pole), targetUserId sú povinné' });
+  }
+  const doMarkComplete = markComplete === true;
+  const targetId = parseInt(targetUserId, 10);
+  if (Number.isNaN(targetId) || targetId < 1) {
+    return res.status(400).json({ error: 'Neplatné targetUserId' });
+  }
+  const tables = { customers: 'customers', products: 'products', production_batches: 'production_batches', pallets: 'pallets', stocks: 'stocks' };
+  const table = tables[recordType];
+  if (!table) {
+    return res.status(400).json({ error: 'recordType musí byť: customers, products, production_batches, pallets, stocks' });
+  }
+  try {
+    const ids = recordIds.map((id) => parseInt(id, 10)).filter((id) => !Number.isNaN(id) && id > 0);
+    if (ids.length === 0) return res.status(400).json({ error: 'Žiadne platné recordIds' });
+    const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+    const q = `UPDATE ${table} SET user_id = $1 WHERE id IN (${placeholders})`;
+    await pool.query(q, [targetId, ...ids]);
+    if (doMarkComplete) {
+      await pool.query("UPDATE app_settings SET value = 'true' WHERE key = 'data_isolation_migrated'");
+      dataIsolationMigrated = true;
+      console.log('[admin] data_isolation_migrated set to true');
+    }
+    res.json({ success: true, updated: ids.length });
+  } catch (err) {
+    console.error('[admin/migrate-user-data]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1046,6 +1177,13 @@ async function start() {
       const { run } = await runMigrations(pool);
       poolReady = true;
       if (run > 0) console.log('[start] Migrácie spustené:', run);
+      try {
+        const r = await pool.query("SELECT value FROM app_settings WHERE key = 'data_isolation_migrated'");
+        dataIsolationMigrated = r.rows[0]?.value === 'true';
+        if (!dataIsolationMigrated) console.warn('[start] data_isolation_migrated = false – manuálna migrácia môže byť potrebná');
+      } catch (_) {
+        dataIsolationMigrated = true;
+      }
       break;
     } catch (err) {
       console.error('[start] DB / migrácie:', err.message);

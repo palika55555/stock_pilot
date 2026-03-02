@@ -30,6 +30,19 @@ class DatabaseService {
   static Future<Database>? _dbFuture;
   static String? _customPath;
 
+  /// Current user identifier (e.g. username) – all reads/writes filter by this. Set on login, cleared on logout.
+  static String? _currentUserId;
+
+  static String? get currentUserId => _currentUserId;
+
+  static void setCurrentUser(String? userId) {
+    _currentUserId = userId;
+  }
+
+  static void clearCurrentUser() {
+    _currentUserId = null;
+  }
+
   factory DatabaseService() => _instance;
 
   DatabaseService._internal();
@@ -38,6 +51,46 @@ class DatabaseService {
     _customPath = path;
     _database = null;
     _dbFuture = null;
+  }
+
+  /// Where clause and args for current user (for SELECT/UPDATE/DELETE). When no user set, returns (null, null) – callers should handle.
+  static String? get _userWhere => _currentUserId != null ? 'user_id = ?' : null;
+  static List<dynamic>? get _userArgs => _currentUserId != null ? [_currentUserId] : null;
+
+  /// Vymaže všetky lokálne dáta aktuálne prihláseného používateľa. Volaj pred clearCurrentUser() pri odhlásení.
+  Future<void> clearCurrentUserData() async {
+    final uid = _currentUserId;
+    if (uid == null) return;
+    final db = await database;
+    const tables = [
+      'notification_preferences',
+      'notification_settings',
+      'app_notifications',
+      'suppliers',
+      'receptura_polozky',
+      'recipe_ingredients',
+      'recipes',
+      'production_orders',
+      'transports',
+      'warehouse_transfers',
+      'stock_movements',
+      'stock_out_items',
+      'stock_outs',
+      'pallets',
+      'production_batch_recipe',
+      'production_batches',
+      'quote_items',
+      'quotes',
+      'inbound_receipt_items',
+      'inbound_receipts',
+      'customers',
+      'products',
+    ];
+    for (final table in tables) {
+      try {
+        await db.delete(table, where: 'user_id = ?', whereArgs: [uid]);
+      } catch (_) {}
+    }
   }
 
   Future<String> getDefaultDatabasePath() async {
@@ -63,7 +116,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 29,
+      version: 30,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -1112,6 +1165,46 @@ class DatabaseService {
         await db.execute('ALTER TABLE inbound_receipts ADD COLUMN stock_applied INTEGER NOT NULL DEFAULT 0');
       }
     }
+
+    // Version 30: per-user data isolation – add user_id to all data tables
+    if (oldVersion < 30) {
+      const dataTables = [
+        'customers',
+        'products',
+        'inbound_receipts',
+        'quotes',
+        'quote_items',
+        'production_batches',
+        'production_batch_recipe',
+        'pallets',
+        'stock_outs',
+        'stock_out_items',
+        'stock_movements',
+        'warehouse_transfers',
+        'transports',
+        'production_orders',
+        'recipes',
+        'recipe_ingredients',
+        'receptura_polozky',
+        'suppliers',
+        'app_notifications',
+        'notification_settings',
+        'notification_preferences',
+      ];
+      for (final table in dataTables) {
+        try {
+          final info = await db.rawQuery('PRAGMA table_info($table)');
+          if (!info.any((c) => c['name'] == 'user_id')) {
+            await db.execute('ALTER TABLE $table ADD COLUMN user_id TEXT');
+            await db.execute(
+              'UPDATE $table SET user_id = (SELECT username FROM users LIMIT 1) WHERE user_id IS NULL',
+            );
+          }
+        } catch (e) {
+          // Table might not exist in older DBs
+        }
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -1393,23 +1486,25 @@ class DatabaseService {
   // CRUD Operations for Products
   Future<int> insertProduct(Product product) async {
     Database db = await database;
-    return await db.insert('products', product.toMap());
+    final map = Map<String, dynamic>.from(product.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('products', map);
   }
 
   Future<List<Product>> getProducts() async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('products');
-    return List.generate(maps.length, (i) {
-      return Product.fromMap(maps[i]);
-    });
+    if (_currentUserId == null) return [];
+    final List<Map<String, dynamic>> maps = await db.query('products', where: _userWhere, whereArgs: _userArgs);
+    return List.generate(maps.length, (i) => Product.fromMap(maps[i]));
   }
 
   Future<Product?> getProductByUniqueId(String uniqueId) async {
     Database db = await database;
+    if (_currentUserId == null) return null;
     final List<Map<String, dynamic>> maps = await db.query(
       'products',
-      where: 'unique_id = ?',
-      whereArgs: [uniqueId],
+      where: 'unique_id = ? AND user_id = ?',
+      whereArgs: [uniqueId, _currentUserId],
     );
     if (maps.isEmpty) return null;
     return Product.fromMap(maps.first);
@@ -1417,12 +1512,12 @@ class DatabaseService {
 
   /// Vyhľadá produkt podľa EAN kódu (čiarový kód).
   Future<Product?> getProductByEan(String ean) async {
-    if (ean.isEmpty) return null;
+    if (ean.isEmpty || _currentUserId == null) return null;
     Database db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       'products',
-      where: 'ean = ?',
-      whereArgs: [ean.trim()],
+      where: 'ean = ? AND user_id = ?',
+      whereArgs: [ean.trim(), _currentUserId],
     );
     if (maps.isEmpty) return null;
     return Product.fromMap(maps.first);
@@ -1441,17 +1536,19 @@ class DatabaseService {
 
   Future<int> updateProduct(Product product) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.update(
       'products',
       product.toMap(),
-      where: 'unique_id = ?',
-      whereArgs: [product.uniqueId],
+      where: 'unique_id = ? AND user_id = ?',
+      whereArgs: [product.uniqueId, _currentUserId],
     );
   }
 
   Future<int> deleteProduct(String id) async {
     Database db = await database;
-    return await db.delete('products', where: 'unique_id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    return await db.delete('products', where: 'unique_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   /// Aktualizuje EAN lokálnych produktov podľa zoznamu z backendu (EAN priradené na webe).
@@ -1475,94 +1572,105 @@ class DatabaseService {
   // Receptúra – zložky (suroviny) receptúry
   Future<List<RecepturaPolozka>> getRecepturaPolozky(String recepturaKartaId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'receptura_polozky',
-      where: 'receptura_karta_id = ?',
-      whereArgs: [recepturaKartaId],
+      where: 'receptura_karta_id = ? AND user_id = ?',
+      whereArgs: [recepturaKartaId, _currentUserId],
     );
     return maps.map((m) => RecepturaPolozka.fromMap(m)).toList();
   }
 
   Future<int> insertRecepturaPolozka(RecepturaPolozka polozka, String recepturaKartaId) async {
     Database db = await database;
-    return await db.insert(
-      'receptura_polozky',
-      polozka.toMap(recepturaKartaId: recepturaKartaId),
-    );
+    final map = Map<String, dynamic>.from(polozka.toMap(recepturaKartaId: recepturaKartaId));
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('receptura_polozky', map);
   }
 
   Future<int> deleteRecepturaPolozkyByRecepturaKartaId(String recepturaKartaId) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.delete(
       'receptura_polozky',
-      where: 'receptura_karta_id = ?',
-      whereArgs: [recepturaKartaId],
+      where: 'receptura_karta_id = ? AND user_id = ?',
+      whereArgs: [recepturaKartaId, _currentUserId],
     );
   }
 
   // Recipes (Receptúry)
   Future<int> insertRecipe(Recipe recipe) async {
     Database db = await database;
-    return await db.insert('recipes', recipe.toMap());
+    final map = Map<String, dynamic>.from(recipe.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('recipes', map);
   }
 
   Future<int> updateRecipe(Recipe recipe) async {
-    if (recipe.id == null) return 0;
+    if (recipe.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('recipes', recipe.toMap(), where: 'id = ?', whereArgs: [recipe.id]);
+    return await db.update('recipes', recipe.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [recipe.id, _currentUserId]);
   }
 
   Future<List<Recipe>> getRecipes({bool? activeOnly, String? search}) async {
     Database db = await database;
-    String? where;
-    List<Object?>? whereArgs;
+    if (_currentUserId == null) return [];
+    final conditions = <String>['user_id = ?'];
+    final args = <Object?>[_currentUserId];
     if (activeOnly == true) {
-      where = 'is_active = 1';
-      whereArgs = null;
+      conditions.add('is_active = 1');
     }
     if (search != null && search.trim().isNotEmpty) {
       final term = '%${search.trim()}%';
-      where = where != null ? '$where AND (name LIKE ? OR finished_product_name LIKE ?)' : '(name LIKE ? OR finished_product_name LIKE ?)';
-      whereArgs = whereArgs != null ? [...whereArgs, term, term] : [term, term];
+      conditions.add('(name LIKE ? OR finished_product_name LIKE ?)');
+      args.addAll([term, term]);
     }
-    final maps = await db.query('recipes', where: where, whereArgs: whereArgs, orderBy: 'name ASC');
+    final maps = await db.query('recipes', where: conditions.join(' AND '), whereArgs: args, orderBy: 'name ASC');
     return maps.map((m) => Recipe.fromMap(m)).toList();
   }
 
   Future<Recipe?> getRecipeById(int id) async {
     Database db = await database;
-    final maps = await db.query('recipes', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('recipes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Recipe.fromMap(maps.first);
   }
 
   Future<int> deleteRecipe(int id) async {
     Database db = await database;
-    await db.delete('recipe_ingredients', where: 'recipe_id = ?', whereArgs: [id]);
-    return await db.delete('recipes', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    await db.delete('recipe_ingredients', where: 'recipe_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    return await db.delete('recipes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   Future<List<RecipeIngredient>> getRecipeIngredients(int recipeId) async {
     Database db = await database;
-    final maps = await db.query('recipe_ingredients', where: 'recipe_id = ?', whereArgs: [recipeId], orderBy: 'id ASC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('recipe_ingredients', where: 'recipe_id = ? AND user_id = ?', whereArgs: [recipeId, _currentUserId], orderBy: 'id ASC');
     return maps.map((m) => RecipeIngredient.fromMap(m)).toList();
   }
 
   Future<int> insertRecipeIngredient(RecipeIngredient ing) async {
     Database db = await database;
-    return await db.insert('recipe_ingredients', ing.toMap());
+    final map = Map<String, dynamic>.from(ing.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('recipe_ingredients', map);
   }
 
   Future<void> deleteRecipeIngredientsByRecipeId(int recipeId) async {
     Database db = await database;
-    await db.delete('recipe_ingredients', where: 'recipe_id = ?', whereArgs: [recipeId]);
+    if (_currentUserId == null) return;
+    await db.delete('recipe_ingredients', where: 'recipe_id = ? AND user_id = ?', whereArgs: [recipeId, _currentUserId]);
   }
 
   Future<String> getNextProductionOrderNumber() async {
     Database db = await database;
+    if (_currentUserId == null) return 'VP-${DateTime.now().year}-0001';
     final year = DateTime.now().year;
     final maps = await db.rawQuery(
-      "SELECT order_number FROM production_orders WHERE order_number LIKE 'VP-$year-%' ORDER BY id DESC LIMIT 1",
+      "SELECT order_number FROM production_orders WHERE user_id = ? AND order_number LIKE 'VP-$year-%' ORDER BY id DESC LIMIT 1",
+      [_currentUserId],
     );
     if (maps.isEmpty) return 'VP-$year-0001';
     final last = maps.first['order_number'] as String? ?? '';
@@ -1574,13 +1682,15 @@ class DatabaseService {
 
   Future<int> insertProductionOrder(ProductionOrder order) async {
     Database db = await database;
-    return await db.insert('production_orders', order.toMap());
+    final map = Map<String, dynamic>.from(order.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('production_orders', map);
   }
 
   Future<int> updateProductionOrder(ProductionOrder order) async {
-    if (order.id == null) return 0;
+    if (order.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('production_orders', order.toMap(), where: 'id = ?', whereArgs: [order.id]);
+    return await db.update('production_orders', order.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [order.id, _currentUserId]);
   }
 
   Future<List<ProductionOrder>> getProductionOrders({
@@ -1592,8 +1702,9 @@ class DatabaseService {
     String? createdBy,
   }) async {
     Database db = await database;
-    final conditions = <String>[];
-    final args = <Object?>[];
+    if (_currentUserId == null) return [];
+    final conditions = <String>['user_id = ?'];
+    final args = <Object?>[_currentUserId];
     if (recipeId != null) {
       conditions.add('recipe_id = ?');
       args.add(recipeId);
@@ -1619,37 +1730,41 @@ class DatabaseService {
       conditions.add('created_by_username = ?');
       args.add(createdBy);
     }
-    final where = conditions.isEmpty ? null : conditions.join(' AND ');
-    final maps = await db.query('production_orders', where: where, whereArgs: args.isEmpty ? null : args, orderBy: 'production_date DESC, id DESC');
+    final where = conditions.join(' AND ');
+    final maps = await db.query('production_orders', where: where, whereArgs: args, orderBy: 'production_date DESC, id DESC');
     return maps.map((m) => ProductionOrder.fromMap(m)).toList();
   }
 
   Future<ProductionOrder?> getProductionOrderById(int id) async {
     Database db = await database;
-    final maps = await db.query('production_orders', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('production_orders', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return ProductionOrder.fromMap(maps.first);
   }
 
   Future<int> getProductionOrderCountByStatus(String status) async {
     Database db = await database;
-    final r = await db.rawQuery('SELECT COUNT(*) as c FROM production_orders WHERE status = ?', [status]);
+    if (_currentUserId == null) return 0;
+    final r = await db.rawQuery('SELECT COUNT(*) as c FROM production_orders WHERE user_id = ? AND status = ?', [_currentUserId, status]);
     return (r.first['c'] as int?) ?? 0;
   }
 
   Future<int> getProductionOrderCountForDate(String dateYyyyMmDd) async {
     Database db = await database;
-    final r = await db.rawQuery('SELECT COUNT(*) as c FROM production_orders WHERE production_date = ? AND status != ?', [dateYyyyMmDd, 'cancelled']);
+    if (_currentUserId == null) return 0;
+    final r = await db.rawQuery('SELECT COUNT(*) as c FROM production_orders WHERE user_id = ? AND production_date = ? AND status != ?', [_currentUserId, dateYyyyMmDd, 'cancelled']);
     return (r.first['c'] as int?) ?? 0;
   }
 
   Future<double?> getTotalProductionCostThisMonth() async {
     Database db = await database;
+    if (_currentUserId == null) return null;
     final start = DateTime(DateTime.now().year, DateTime.now().month, 1).toIso8601String();
     final endNext = DateTime(DateTime.now().year, DateTime.now().month + 1, 1).toIso8601String();
     final r = await db.rawQuery(
-      "SELECT SUM(total_cost) as s FROM production_orders WHERE status = 'completed' AND completed_at >= ? AND completed_at < ?",
-      [start, endNext],
+      "SELECT SUM(total_cost) as s FROM production_orders WHERE user_id = ? AND status = 'completed' AND completed_at >= ? AND completed_at < ?",
+      [_currentUserId, start, endNext],
     );
     final v = r.first['s'];
     return v != null ? (v as num).toDouble() : null;
@@ -1658,21 +1773,26 @@ class DatabaseService {
   // Inbound receipts
   Future<int> insertInboundReceipt(InboundReceipt receipt) async {
     Database db = await database;
-    return await db.insert('inbound_receipts', receipt.toMap());
+    final map = Map<String, dynamic>.from(receipt.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('inbound_receipts', map);
   }
 
   /// Príjemky zoradené od najnovších. Ak [warehouseId] je zadané, len príjemky daného skladu.
   Future<List<InboundReceipt>> getInboundReceipts({int? warehouseId}) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final List<Map<String, dynamic>> maps = warehouseId != null
         ? await db.query(
             'inbound_receipts',
-            where: 'warehouse_id = ?',
-            whereArgs: [warehouseId],
+            where: 'user_id = ? AND warehouse_id = ?',
+            whereArgs: [_currentUserId, warehouseId],
             orderBy: 'created_at DESC',
           )
         : await db.query(
             'inbound_receipts',
+            where: _userWhere,
+            whereArgs: _userArgs,
             orderBy: 'created_at DESC',
           );
     return maps.map((m) => InboundReceipt.fromMap(m)).toList();
@@ -1689,10 +1809,11 @@ class DatabaseService {
 
   Future<InboundReceipt?> getInboundReceiptById(int id) async {
     Database db = await database;
+    if (_currentUserId == null) return null;
     final List<Map<String, dynamic>> maps = await db.query(
       'inbound_receipts',
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, _currentUserId],
     );
     if (maps.isEmpty) return null;
     return InboundReceipt.fromMap(maps.first);
@@ -1700,26 +1821,30 @@ class DatabaseService {
 
   Future<List<InboundReceiptItem>> getInboundReceiptItems(int receiptId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final List<Map<String, dynamic>> maps = await db.query(
       'inbound_receipt_items',
-      where: 'receipt_id = ?',
-      whereArgs: [receiptId],
+      where: 'receipt_id = ? AND user_id = ?',
+      whereArgs: [receiptId, _currentUserId],
     );
     return maps.map((m) => InboundReceiptItem.fromMap(m)).toList();
   }
 
   Future<int> insertInboundReceiptItem(InboundReceiptItem item) async {
     Database db = await database;
-    return await db.insert('inbound_receipt_items', item.toMap());
+    final map = Map<String, dynamic>.from(item.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('inbound_receipt_items', map);
   }
 
   Future<int> updateInboundReceipt(InboundReceipt receipt) async {
+    if (receipt.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'inbound_receipts',
       receipt.toMap(),
-      where: 'id = ?',
-      whereArgs: [receipt.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [receipt.id, _currentUserId],
     );
   }
 
@@ -1728,20 +1853,22 @@ class DatabaseService {
     InboundReceiptStatus status,
   ) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.update(
       'inbound_receipts',
       {'status': status.value},
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, _currentUserId],
     );
   }
 
   Future<int> deleteInboundReceiptItemsByReceiptId(int receiptId) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.delete(
       'inbound_receipt_items',
-      where: 'receipt_id = ?',
-      whereArgs: [receiptId],
+      where: 'receipt_id = ? AND user_id = ?',
+      whereArgs: [receiptId, _currentUserId],
     );
   }
 
@@ -1776,40 +1903,41 @@ class DatabaseService {
   Future<int> deleteInboundReceipt(int receiptId) async {
     Database db = await database;
     final receipt = await getInboundReceiptById(receiptId);
-    if (receipt == null || receipt.isApproved) return 0;
+    if (receipt == null || receipt.isApproved || _currentUserId == null) return 0;
     await db.delete(
       'inbound_receipt_items',
-      where: 'receipt_id = ?',
-      whereArgs: [receiptId],
+      where: 'receipt_id = ? AND user_id = ?',
+      whereArgs: [receiptId, _currentUserId],
     );
     await deleteReceiptAcquisitionCostsByReceiptId(receiptId);
     return await db.delete(
       'inbound_receipts',
-      where: 'id = ?',
-      whereArgs: [receiptId],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [receiptId, _currentUserId],
     );
   }
 
   /// Aktualizuje celú príjemku (vrátane nových stĺpcov schválenia).
   Future<void> updateInboundReceiptFull(InboundReceipt receipt) async {
-    if (receipt.id == null) return;
+    if (receipt.id == null || _currentUserId == null) return;
     Database db = await database;
     await db.update(
       'inbound_receipts',
       receipt.toMap(),
-      where: 'id = ?',
-      whereArgs: [receipt.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [receipt.id, _currentUserId],
     );
   }
 
   /// Označí príjemku, že bolo množstvo pričítané/odpočítané na sklad. [applied] = false pri storne s odpočítaním.
   Future<void> setReceiptStockApplied(int receiptId, {bool applied = true}) async {
     Database db = await database;
+    if (_currentUserId == null) return;
     await db.update(
       'inbound_receipts',
       {'stock_applied': applied ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [receiptId],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [receiptId, _currentUserId],
     );
   }
 
@@ -1837,7 +1965,9 @@ class DatabaseService {
   // App notifications
   Future<int> insertAppNotification(AppNotification n) async {
     Database db = await database;
-    return await db.insert('app_notifications', n.toMap());
+    final map = Map<String, dynamic>.from(n.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('app_notifications', map);
   }
 
   Future<List<AppNotification>> getAppNotifications({
@@ -1849,28 +1979,28 @@ class DatabaseService {
     DateTime? olderThan,
   }) async {
     Database db = await database;
-    String? where;
-    List<Object?>? whereArgs = [];
+    if (_currentUserId == null) return [];
+    final conditions = <String>['user_id = ?'];
+    final whereArgs = <Object?>[_currentUserId];
     if (targetUsername != null) {
-      where = '(target_username IS NULL OR target_username = ?)';
+      conditions.add('(target_username IS NULL OR target_username = ?)');
       whereArgs.add(targetUsername);
     }
     if (unreadOnly == true) {
-      where = where == null ? 'read = 0' : '$where AND read = 0';
+      conditions.add('read = 0');
     }
     if (typeFilter != null && typeFilter.isNotEmpty) {
-      where = where == null ? 'type = ?' : '$where AND type = ?';
+      conditions.add('type = ?');
       whereArgs.add(typeFilter);
     }
     if (olderThan != null) {
-      final s = olderThan.toIso8601String();
-      where = where == null ? 'created_at >= ?' : '$where AND created_at >= ?';
-      whereArgs.add(s);
+      conditions.add('created_at >= ?');
+      whereArgs.add(olderThan.toIso8601String());
     }
     final maps = await db.query(
       'app_notifications',
-      where: where,
-      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      where: conditions.join(' AND '),
+      whereArgs: whereArgs,
       orderBy: 'created_at DESC',
       limit: limit,
       offset: offset,
@@ -1880,50 +2010,57 @@ class DatabaseService {
 
   Future<int> getUnreadNotificationCount(String? targetUsername) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
+    final args = [_currentUserId];
+    if (targetUsername != null) args.add(targetUsername);
     final r = await db.rawQuery(
       targetUsername == null
-          ? 'SELECT COUNT(*) as c FROM app_notifications WHERE read = 0'
-          : 'SELECT COUNT(*) as c FROM app_notifications WHERE read = 0 AND (target_username IS NULL OR target_username = ?)',
-      targetUsername == null ? null : [targetUsername],
+          ? 'SELECT COUNT(*) as c FROM app_notifications WHERE user_id = ? AND read = 0'
+          : 'SELECT COUNT(*) as c FROM app_notifications WHERE user_id = ? AND read = 0 AND (target_username IS NULL OR target_username = ?)',
+      args,
     );
     return (r.first['c'] as int?) ?? 0;
   }
 
   Future<void> markNotificationRead(int id) async {
     Database db = await database;
-    await db.update('app_notifications', {'read': 1}, where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return;
+    await db.update('app_notifications', {'read': 1}, where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   Future<void> markAllNotificationsRead(String? targetUsername) async {
     Database db = await database;
+    if (_currentUserId == null) return;
     if (targetUsername == null) {
-      await db.update('app_notifications', {'read': 1});
+      await db.update('app_notifications', {'read': 1}, where: 'user_id = ?', whereArgs: [_currentUserId]);
     } else {
       await db.update(
         'app_notifications',
         {'read': 1},
-        where: 'target_username IS NULL OR target_username = ?',
-        whereArgs: [targetUsername],
+        where: 'user_id = ? AND (target_username IS NULL OR target_username = ?)',
+        whereArgs: [_currentUserId, targetUsername],
       );
     }
   }
 
   Future<void> deleteNotificationsOlderThan(Duration d) async {
     Database db = await database;
+    if (_currentUserId == null) return;
     final cutoff = DateTime.now().subtract(d);
     await db.delete(
       'app_notifications',
-      where: 'created_at < ?',
-      whereArgs: [cutoff.toIso8601String()],
+      where: 'user_id = ? AND created_at < ?',
+      whereArgs: [_currentUserId, cutoff.toIso8601String()],
     );
   }
 
   Future<Map<String, dynamic>?> getNotificationPreferences(String username) async {
     Database db = await database;
+    if (_currentUserId == null) return null;
     final maps = await db.query(
       'notification_preferences',
-      where: 'username = ?',
-      whereArgs: [username],
+      where: 'username = ? AND user_id = ?',
+      whereArgs: [username, _currentUserId],
     );
     if (maps.isEmpty) return null;
     final m = maps.first;
@@ -1951,6 +2088,7 @@ class DatabaseService {
       'pending_reminder_hours': pendingReminderHours ?? existing?['pending_reminder_hours'] ?? 24,
       'price_change_threshold_percent': priceChangeThresholdPercent ?? existing?['price_change_threshold_percent'] ?? 20.0,
     };
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
     await db.insert(
       'notification_preferences',
       map,
@@ -1963,27 +2101,29 @@ class DatabaseService {
     String productUniqueId,
   ) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final rows = await db.rawQuery(
       '''
       SELECT r.receipt_number, r.created_at, r.prices_include_vat,
              i.unit_price, i.qty, i.unit
       FROM inbound_receipt_items i
-      JOIN inbound_receipts r ON i.receipt_id = r.id
-      WHERE i.product_unique_id = ?
+      JOIN inbound_receipts r ON i.receipt_id = r.id AND r.user_id = i.user_id
+      WHERE i.product_unique_id = ? AND i.user_id = ?
       ORDER BY r.created_at DESC
     ''',
-      [productUniqueId],
+      [productUniqueId, _currentUserId],
     );
     return rows;
   }
 
   Future<String> getNextReceiptNumber() async {
     Database db = await database;
+    if (_currentUserId == null) return 'PR-${DateTime.now().year}-0001';
     final year = DateTime.now().year;
     final prefix = 'PR-$year-';
     final result = await db.rawQuery(
-      'SELECT receipt_number FROM inbound_receipts WHERE receipt_number LIKE ? ORDER BY id DESC LIMIT 1',
-      ['$prefix%'],
+      'SELECT receipt_number FROM inbound_receipts WHERE user_id = ? AND receipt_number LIKE ? ORDER BY id DESC LIMIT 1',
+      [_currentUserId, '$prefix%'],
     );
     if (result.isEmpty) return '${prefix}0001';
     final last = result.first['receipt_number'] as String;
@@ -1995,20 +2135,25 @@ class DatabaseService {
   // Supplier CRUD
   Future<int> insertSupplier(Supplier supplier) async {
     Database db = await database;
-    return await db.insert('suppliers', supplier.toMap());
+    final map = Map<String, dynamic>.from(supplier.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('suppliers', map);
   }
 
   Future<List<Supplier>> getSuppliers() async {
     Database db = await database;
-    final maps = await db.query('suppliers', orderBy: 'name ASC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('suppliers', where: _userWhere, whereArgs: _userArgs, orderBy: 'name ASC');
     return maps.map((m) => Supplier.fromMap(m)).toList();
   }
 
   Future<List<Supplier>> getActiveSuppliers() async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'suppliers',
-      where: 'is_active = 1',
+      where: 'user_id = ? AND is_active = 1',
+      whereArgs: [_currentUserId],
       orderBy: 'name ASC',
     );
     return maps.map((m) => Supplier.fromMap(m)).toList();
@@ -2016,44 +2161,51 @@ class DatabaseService {
 
   Future<Supplier?> getSupplierById(int id) async {
     Database db = await database;
-    final maps = await db.query('suppliers', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Supplier.fromMap(maps.first);
   }
 
   Future<int> updateSupplier(Supplier supplier) async {
-    if (supplier.id == null) return 0;
+    if (supplier.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'suppliers',
       supplier.toMap(),
-      where: 'id = ?',
-      whereArgs: [supplier.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [supplier.id, _currentUserId],
     );
   }
 
   Future<int> deleteSupplier(int id) async {
     Database db = await database;
-    return await db.delete('suppliers', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    return await db.delete('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   // Customer CRUD
   Future<int> insertCustomer(Customer customer) async {
     Database db = await database;
-    return await db.insert('customers', customer.toMap());
+    final map = Map<String, dynamic>.from(customer.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('customers', map);
   }
 
   Future<List<Customer>> getCustomers() async {
     Database db = await database;
-    final maps = await db.query('customers', orderBy: 'name ASC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('customers', where: _userWhere, whereArgs: _userArgs, orderBy: 'name ASC');
     return maps.map((m) => Customer.fromMap(m)).toList();
   }
 
   Future<List<Customer>> getActiveCustomers() async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'customers',
-      where: 'is_active = 1',
+      where: 'user_id = ? AND is_active = 1',
+      whereArgs: [_currentUserId],
       orderBy: 'name ASC',
     );
     return maps.map((m) => Customer.fromMap(m)).toList();
@@ -2061,47 +2213,51 @@ class DatabaseService {
 
   Future<Customer?> getCustomerById(int id) async {
     Database db = await database;
-    final maps = await db.query('customers', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('customers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Customer.fromMap(maps.first);
   }
 
   Future<int> updateCustomer(Customer customer) async {
-    if (customer.id == null) return 0;
+    if (customer.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'customers',
       customer.toMap(),
-      where: 'id = ?',
-      whereArgs: [customer.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [customer.id, _currentUserId],
     );
   }
 
   Future<int> deleteCustomer(int id) async {
     Database db = await database;
-    return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    return await db.delete('customers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
-  /// Nahradí lokálnych zákazníkov zoznamom z backendu (napr. po úpravách na webe).
-  /// Vymaže lokálne záznamy a vloží položky z [list]. Nikdy nevolajte s prázdnym zoznamom – dáta by sa v apke vymazali.
+  /// Nahradí lokálnych zákazníkov zoznamom z backendu. Vkladá s user_id = _currentUserId.
   Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> list) async {
-    if (list.isEmpty) return;
+    if (list.isEmpty || _currentUserId == null) return;
     Database db = await database;
-    await db.delete('customers');
+    await db.delete('customers', where: 'user_id = ?', whereArgs: [_currentUserId]);
     for (final map in list) {
       final c = Customer.fromMap(Map<String, dynamic>.from(map));
-      await db.insert('customers', c.toMap());
+      final row = Map<String, dynamic>.from(c.toMap());
+      row['user_id'] = _currentUserId;
+      await db.insert('customers', row);
     }
   }
 
   // Quote CRUD
   Future<String> getNextQuoteNumber() async {
     Database db = await database;
+    if (_currentUserId == null) return 'CP-${DateTime.now().year}-0001';
     final year = DateTime.now().year;
     final prefix = 'CP-$year-';
     final result = await db.rawQuery(
-      'SELECT quote_number FROM quotes WHERE quote_number LIKE ? ORDER BY id DESC LIMIT 1',
-      ['$prefix%'],
+      'SELECT quote_number FROM quotes WHERE user_id = ? AND quote_number LIKE ? ORDER BY id DESC LIMIT 1',
+      [_currentUserId, '$prefix%'],
     );
     if (result.isEmpty) return '${prefix}0001';
     final last = result.first['quote_number'] as String;
@@ -2112,56 +2268,63 @@ class DatabaseService {
 
   Future<int> insertQuote(Quote quote) async {
     Database db = await database;
-    return await db.insert('quotes', quote.toMap());
+    final map = Map<String, dynamic>.from(quote.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('quotes', map);
   }
 
   Future<Quote?> getQuoteById(int id) async {
     Database db = await database;
-    final maps = await db.query('quotes', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('quotes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Quote.fromMap(maps.first);
   }
 
   Future<List<Quote>> getQuotes() async {
     Database db = await database;
-    final maps = await db.query('quotes', orderBy: 'created_at DESC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('quotes', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC');
     return maps.map((m) => Quote.fromMap(m)).toList();
   }
 
   Future<List<Quote>> getQuotesByCustomerId(int customerId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'quotes',
-      where: 'customer_id = ?',
-      whereArgs: [customerId],
+      where: 'user_id = ? AND customer_id = ?',
+      whereArgs: [_currentUserId, customerId],
       orderBy: 'created_at DESC',
     );
     return maps.map((m) => Quote.fromMap(m)).toList();
   }
 
   Future<int> updateQuote(Quote quote) async {
-    if (quote.id == null) return 0;
+    if (quote.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'quotes',
       quote.toMap(),
-      where: 'id = ?',
-      whereArgs: [quote.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [quote.id, _currentUserId],
     );
   }
 
   Future<int> deleteQuote(int id) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     await db.delete('quote_items', where: 'quote_id = ?', whereArgs: [id]);
-    return await db.delete('quotes', where: 'id = ?', whereArgs: [id]);
+    return await db.delete('quotes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   Future<List<QuoteItem>> getQuoteItems(int quoteId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'quote_items',
-      where: 'quote_id = ?',
-      whereArgs: [quoteId],
+      where: 'quote_id = ? AND user_id = ?',
+      whereArgs: [quoteId, _currentUserId],
       orderBy: 'id ASC',
     );
     return maps.map((m) => QuoteItem.fromMap(m)).toList();
@@ -2169,31 +2332,35 @@ class DatabaseService {
 
   Future<int> insertQuoteItem(QuoteItem item) async {
     Database db = await database;
-    return await db.insert('quote_items', item.toMap());
+    final map = Map<String, dynamic>.from(item.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('quote_items', map);
   }
 
   Future<int> updateQuoteItem(QuoteItem item) async {
-    if (item.id == null) return 0;
+    if (item.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'quote_items',
       item.toMap(),
-      where: 'id = ?',
-      whereArgs: [item.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [item.id, _currentUserId],
     );
   }
 
   Future<int> deleteQuoteItem(int id) async {
     Database db = await database;
-    return await db.delete('quote_items', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    return await db.delete('quote_items', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   Future<int> deleteQuoteItemsByQuoteId(int quoteId) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.delete(
       'quote_items',
-      where: 'quote_id = ?',
-      whereArgs: [quoteId],
+      where: 'quote_id = ? AND user_id = ?',
+      whereArgs: [quoteId, _currentUserId],
     );
   }
 
@@ -2228,13 +2395,16 @@ class DatabaseService {
   }
   Future<List<WarehouseTransfer>> getWarehouseTransfers() async {
     Database db = await database;
-    final maps = await db.query('warehouse_transfers', orderBy: 'created_at DESC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('warehouse_transfers', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC');
     return maps.map((m) => WarehouseTransfer.fromMap(m)).toList();
   }
 
   Future<int> insertWarehouseTransfer(WarehouseTransfer transfer) async {
     Database db = await database;
-    return await db.insert('warehouse_transfers', transfer.toMap());
+    final map = Map<String, dynamic>.from(transfer.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('warehouse_transfers', map);
   }
 
   /// Vykoná presun medzi skladmi: zníži zásobu v zdrojovom sklade, zvýši (alebo vytvorí kartu) v cieľovom, zapíše presun.
@@ -2398,7 +2568,9 @@ class DatabaseService {
         );
         await txn.insert('products', newProduct.toMap());
       }
-      return await txn.insert('warehouse_transfers', transfer.toMap());
+      final wtMap = Map<String, dynamic>.from(transfer.toMap());
+      if (_currentUserId != null) wtMap['user_id'] = _currentUserId;
+      return await txn.insert('warehouse_transfers', wtMap);
     });
   }
 
@@ -2503,7 +2675,7 @@ class DatabaseService {
           await txn.insert('products', newProduct.toMap());
         }
 
-        await txn.insert('stock_movements', StockMovement(
+        final smMap = StockMovement(
           stockOutId: stockOutId,
           documentNumber: stockOutDocumentNumber,
           createdAt: stockOutCreatedAt,
@@ -2513,7 +2685,9 @@ class DatabaseService {
           qty: item.qty,
           unit: item.unit,
           direction: 'OUT',
-        ).toMap());
+        ).toMap();
+        if (_currentUserId != null) smMap['user_id'] = _currentUserId;
+        await txn.insert('stock_movements', smMap);
       }
     });
   }
@@ -2553,28 +2727,37 @@ class DatabaseService {
 
   Future<Map<String, dynamic>> getDashboardStats() async {
     Database db = await database;
+    if (_currentUserId == null) {
+      return {
+        'products': 0, 'orders': 0, 'customers': 0, 'revenue': 0.0, 'inboundCount': 0, 'outboundCount': 0,
+        'quotesCount': 0, 'receiptsToday': 0, 'pendingReceiptCount': 0, 'receiptsValueThisMonth': 0.0,
+        'lowStockCount': 0, 'lastReceipt': null, 'productionOrdersToday': 0, 'productionInProgressCount': 0,
+        'productionPendingApprovalCount': 0, 'productionCostThisMonth': 0.0,
+      };
+    }
+    final uid = _currentUserId!;
 
     // Počet produktov
     final productCountResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM products',
+      'SELECT COUNT(*) as count FROM products WHERE user_id = ?', [uid],
     );
     int productCount = Sqflite.firstIntValue(productCountResult) ?? 0;
 
     // Počet zákazníkov
     final customerCountResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM customers',
+      'SELECT COUNT(*) as count FROM customers WHERE user_id = ?', [uid],
     );
     int customerCount = Sqflite.firstIntValue(customerCountResult) ?? 0;
 
     // Počet quotes (ako objednávky)
     final quotesCountResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM quotes',
+      'SELECT COUNT(*) as count FROM quotes WHERE user_id = ?', [uid],
     );
     int quotesCount = Sqflite.firstIntValue(quotesCountResult) ?? 0;
 
     // Počet príjemiek
     final inboundCountResult = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM inbound_receipts',
+      'SELECT COUNT(*) as count FROM inbound_receipts WHERE user_id = ?', [uid],
     );
     int inboundCount = Sqflite.firstIntValue(inboundCountResult) ?? 0;
 
@@ -2582,15 +2765,15 @@ class DatabaseService {
     final todayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).toIso8601String();
     final todayEnd = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59).toIso8601String();
     final receiptsTodayResult = await db.rawQuery(
-      'SELECT COUNT(*) as c FROM inbound_receipts WHERE created_at >= ? AND created_at <= ?',
-      [todayStart, todayEnd],
+      'SELECT COUNT(*) as c FROM inbound_receipts WHERE user_id = ? AND created_at >= ? AND created_at <= ?',
+      [uid, todayStart, todayEnd],
     );
     int receiptsToday = (receiptsTodayResult.isNotEmpty && receiptsTodayResult.first['c'] != null)
         ? (receiptsTodayResult.first['c'] as num).toInt() : 0;
 
     // Čakajú na schválenie (pending)
     final pendingResult = await db.rawQuery(
-      "SELECT COUNT(*) as c FROM inbound_receipts WHERE status = 'pending'",
+      "SELECT COUNT(*) as c FROM inbound_receipts WHERE user_id = ? AND status = 'pending'", [uid],
     );
     int pendingCount = (pendingResult.isNotEmpty && pendingResult.first['c'] != null)
         ? (pendingResult.first['c'] as num).toInt() : 0;
@@ -2602,9 +2785,9 @@ class DatabaseService {
       final sumResult = await db.rawQuery('''
         SELECT SUM(i.qty * i.unit_price) as total
         FROM inbound_receipt_items i
-        JOIN inbound_receipts r ON r.id = i.receipt_id
-        WHERE r.status = 'schvalena' AND r.approved_at >= ?
-      ''', [monthStart]);
+        JOIN inbound_receipts r ON r.id = i.receipt_id AND r.user_id = i.user_id
+        WHERE r.user_id = ? AND r.status = 'schvalena' AND r.approved_at >= ?
+      ''', [uid, monthStart]);
       if (sumResult.isNotEmpty && sumResult[0]['total'] != null) {
         valueThisMonth = (sumResult[0]['total'] as num).toDouble();
       }
@@ -2612,14 +2795,14 @@ class DatabaseService {
 
     // Produkty pod minimálnou zásobou
     final lowResult = await db.rawQuery(
-      'SELECT COUNT(*) as c FROM products WHERE min_quantity > 0 AND qty < min_quantity',
+      'SELECT COUNT(*) as c FROM products WHERE user_id = ? AND min_quantity > 0 AND qty < min_quantity', [uid],
     );
     int lowStockCount = (lowResult.isNotEmpty && lowResult.first['c'] != null)
         ? (lowResult.first['c'] as num).toInt() : 0;
 
     // Posledná príjemka (číslo + dátum)
     Map<String, dynamic>? lastReceipt;
-    final lastR = await db.query('inbound_receipts', orderBy: 'created_at DESC', limit: 1);
+    final lastR = await db.query('inbound_receipts', where: 'user_id = ?', whereArgs: [uid], orderBy: 'created_at DESC', limit: 1);
     if (lastR.isNotEmpty) {
       lastReceipt = {
         'receipt_number': lastR[0]['receipt_number'],
@@ -2630,26 +2813,26 @@ class DatabaseService {
     // Výrobné príkazy – KPI
     final todayStr = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).toIso8601String().split('T').first;
     final productionTodayResult = await db.rawQuery(
-      "SELECT COUNT(*) as c FROM production_orders WHERE production_date = ? AND status != 'cancelled'",
-      [todayStr],
+      "SELECT COUNT(*) as c FROM production_orders WHERE user_id = ? AND production_date = ? AND status != 'cancelled'",
+      [uid, todayStr],
     );
     int productionOrdersToday = (productionTodayResult.isNotEmpty && productionTodayResult.first['c'] != null)
         ? (productionTodayResult.first['c'] as num).toInt() : 0;
     final productionInProgressResult = await db.rawQuery(
-      "SELECT COUNT(*) as c FROM production_orders WHERE status = 'in_progress'",
+      "SELECT COUNT(*) as c FROM production_orders WHERE user_id = ? AND status = 'in_progress'", [uid],
     );
     int productionInProgressCount = (productionInProgressResult.isNotEmpty && productionInProgressResult.first['c'] != null)
         ? (productionInProgressResult.first['c'] as num).toInt() : 0;
     final productionPendingResult = await db.rawQuery(
-      "SELECT COUNT(*) as c FROM production_orders WHERE status = 'pending'",
+      "SELECT COUNT(*) as c FROM production_orders WHERE user_id = ? AND status = 'pending'", [uid],
     );
     int productionPendingApprovalCount = (productionPendingResult.isNotEmpty && productionPendingResult.first['c'] != null)
         ? (productionPendingResult.first['c'] as num).toInt() : 0;
     double productionCostThisMonth = 0.0;
     try {
       final costResult = await db.rawQuery(
-        "SELECT SUM(total_cost) as s FROM production_orders WHERE status = 'completed' AND completed_at >= ? AND completed_at < ?",
-        [monthStart, DateTime(DateTime.now().year, DateTime.now().month + 1, 1).toIso8601String()],
+        "SELECT SUM(total_cost) as s FROM production_orders WHERE user_id = ? AND status = 'completed' AND completed_at >= ? AND completed_at < ?",
+        [uid, monthStart, DateTime(DateTime.now().year, DateTime.now().month + 1, 1).toIso8601String()],
       );
       if (costResult.isNotEmpty && costResult.first['s'] != null) {
         productionCostThisMonth = (costResult.first['s'] as num).toDouble();
@@ -2666,11 +2849,11 @@ class DatabaseService {
         SELECT SUM(
           (SELECT SUM(qi.qty * qi.unit_price * (1 + qi.vat_percent / 100.0))
            FROM quote_items qi
-           WHERE qi.quote_id = q.id)
+           WHERE qi.quote_id = q.id AND qi.user_id = q.user_id)
         ) as total
         FROM quotes q
-        WHERE q.status != 'draft'
-      ''');
+        WHERE q.user_id = ? AND q.status != 'draft'
+      ''', [uid]);
       if (revenueResult.isNotEmpty && revenueResult[0]['total'] != null) {
         revenue = (revenueResult[0]['total'] as num?)?.toDouble() ?? 0.0;
       }
@@ -2754,10 +2937,11 @@ class DatabaseService {
 
   Future<List<Map<String, dynamic>>> getRecentInboundReceiptsWithTotal({int limit = 5}) async {
     Database db = await database;
-    final receipts = await db.query('inbound_receipts', orderBy: 'created_at DESC', limit: limit);
+    if (_currentUserId == null) return [];
+    final receipts = await db.query('inbound_receipts', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final r in receipts) {
-      final items = await db.query('inbound_receipt_items', where: 'receipt_id = ?', whereArgs: [r['id']]);
+      final items = await db.query('inbound_receipt_items', where: 'receipt_id = ? AND user_id = ?', whereArgs: [r['id'], _currentUserId]);
       double total = 0;
       for (final i in items) {
         total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
@@ -2769,10 +2953,11 @@ class DatabaseService {
 
   Future<List<Map<String, dynamic>>> getRecentStockOutsWithTotal({int limit = 5}) async {
     Database db = await database;
-    final outs = await db.query('stock_outs', orderBy: 'created_at DESC', limit: limit);
+    if (_currentUserId == null) return [];
+    final outs = await db.query('stock_outs', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final o in outs) {
-      final items = await db.query('stock_out_items', where: 'stock_out_id = ?', whereArgs: [o['id']]);
+      final items = await db.query('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [o['id'], _currentUserId]);
       double total = 0;
       for (final i in items) {
         total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
@@ -2795,24 +2980,28 @@ class DatabaseService {
 
   Future<void> insertTransport(Transport transport) async {
     Database db = await database;
-    await db.insert('transports', transport.toMap());
+    final map = Map<String, dynamic>.from(transport.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    await db.insert('transports', map);
   }
 
   Future<List<StockOut>> getStockOuts() async {
     Database db = await database;
-    final maps = await db.query('stock_outs', orderBy: 'created_at DESC');
+    if (_currentUserId == null) return [];
+    final maps = await db.query('stock_outs', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC');
     return maps.map((m) => StockOut.fromMap(m)).toList();
   }
 
   /// Výdajky pre daný sklad; ak [warehouseId] je null, vráti všetky.
   Future<List<StockOut>> getStockOutsByWarehouseId(int? warehouseId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = warehouseId == null
-        ? await db.query('stock_outs', orderBy: 'created_at DESC')
+        ? await db.query('stock_outs', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC')
         : await db.query(
             'stock_outs',
-            where: 'warehouse_id = ?',
-            whereArgs: [warehouseId],
+            where: 'user_id = ? AND warehouse_id = ?',
+            whereArgs: [_currentUserId, warehouseId],
             orderBy: 'created_at DESC',
           );
     return maps.map((m) => StockOut.fromMap(m)).toList();
@@ -2820,22 +3009,25 @@ class DatabaseService {
 
   Future<StockOut?> getStockOutById(int id) async {
     Database db = await database;
-    final maps = await db.query('stock_outs', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('stock_outs', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return StockOut.fromMap(maps.first);
   }
 
   Future<List<StockOutItem>> getStockOutItems(int stockOutId) async {
     Database db = await database;
-    final maps = await db.query('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
+    if (_currentUserId == null) return [];
+    final maps = await db.query('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
     return maps.map((m) => StockOutItem.fromMap(m)).toList();
   }
 
   Future<String> getNextStockOutNumber() async {
     Database db = await database;
+    if (_currentUserId == null) return 'VY-${DateTime.now().year}-0001';
     final year = DateTime.now().year;
     final prefix = 'VY-$year-';
-    final result = await db.rawQuery('SELECT document_number FROM stock_outs WHERE document_number LIKE ? ORDER BY id DESC LIMIT 1', ['$prefix%']);
+    final result = await db.rawQuery('SELECT document_number FROM stock_outs WHERE user_id = ? AND document_number LIKE ? ORDER BY id DESC LIMIT 1', [_currentUserId, '$prefix%']);
     if (result.isEmpty) return '${prefix}0001';
     final last = result.first['document_number'] as String;
     final next = (int.tryParse(last.replaceFirst(prefix, '')) ?? 0) + 1;
@@ -2844,28 +3036,34 @@ class DatabaseService {
 
   Future<int> insertStockOut(StockOut stockOut) async {
     Database db = await database;
-    return await db.insert('stock_outs', stockOut.toMap());
+    final map = Map<String, dynamic>.from(stockOut.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('stock_outs', map);
   }
 
   Future<void> insertStockOutItem(StockOutItem item) async {
     Database db = await database;
-    await db.insert('stock_out_items', item.toMap());
+    final map = Map<String, dynamic>.from(item.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    await db.insert('stock_out_items', map);
   }
 
   Future<void> deleteStockOutItemsByStockOutId(int stockOutId) async {
     Database db = await database;
-    await db.delete('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
+    if (_currentUserId == null) return;
+    await db.delete('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
   }
 
   Future<int> updateStockOut(StockOut stockOut) async {
-    if (stockOut.id == null) return 0;
+    if (stockOut.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('stock_outs', stockOut.toMap(), where: 'id = ?', whereArgs: [stockOut.id]);
+    return await db.update('stock_outs', stockOut.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [stockOut.id, _currentUserId]);
   }
 
   Future<void> updateStockOutStatus(int stockOutId, StockOutStatus status) async {
     Database db = await database;
-    await db.update('stock_outs', {'status': status.value}, where: 'id = ?', whereArgs: [stockOutId]);
+    if (_currentUserId == null) return;
+    await db.update('stock_outs', {'status': status.value}, where: 'id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
   }
 
   Future<List<MovementType>> getMovementTypes() async {
@@ -2881,37 +3079,42 @@ class DatabaseService {
 
   Future<List<StockMovement>> getStockMovementsByStockOutId(int stockOutId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'stock_movements',
-      where: 'stock_out_id = ?',
-      whereArgs: [stockOutId],
+      where: 'stock_out_id = ? AND user_id = ?',
+      whereArgs: [stockOutId, _currentUserId],
     );
     return maps.map((m) => StockMovement.fromMap(m)).toList();
   }
 
   Future<int> insertStockMovement(StockMovement sm) async {
     Database db = await database;
-    return await db.insert('stock_movements', sm.toMap());
+    final map = Map<String, dynamic>.from(sm.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    return await db.insert('stock_movements', map);
   }
 
   Future<void> deleteStockMovementsByStockOutId(int stockOutId) async {
     Database db = await database;
-    await db.delete('stock_movements', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
+    if (_currentUserId == null) return;
+    await db.delete('stock_movements', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
   }
 
   /// Výdajové pohyby (z výdajok) s warehouse_id; ak [warehouseId] je zadané, len daný sklad.
   Future<List<WarehouseMovementRecord>> getStockMovementRecordsOut({int? warehouseId}) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final sql = '''
       SELECT sm.id, sm.document_number, sm.created_at, sm.product_unique_id, sm.product_name, sm.plu, sm.qty, sm.unit, sm.direction, so.warehouse_id
       FROM stock_movements sm
-      JOIN stock_outs so ON sm.stock_out_id = so.id
-      ${warehouseId != null ? 'WHERE so.warehouse_id = ?' : ''}
+      JOIN stock_outs so ON sm.stock_out_id = so.id AND so.user_id = sm.user_id
+      WHERE so.user_id = ? ${warehouseId != null ? 'AND so.warehouse_id = ?' : ''}
       ORDER BY sm.created_at DESC
     ''';
     final maps = warehouseId != null
-        ? await db.rawQuery(sql, [warehouseId])
-        : await db.rawQuery(sql);
+        ? await db.rawQuery(sql, [_currentUserId, warehouseId])
+        : await db.rawQuery(sql, [_currentUserId]);
     return maps.map((m) => WarehouseMovementRecord(
       createdAt: DateTime.parse(m['created_at'] as String),
       documentNumber: m['document_number'] as String? ?? '',
@@ -2930,16 +3133,17 @@ class DatabaseService {
   /// Príjmové pohyby (z príjemiek); ak [warehouseId] je zadané, len daný sklad.
   Future<List<WarehouseMovementRecord>> getReceiptMovementRecordsIn({int? warehouseId}) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final sql = '''
       SELECT i.id, r.receipt_number AS document_number, r.created_at, i.product_unique_id, i.product_name, i.plu, i.qty, i.unit, r.warehouse_id
       FROM inbound_receipt_items i
-      JOIN inbound_receipts r ON i.receipt_id = r.id
-      ${warehouseId != null ? 'WHERE r.warehouse_id = ?' : ''}
+      JOIN inbound_receipts r ON i.receipt_id = r.id AND r.user_id = i.user_id
+      WHERE r.user_id = ? ${warehouseId != null ? 'AND r.warehouse_id = ?' : ''}
       ORDER BY r.created_at DESC
     ''';
     final maps = warehouseId != null
-        ? await db.rawQuery(sql, [warehouseId])
-        : await db.rawQuery(sql);
+        ? await db.rawQuery(sql, [_currentUserId, warehouseId])
+        : await db.rawQuery(sql, [_currentUserId]);
     return maps.map((m) => WarehouseMovementRecord(
       createdAt: DateTime.parse(m['created_at'] as String),
       documentNumber: m['document_number'] as String? ?? '',
@@ -3065,22 +3269,25 @@ class DatabaseService {
     final map = batch.toMap()
       ..remove('id')
       ..['created_at'] = batch.createdAt ?? DateTime.now().toIso8601String();
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
     return await db.insert('production_batches', map);
   }
 
   Future<ProductionBatch?> getProductionBatchById(int id) async {
     Database db = await database;
-    final maps = await db.query('production_batches', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('production_batches', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return ProductionBatch.fromMap(maps.first);
   }
 
   Future<List<ProductionBatch>> getProductionBatchesByDate(String date) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'production_batches',
-      where: 'production_date = ?',
-      whereArgs: [date],
+      where: 'user_id = ? AND production_date = ?',
+      whereArgs: [_currentUserId, date],
       orderBy: 'created_at DESC',
     );
     return maps.map((m) => ProductionBatch.fromMap(m)).toList();
@@ -3088,10 +3295,11 @@ class DatabaseService {
 
   Future<List<ProductionBatch>> getProductionBatchesByDateRange(String fromDate, String toDate) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'production_batches',
-      where: 'production_date >= ? AND production_date <= ?',
-      whereArgs: [fromDate, toDate],
+      where: 'user_id = ? AND production_date >= ? AND production_date <= ?',
+      whereArgs: [_currentUserId, fromDate, toDate],
       orderBy: 'production_date DESC, created_at DESC',
     );
     return maps.map((m) => ProductionBatch.fromMap(m)).toList();
@@ -3099,10 +3307,11 @@ class DatabaseService {
 
   Future<List<ProductionBatchRecipeItem>> getRecipeForBatch(int batchId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'production_batch_recipe',
-      where: 'batch_id = ?',
-      whereArgs: [batchId],
+      where: 'batch_id = ? AND user_id = ?',
+      whereArgs: [batchId, _currentUserId],
       orderBy: 'id ASC',
     );
     return maps.map((m) => ProductionBatchRecipeItem.fromMap(m)).toList();
@@ -3111,33 +3320,36 @@ class DatabaseService {
   Future<int> insertProductionBatchRecipeItem(ProductionBatchRecipeItem item) async {
     Database db = await database;
     final map = item.toMap()..remove('id');
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
     return await db.insert('production_batch_recipe', map);
   }
 
   Future<int> deleteProductionBatchRecipeItems(int batchId) async {
     Database db = await database;
+    if (_currentUserId == null) return 0;
     return await db.delete(
       'production_batch_recipe',
-      where: 'batch_id = ?',
-      whereArgs: [batchId],
+      where: 'batch_id = ? AND user_id = ?',
+      whereArgs: [batchId, _currentUserId],
     );
   }
 
   Future<int> updateProductionBatch(ProductionBatch batch) async {
-    if (batch.id == null) return 0;
+    if (batch.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'production_batches',
       batch.toMap()..remove('id'),
-      where: 'id = ?',
-      whereArgs: [batch.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [batch.id, _currentUserId],
     );
   }
 
   Future<int> deleteProductionBatch(int id) async {
     Database db = await database;
-    await db.delete('production_batch_recipe', where: 'batch_id = ?', whereArgs: [id]);
-    return await db.delete('production_batches', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return 0;
+    await db.delete('production_batch_recipe', where: 'batch_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    return await db.delete('production_batches', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
   // ---------- Palety (Expedícia) ----------
@@ -3146,35 +3358,38 @@ class DatabaseService {
     final map = pallet.toMap()
       ..remove('id')
       ..['created_at'] = pallet.createdAt ?? DateTime.now().toIso8601String();
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
     return await db.insert('pallets', map);
   }
 
   Future<Pallet?> getPalletById(int id) async {
     Database db = await database;
-    final maps = await db.query('pallets', where: 'id = ?', whereArgs: [id]);
+    if (_currentUserId == null) return null;
+    final maps = await db.query('pallets', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Pallet.fromMap(maps.first);
   }
 
   Future<List<Pallet>> getPalletsByBatchId(int batchId) async {
     Database db = await database;
+    if (_currentUserId == null) return [];
     final maps = await db.query(
       'pallets',
-      where: 'batch_id = ?',
-      whereArgs: [batchId],
+      where: 'batch_id = ? AND user_id = ?',
+      whereArgs: [batchId, _currentUserId],
       orderBy: 'id ASC',
     );
     return maps.map((m) => Pallet.fromMap(m)).toList();
   }
 
   Future<int> updatePallet(Pallet pallet) async {
-    if (pallet.id == null) return 0;
+    if (pallet.id == null || _currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'pallets',
       pallet.toMap()..remove('id'),
-      where: 'id = ?',
-      whereArgs: [pallet.id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [pallet.id, _currentUserId],
     );
   }
 
@@ -3184,14 +3399,15 @@ class DatabaseService {
     final pallet = await getPalletById(palletId);
     final customer = await getCustomerById(customerId);
     if (pallet == null || customer == null) return;
+    if (_currentUserId == null) return;
     await db.update(
       'pallets',
       {
         'customer_id': customerId,
         'status': PalletStatus.uZakaznika.label,
       },
-      where: 'id = ?',
-      whereArgs: [palletId],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [palletId, _currentUserId],
     );
     await db.update(
       'customers',
@@ -3201,13 +3417,13 @@ class DatabaseService {
     );
   }
 
-  /// Nahradí lokálne šarže, recepty a palety dátami z backendu (ako replaceCustomersFromBackend).
-  /// Po volaní má aplikácia rovnaké šarže ako web. Volaj po fetchBatchesFromBackend.
+  /// Nahradí lokálne šarže recepty a palety dátami z backendu. Vkladá s user_id = _currentUserId.
   Future<void> replaceBatchesFromBackend(List<Map<String, dynamic>> batches) async {
+    if (_currentUserId == null) return;
     final db = await database;
-    await db.delete('production_batch_recipe');
-    await db.delete('pallets');
-    await db.delete('production_batches');
+    await db.delete('production_batch_recipe', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('pallets', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('production_batches', where: 'user_id = ?', whereArgs: [_currentUserId]);
     if (batches.isEmpty) return;
     for (final b in batches) {
       final batchId = b['id'] as int?;
@@ -3217,6 +3433,7 @@ class DatabaseService {
       final quantityProduced = (b['quantity_produced'] as num?)?.toInt() ?? 0;
       await db.insert('production_batches', {
         'id': batchId,
+        'user_id': _currentUserId,
         'production_date': productionDate,
         'product_type': productType,
         'quantity_produced': quantityProduced,
@@ -3231,6 +3448,7 @@ class DatabaseService {
         final qty = (map['quantity'] as num?)?.toDouble() ?? 0;
         if (qty <= 0) continue;
         await db.insert('production_batch_recipe', {
+          'user_id': _currentUserId,
           'batch_id': batchId,
           'material_name': (map['material_name'] as String?) ?? '',
           'quantity': qty,
@@ -3244,6 +3462,7 @@ class DatabaseService {
         if (palletId == null) continue;
         await db.insert('pallets', {
           'id': palletId,
+          'user_id': _currentUserId,
           'batch_id': batchId,
           'product_type': (map['product_type'] as String?) ?? '',
           'quantity': (map['quantity'] as num?)?.toInt() ?? 0,
@@ -3262,11 +3481,12 @@ class DatabaseService {
     final customer = await getCustomerById(customerId);
     if (customer == null) return;
     final newBalance = (customer.palletBalance - count).clamp(0, 0x7fffffff);
+    if (_currentUserId == null) return;
     await db.update(
       'customers',
       {'pallet_balance': newBalance},
-      where: 'id = ?',
-      whereArgs: [customerId],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [customerId, _currentUserId],
     );
   }
 }

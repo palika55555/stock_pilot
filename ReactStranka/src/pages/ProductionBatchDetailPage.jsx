@@ -107,14 +107,8 @@ export default function ProductionBatchDetailPage() {
   if (!auth) return null
   if (loading || !batch) {
     return (
-      <div className="dashboard-page">
-        <header className="dashboard-header">
-          <div className="dashboard-brand">
-            <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')}>←</button>
-            <span className="dashboard-logo-label">STOCK</span>
-            <h1 className="dashboard-logo-title">PILOT</h1>
-          </div>
-        </header>
+      <div className="dashboard-page-content">
+        <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')} style={{ marginBottom: '0.5rem' }}>← Späť</button>
         <main className="dashboard-main">
           <div className="dashboard-loading">
             <span className="btn-spinner" aria-hidden="true" />
@@ -128,16 +122,9 @@ export default function ProductionBatchDetailPage() {
   const qrPayload = `${QR_PREFIX}${batch.id}`
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')}>←</button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content">
       <main className="dashboard-main customers-main">
+        <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/production')} style={{ marginBottom: '0.5rem' }}>← Späť na výrobu</button>
         <h2 className="dashboard-overview-title">{batch.product_type}</h2>
 
         <div className="production-detail-qr">

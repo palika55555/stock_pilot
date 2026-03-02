@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../models/user.dart';
 import '../../screens/profile/profile_page.dart';
 import '../../screens/login/login_page.dart';
-import '../../services/Database/database_service.dart';
+import '../../services/logout_service.dart';
 import '../../screens/Settings/settings_page.dart';
-import '../notifications/notifications_sheet_widget.dart';
+import '../Notifications/notifications_sheet_widget.dart';
 
 class UserOptionsSheet extends StatelessWidget {
   final User user;
@@ -171,16 +171,7 @@ class UserOptionsSheet extends StatelessWidget {
                       "Odhlásiť sa",
                       Colors.redAccent,
                       onTap: () async {
-                        await DatabaseService().clearSavedLogin();
-                        if (!context.mounted) return;
-                        Navigator.pop(context);
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginPage(),
-                          ),
-                          (route) => false,
-                        );
+                        await LogoutService.logout(context);
                       },
                     ),
                   ],

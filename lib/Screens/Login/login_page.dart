@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
+import '../../services/sync_service.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/Common/change_password_dialog.dart';
@@ -22,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isObscured = true;
   bool _isLoading = false;
+  String? _syncMessage;
   bool _rememberMe = false;
   final DatabaseService _dbService = DatabaseService();
 
@@ -56,8 +58,9 @@ class _LoginPageState extends State<LoginPage> {
       User? user = await _dbService.getUserByUsername(_loginController.text);
 
       if (mounted) {
-        setState(() => _isLoading = false);
-
+        if (user == null || user.password != _passwordController.text) {
+          setState(() => _isLoading = false);
+        }
         if (user != null && user.password == _passwordController.text) {
           if (_rememberMe) {
             await _dbService.setRememberMe(true);
@@ -65,19 +68,30 @@ class _LoginPageState extends State<LoginPage> {
           } else {
             await _dbService.clearSavedLogin();
           }
-          // Najprv sync používateľa na backend, aby tam bol pred prihlásením (rovnaké meno/heslo)
+          if (!mounted) return;
+          DatabaseService.setCurrentUser(user.username);
           await syncUserToBackend(user);
+          if (!mounted) return;
           final customers = await _dbService.getCustomers();
-          syncCustomersToBackend(customers);
-          // Token potrebujeme pre sync aj pre dotiahnutie z webu
-          final token = await fetchBackendToken(user.username, user.password);
-          if (token != null) setBackendToken(token);
-          // So tokenom odošleme zákazníkov a produkty na backend (inak backend vracia 401)
-          if (token != null) syncCustomersToBackend(customers);
-          final fromBackend = await fetchCustomersFromBackendWithToken(token);
-          if (fromBackend != null && fromBackend.isNotEmpty && mounted) {
-            await _dbService.replaceCustomersFromBackend(fromBackend);
-          } else if (mounted && token == null) {
+          final token = await fetchBackendToken(user.username, user.password, rememberMe: _rememberMe);
+          if (token != null) {
+            if (mounted) setState(() => _syncMessage = 'Načítavam vaše dáta...');
+            syncCustomersToBackend(customers);
+            final products = await _dbService.getProducts();
+            syncProductsToBackend(products);
+            await syncBatchesToBackend();
+            final ok = await SyncService.initialSync(user.id?.toString() ?? '0', token);
+            if (!mounted) return;
+            if (!ok) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Dáta z webu sa nenačítali. Skontrolujte sieť. Môžete pokračovať v režime offline.'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            }
+          } else if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Zákazníci z webu sa nenačítali. Skontrolujte sieť alebo prihlásenie (rovnaký účet ako na webe).'),
@@ -86,22 +100,8 @@ class _LoginPageState extends State<LoginPage> {
               ),
             );
           }
-          // Automatická synchronizácia produktov s webom (push + pull EAN) – na webe môžeš priradzovať EAN/PLU
-          if (mounted && token != null) {
-            final products = await _dbService.getProducts();
-            syncProductsToBackend(products);
-            final backendProducts = await fetchProductsFromBackendWithToken(token);
-            if (backendProducts != null && backendProducts.isNotEmpty) {
-              await _dbService.updateProductEanFromBackend(backendProducts);
-            }
-            await syncBatchesToBackend();
-            final backendBatches = await fetchBatchesFromBackendWithToken(token);
-            if (backendBatches != null) {
-              await _dbService.replaceBatchesFromBackend(backendBatches);
-            }
-          }
           if (!mounted) return;
-          // Navigácia na HomeScreen s reálnymi dátami používateľa
+          setState(() { _isLoading = false; _syncMessage = null; });
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -241,6 +241,13 @@ class _LoginPageState extends State<LoginPage> {
                           isLoading: _isLoading,
                           onPressed: _handleLogin,
                         ),
+                        if (_syncMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _syncMessage!,
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         TextButton(
                           onPressed: () {

@@ -119,23 +119,7 @@ export default function CustomerDetailPage() {
   if (!auth) return null
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/customers')} title="Späť na zákazníkov">
-            ←
-          </button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
-        </div>
-        <div className="dashboard-user">
-          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Používateľ'}</span>
-          <button type="button" className="btn-logout" onClick={() => { localStorage.removeItem('stockpilot_auth'); navigate('/', { replace: true }) }}>
-            Odhlásiť sa
-          </button>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content">
       <main className="dashboard-main customer-detail-main">
         {loading ? (
           <div className="dashboard-loading">
@@ -147,6 +131,7 @@ export default function CustomerDetailPage() {
         ) : customer ? (
           <>
             <div className="customer-detail-header">
+              <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/customers')} style={{ marginBottom: '0.5rem' }}>← Späť na zoznam</button>
               <h2 className="dashboard-overview-title">{customer.name}</h2>
               <div className="customer-detail-actions">
                 {!editing ? (
@@ -292,10 +277,6 @@ export default function CustomerDetailPage() {
           </>
         ) : null}
       </main>
-
-      <footer className="dashboard-footer">
-        Stock Pilot &copy; {new Date().getFullYear()}
-      </footer>
     </div>
   )
 }

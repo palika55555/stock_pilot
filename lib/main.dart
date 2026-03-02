@@ -46,6 +46,9 @@ void main() async {
     final savedUsername = await db.getSavedUsername();
     if (rememberMe && savedUsername != null && savedUsername.isNotEmpty) {
       initialUser = await db.getUserByUsername(savedUsername);
+      if (initialUser != null) {
+        DatabaseService.setCurrentUser(initialUser.username);
+      }
     }
     // Ak žiadny používateľ nie je prihlásený, skontrolujeme či v DB vôbec sú používatelia
     if (initialUser == null) {

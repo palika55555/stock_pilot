@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../screens/login/login_page.dart';
-import '../../services/Database/database_service.dart';
+import '../../services/logout_service.dart';
 
 class MobileUserInfoWidget extends StatelessWidget {
   final String userName;
@@ -178,14 +178,7 @@ class MobileUserInfoWidget extends StatelessWidget {
             ],
           ),
           onTap: () async {
-            await DatabaseService().clearSavedLogin();
-            if (!context.mounted) return;
-            Navigator.pop(context);
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginPage()),
-              (Route<dynamic> route) => false,
-            );
+            await LogoutService.logout(context);
           },
         ),
       ],

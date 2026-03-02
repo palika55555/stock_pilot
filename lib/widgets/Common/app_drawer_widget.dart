@@ -16,6 +16,7 @@ import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Reports/reports_list_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
+import 'package:stock_pilot/services/logout_service.dart';
 
 const Color _kDrawerBg = Color(0xFF212124);
 const Color _kDrawerText = Color(0xFFFFFFFF);
@@ -373,13 +374,7 @@ class _LogoutItem extends StatelessWidget {
       title: l10n.logout,
       color: const Color(0xFFEF4444),
       onTap: () async {
-        await DatabaseService().clearSavedLogin();
-        if (!context.mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (route) => false,
-        );
+        await LogoutService.logout(context);
       },
     );
   }

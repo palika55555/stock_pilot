@@ -69,25 +69,9 @@ export default function ProductDetailPage() {
   if (!auth) return null
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">
-            ←
-          </button>
-          <span className="dashboard-logo-label">STOCK</span>
-          <h1 className="dashboard-logo-title">PILOT</h1>
-        </div>
-        <div className="dashboard-user">
-          <span className="dashboard-user-name">{auth.user?.fullName || auth.user?.username || 'Používateľ'}</span>
-          <span className="dashboard-user-role">{auth.user?.role || 'user'}</span>
-          <button type="button" className="btn-logout" onClick={handleLogout}>
-            Odhlásiť sa
-          </button>
-        </div>
-      </header>
-
+    <div className="dashboard-page-content">
       <main className="dashboard-main product-detail-main">
+        <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard/products')} style={{ marginBottom: '0.5rem' }}>← Späť na produkty</button>
         <h2 className="dashboard-overview-title">Detail produktu</h2>
 
         {loading ? (
@@ -123,10 +107,6 @@ export default function ProductDetailPage() {
           </>
         ) : null}
       </main>
-
-      <footer className="dashboard-footer">
-        Stock Pilot &copy; {new Date().getFullYear()}
-      </footer>
     </div>
   )
 }

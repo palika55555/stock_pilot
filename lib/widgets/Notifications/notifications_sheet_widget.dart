@@ -11,6 +11,8 @@ class NotificationItem {
   final bool read;
   final IconData icon;
   final Color iconColor;
+  /// Po kliku na položku (context = sheet). Ak null, len zatvorí sheet.
+  final void Function(BuildContext context)? onTap;
 
   const NotificationItem({
     required this.id,
@@ -20,6 +22,7 @@ class NotificationItem {
     this.read = false,
     this.icon = Icons.notifications_outlined,
     this.iconColor = Colors.orange,
+    this.onTap,
   });
 }
 
@@ -30,7 +33,7 @@ class NotificationsSheet extends StatelessWidget {
 
   const NotificationsSheet({super.key, this.notifications, this.onClearAll});
 
-  static List<NotificationItem> get _defaultNotifications => [
+  static List<NotificationItem> get defaultNotifications => [
     NotificationItem(
       id: '1',
       title: 'Nízky stav skladu',
@@ -65,7 +68,7 @@ class NotificationsSheet extends StatelessWidget {
 
   Widget _buildGlassNotificationsModal(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final list = notifications ?? _defaultNotifications;
+    final list = notifications ?? defaultNotifications;
 
     return Material(
       color: Colors.transparent,
@@ -217,7 +220,13 @@ class NotificationsSheet extends StatelessWidget {
                                       color: Colors.white.withOpacity(0.5),
                                     ),
                                   ),
-                                  onTap: () => Navigator.pop(context),
+                                  onTap: () {
+                                    if (n.onTap != null) {
+                                      n.onTap!(context);
+                                    } else {
+                                      Navigator.pop(context);
+                                    }
+                                  },
                                 );
                               },
                             ),

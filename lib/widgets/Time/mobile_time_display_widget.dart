@@ -11,19 +11,20 @@ class MobileTimeDisplayWidget extends StatefulWidget {
 
 class _MobileTimeDisplayWidgetState extends State<MobileTimeDisplayWidget> {
   late DateTime _now;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _now = DateTime.now();
-    // Update every 30 seconds instead of every second for mobile
-    Timer.periodic(const Duration(seconds: 30), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) setState(() => _now = DateTime.now());
     });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     super.dispose();
   }
 
