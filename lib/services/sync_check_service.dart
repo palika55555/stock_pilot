@@ -35,6 +35,17 @@ class SyncCheckService {
   /// Jednorazová kontrola (volaj z SyncService pri 5-min sync alebo reconnect).
   Future<void> triggerCheck() async => _check();
 
+  /// Po úspešnom pridání/úprave zákazníkov cez aplikáciu volaj túto metódu – aktualizuje
+  /// lokálny „last known“ timestamp, takže sa nezobrazí hláška „Na webe boli zmeny...“.
+  Future<void> updateLastKnownFromServer() async {
+    final token = getBackendToken();
+    final data = await fetchSyncCheck(token: token);
+    final serverAt = data != null ? (data['customers_updated_at'] as num?)?.toInt() ?? 0 : 0;
+    if (serverAt == 0) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyLastKnown, serverAt);
+  }
+
   Future<void> _check() async {
     final token = getBackendToken();
     final data = await fetchSyncCheck(token: token);

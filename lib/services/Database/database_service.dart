@@ -2186,14 +2186,14 @@ class DatabaseService {
     return rows;
   }
 
+  /// Generuje ďalšie voľné číslo príjemky (globálne unikátne – stĺpec receipt_number má UNIQUE).
   Future<String> getNextReceiptNumber() async {
     Database db = await database;
-    if (_currentUserId == null) return 'PR-${DateTime.now().year}-0001';
     final year = DateTime.now().year;
     final prefix = 'PR-$year-';
     final result = await db.rawQuery(
-      'SELECT receipt_number FROM inbound_receipts WHERE user_id = ? AND receipt_number LIKE ? ORDER BY id DESC LIMIT 1',
-      [_currentUserId, '$prefix%'],
+      'SELECT receipt_number FROM inbound_receipts WHERE receipt_number LIKE ? ORDER BY receipt_number DESC LIMIT 1',
+      ['$prefix%'],
     );
     if (result.isEmpty) return '${prefix}0001';
     final last = result.first['receipt_number'] as String;
@@ -2204,22 +2204,28 @@ class DatabaseService {
 
   // Supplier CRUD
   Future<int> insertSupplier(Supplier supplier) async {
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
+    if (_currentUserId == null) {
+      throw Exception('Nie ste prihlásený – nie je možné uložiť dodávateľa');
+    }
     Database db = await database;
     final map = Map<String, dynamic>.from(supplier.toMap());
-    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    map['user_id'] = _currentUserId;
     return await db.insert('suppliers', map);
   }
 
   Future<List<Supplier>> getSuppliers() async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return [];
+    Database db = await database;
     final maps = await db.query('suppliers', where: _userWhere, whereArgs: _userArgs, orderBy: 'name ASC');
     return maps.map((m) => Supplier.fromMap(m)).toList();
   }
 
   Future<List<Supplier>> getActiveSuppliers() async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return [];
+    Database db = await database;
     final maps = await db.query(
       'suppliers',
       where: 'user_id = ? AND is_active = 1',
@@ -2230,15 +2236,18 @@ class DatabaseService {
   }
 
   Future<Supplier?> getSupplierById(int id) async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return null;
+    Database db = await database;
     final maps = await db.query('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     if (maps.isEmpty) return null;
     return Supplier.fromMap(maps.first);
   }
 
   Future<int> updateSupplier(Supplier supplier) async {
-    if (supplier.id == null || _currentUserId == null) return 0;
+    if (supplier.id == null) return 0;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
+    if (_currentUserId == null) return 0;
     Database db = await database;
     return await db.update(
       'suppliers',
@@ -2249,8 +2258,9 @@ class DatabaseService {
   }
 
   Future<int> deleteSupplier(int id) async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return 0;
+    Database db = await database;
     return await db.delete('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
   }
 
