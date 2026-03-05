@@ -46,8 +46,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Povolené CORS origins (z env alebo default pre Stock Pilot)
 const defaultOrigins = [
-  'https://www.stockpilot.sk',
-  'https://stockpilot.sk',
+  'https://www.app.stockpilot.sk',
+  'https://app.stockpilot.sk',
 ];
 
 // Vždy zahrni default origins; ALLOWED_ORIGINS len pridá ďalšie (nikdy nenahradí www.stockpilot.sk).
