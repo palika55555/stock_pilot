@@ -2,8 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
-import '../../services/api_sync_service.dart';
-import '../../services/sync_service.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/Common/change_password_dialog.dart';
@@ -23,7 +21,6 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isObscured = true;
   bool _isLoading = false;
-  String? _syncMessage;
   bool _rememberMe = false;
   final DatabaseService _dbService = DatabaseService();
 
@@ -58,9 +55,8 @@ class _LoginPageState extends State<LoginPage> {
       User? user = await _dbService.getUserByUsername(_loginController.text);
 
       if (mounted) {
-        if (user == null || user.password != _passwordController.text) {
-          setState(() => _isLoading = false);
-        }
+        setState(() => _isLoading = false);
+
         if (user != null && user.password == _passwordController.text) {
           if (_rememberMe) {
             await _dbService.setRememberMe(true);
@@ -69,70 +65,7 @@ class _LoginPageState extends State<LoginPage> {
             await _dbService.clearSavedLogin();
           }
           if (!mounted) return;
-
-          // 1) Backend login – získame accessToken + numerické userId z Postgresu
-          final loginResult = await fetchBackendToken(
-            user.username,
-            user.password,
-            rememberMe: _rememberMe,
-          );
-          final backendUserId = loginResult?.userId;
-          final token = loginResult?.accessToken;
-
-          // 2) Nastavíme aktuálneho používateľa podľa backend ID (ak je k dispozícii),
-          // inak fallback na lokálne username (offline scenár).
-          if (backendUserId != null && backendUserId.isNotEmpty) {
-            await DatabaseService().migrateUserIdForCurrentUser(
-              oldUserId: user.username,
-              newUserId: backendUserId,
-            );
-            await DatabaseService.setCurrentUser(backendUserId);
-            print(
-              'DEBUG LoginPage: setCurrentUser called with backend userId = $backendUserId (currentUserId=${DatabaseService.currentUserId})',
-            );
-          } else {
-            await DatabaseService.setCurrentUser(user.username);
-            print(
-              'DEBUG LoginPage: backend login failed or no userId, setCurrentUser fallback to username = ${user.username} (currentUserId=${DatabaseService.currentUserId})',
-            );
-          }
-
-          // 3) Po nastavení currentUserId môžeme bezpečne pracovať s lokálnou DB
-          await syncUserToBackend(user);
-          if (!mounted) return;
-          final customers = await _dbService.getCustomers();
-          final products = await _dbService.getProducts();
-
-          if (token != null) {
-            if (mounted) setState(() => _syncMessage = 'Načítavam vaše dáta...');
-            syncCustomersToBackend(customers);
-            syncProductsToBackend(products);
-            await syncBatchesToBackend();
-            // 4) Počiatočný sync z backendu – NEmažeme viac lokálne dáta vopred,
-            // aby sme pri chybe neskončili s prázdnou DB. Namiesto toho sa spoliehame
-            // na replace/update metódy v DatabaseService.
-            final ok = await SyncService.initialSync(DatabaseService.currentUserId ?? (user.id?.toString() ?? '0'), token);
-            if (!mounted) return;
-            if (!ok) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Dáta z webu sa nenačítali. Skontrolujte sieť. Môžete pokračovať v režime offline.'),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 4),
-                ),
-              );
-            }
-          } else if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Zákazníci z webu sa nenačítali. Skontrolujte sieť alebo prihlásenie (rovnaký účet ako na webe).'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 4),
-              ),
-            );
-          }
-          if (!mounted) return;
-          setState(() { _isLoading = false; _syncMessage = null; });
+          // Navigácia na HomeScreen s reálnymi dátami používateľa
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -272,13 +205,6 @@ class _LoginPageState extends State<LoginPage> {
                           isLoading: _isLoading,
                           onPressed: _handleLogin,
                         ),
-                        if (_syncMessage != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _syncMessage!,
-                            style: TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                        ],
                         const SizedBox(height: 16),
                         TextButton(
                           onPressed: () {

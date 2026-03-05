@@ -124,7 +124,9 @@ Future<void> syncUserToBackend(User user) async {
 
 /// Pošle zoznam zákazníkov do backendu – dashboard na webe zobrazí rovnaký počet.
 /// Volaj po prihlásení a po pridaní/úprave zákazníka. Vyžaduje token (backend vracia 401 bez neho).
-void syncCustomersToBackend(List<Customer> customers) {
+/// Vráti Future, ktoré dokončí po úspešnom odoslaní – po await volaj [SyncCheckService.updateLastKnownFromServer],
+/// aby sa nezobrazila hláška „Na webe boli zmeny v zákazníkoch“.
+Future<void> syncCustomersToBackend(List<Customer> customers) async {
   if (customers.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
@@ -132,14 +134,16 @@ void syncCustomersToBackend(List<Customer> customers) {
   final body = jsonEncode({
     'customers': customers.map((c) => c.toMap()).toList(),
   });
-  http
+  final res = await http
       .post(
         uri,
         headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
         body: body,
       )
-      .timeout(const Duration(seconds: 10))
-      .ignore();
+      .timeout(const Duration(seconds: 10));
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('sync customers failed: ${res.statusCode}');
+  }
 }
 
 /// Pošle zoznam produktov do backendu – webové skenovanie potom zobrazí názov a množstvo.

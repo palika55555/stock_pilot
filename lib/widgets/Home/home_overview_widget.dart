@@ -132,21 +132,49 @@ class _HomeOverviewState extends State<HomeOverview> {
           ),
           child: Padding(
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 8,
-              left: 16.0,
-              right: 16.0,
+              top: MediaQuery.of(context).padding.top + 6,
+              left: 14.0,
+              right: 14.0,
               bottom: 24.0,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  l10n.overview,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: _kHomeText,
-                  ),
+                // Header row: title + refresh button
+                Row(
+                  children: [
+                    Text(
+                      l10n.overview,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _kHomeText,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: _loadStats,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _kHomeCard,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _kHomeBorder, width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 13, color: _kHomeAccent),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Obnoviť',
+                              style: TextStyle(fontSize: 11, color: _kHomeTextMuted, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 LayoutBuilder(
@@ -158,7 +186,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Expanded(child: _buildNotesCard(context, l10n, matchHeight: true)),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 12),
                             Expanded(child: _buildTasksCard(context, l10n, matchHeight: true)),
                           ],
                         ),
@@ -167,27 +195,46 @@ class _HomeOverviewState extends State<HomeOverview> {
                     return Column(
                       children: [
                         _buildNotesCard(context, l10n, matchHeight: false),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 10),
                         _buildTasksCard(context, l10n, matchHeight: false),
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
                 _buildReceiptKpiCards(context),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 _buildProductionKpiCards(context),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 _buildKpiCards(context, l10n),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
                 _buildRecentMovementsCard(context, l10n),
                 const SizedBox(height: 24),
-               
-                const SizedBox(height: 40),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 13, color: _kHomeAccent),
+          const SizedBox(width: 5),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: _kHomeTextMuted,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -206,10 +253,15 @@ class _HomeOverviewState extends State<HomeOverview> {
         try {
           final dt = DateTime.parse(createdAt);
           final diff = DateTime.now().difference(dt);
-          if (diff.inMinutes < 60) lastReceiptText = '$numStr (pred ${diff.inMinutes} min)';
-          else if (diff.inHours < 24) lastReceiptText = '$numStr (pred ${diff.inHours} h)';
-          else if (diff.inDays < 7) lastReceiptText = '$numStr (pred ${diff.inDays} d)';
-          else lastReceiptText = numStr;
+          if (diff.inMinutes < 60) {
+            lastReceiptText = '$numStr (${diff.inMinutes}min)';
+          } else if (diff.inHours < 24) {
+            lastReceiptText = '$numStr (${diff.inHours}h)';
+          } else if (diff.inDays < 7) {
+            lastReceiptText = '$numStr (${diff.inDays}d)';
+          } else {
+            lastReceiptText = numStr;
+          }
         } catch (_) {
           lastReceiptText = numStr;
         }
@@ -217,50 +269,58 @@ class _HomeOverviewState extends State<HomeOverview> {
         lastReceiptText = numStr;
       }
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 700 ? 5 : (constraints.maxWidth > 450 ? 3 : 2);
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.2,
-          children: [
-            _DashboardKpiCard(
-              title: 'Príjemky dnes',
-              value: receiptsToday.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Čaká na schválenie',
-              value: pendingCount.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Hodnota príjemiek tento mesiac',
-              value: '${NumberFormat.decimalPattern('sk_SK').format(valueMonth)} €',
-              trendPercent: 0,
-              onTap: () {},
-            ),
-            _DashboardKpiCard(
-              title: 'Produkty pod min. zásobou',
-              value: lowStock.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseSuppliesScreen(userRole: widget.userRole))).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Posledná príjemka',
-              value: lastReceiptText,
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel('Príjemky & Sklad', Icons.inventory_2_rounded),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth > 700 ? 5 : (constraints.maxWidth > 450 ? 3 : 2);
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.45,
+              children: [
+                _DashboardKpiCard(
+                  title: 'Príjemky dnes',
+                  value: receiptsToday.toString(),
+                  icon: Icons.today_rounded,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Čaká na schválenie',
+                  value: pendingCount.toString(),
+                  icon: Icons.pending_actions_rounded,
+                  iconColor: pendingCount > 0 ? Colors.orangeAccent : null,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Hodnota tento mesiac',
+                  value: '${NumberFormat.decimalPattern('sk_SK').format(valueMonth)} €',
+                  icon: Icons.euro_rounded,
+                  onTap: () {},
+                ),
+                _DashboardKpiCard(
+                  title: 'Pod min. zásobou',
+                  value: lowStock.toString(),
+                  icon: Icons.warning_amber_rounded,
+                  iconColor: lowStock > 0 ? Colors.redAccent : null,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseSuppliesScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Posledná príjemka',
+                  value: lastReceiptText,
+                  icon: Icons.receipt_long_rounded,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GoodsReceiptScreen())).then((_) => _loadStats()),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -269,86 +329,101 @@ class _HomeOverviewState extends State<HomeOverview> {
     final inProgress = _stats['productionInProgressCount'] is int ? _stats['productionInProgressCount'] as int : 0;
     final pendingApproval = _stats['productionPendingApprovalCount'] is int ? _stats['productionPendingApprovalCount'] as int : 0;
     final costMonth = _stats['productionCostThisMonth'] is num ? (_stats['productionCostThisMonth'] as num).toDouble() : 0.0;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.2,
-          children: [
-            _DashboardKpiCard(
-              title: 'Výrobné príkazy dnes',
-              value: ordersToday.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Prebieha výroba',
-              value: inProgress.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Čaká na schválenie (VP)',
-              value: pendingApproval.toString(),
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
-            ),
-            _DashboardKpiCard(
-              title: 'Výrobné náklady tento mesiac',
-              value: '${NumberFormat.decimalPattern('sk_SK').format(costMonth)} €',
-              trendPercent: 0,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel('Výroba', Icons.precision_manufacturing_rounded),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.45,
+              children: [
+                _DashboardKpiCard(
+                  title: 'Príkazy dnes',
+                  value: ordersToday.toString(),
+                  icon: Icons.assignment_rounded,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Prebieha výroba',
+                  value: inProgress.toString(),
+                  icon: Icons.play_circle_rounded,
+                  iconColor: inProgress > 0 ? const Color(0xFF22C55E) : null,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Čaká na schválenie',
+                  value: pendingApproval.toString(),
+                  icon: Icons.pending_rounded,
+                  iconColor: pendingApproval > 0 ? Colors.orangeAccent : null,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+                ),
+                _DashboardKpiCard(
+                  title: 'Náklady tento mesiac',
+                  value: '${NumberFormat.decimalPattern('sk_SK').format(costMonth)} €',
+                  icon: Icons.payments_rounded,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductionOrderListScreen(userRole: widget.userRole))).then((_) => _loadStats()),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildKpiCards(BuildContext context, AppLocalizations l10n) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.35,
-          children: [
-            _DashboardKpiCard(
-              title: 'Produkty',
-              value: _stats['products'].toString(),
-              trendPercent: 0,
-              onTap: () => _navigateTo(context, 'products'),
-            ),
-            _DashboardKpiCard(
-              title: 'Objednávky',
-              value: _stats['orders'].toString(),
-              trendPercent: 0,
-              onTap: () => _navigateTo(context, 'orders'),
-            ),
-            _DashboardKpiCard(
-              title: 'Zákazníci',
-              value: _stats['customers'].toString(),
-              trendPercent: 0,
-              onTap: () => _navigateTo(context, 'customers'),
-            ),
-            _DashboardKpiCard(
-              title: 'Tržby',
-              value: _formatCurrency(_stats['revenue']),
-              trendPercent: 0,
-              onTap: () => _navigateTo(context, 'revenue'),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel('Prehľad', Icons.bar_chart_rounded),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.45,
+              children: [
+                _DashboardKpiCard(
+                  title: 'Produkty',
+                  value: _stats['products'].toString(),
+                  icon: Icons.inventory_rounded,
+                  onTap: () => _navigateTo(context, 'products'),
+                ),
+                _DashboardKpiCard(
+                  title: 'Objednávky',
+                  value: _stats['orders'].toString(),
+                  icon: Icons.shopping_bag_rounded,
+                  onTap: () => _navigateTo(context, 'orders'),
+                ),
+                _DashboardKpiCard(
+                  title: 'Zákazníci',
+                  value: _stats['customers'].toString(),
+                  icon: Icons.people_rounded,
+                  onTap: () => _navigateTo(context, 'customers'),
+                ),
+                _DashboardKpiCard(
+                  title: 'Tržby',
+                  value: _formatCurrency(_stats['revenue']),
+                  icon: Icons.trending_up_rounded,
+                  iconColor: const Color(0xFF22C55E),
+                  onTap: () => _navigateTo(context, 'revenue'),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -359,39 +434,39 @@ class _HomeOverviewState extends State<HomeOverview> {
       minLines: 3,
       decoration: InputDecoration(
         hintText: l10n.overviewNotesPlaceholder,
-        hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 14),
+        hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 13),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: _kHomeTextMuted.withOpacity(0.15)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: _kHomeAccent, width: 1.5),
         ),
         filled: true,
         fillColor: _kHomeBg,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         isDense: true,
       ),
-      style: const TextStyle(fontSize: 14, color: _kHomeText),
+      style: const TextStyle(fontSize: 13, color: _kHomeText),
       onChanged: _saveNotes,
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _kHomeCard,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _kHomeTextMuted.withOpacity(0.12), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -401,25 +476,25 @@ class _HomeOverviewState extends State<HomeOverview> {
           Row(
             children: [
               Container(
-                width: 4,
-                height: 22,
+                width: 3,
+                height: 16,
                 decoration: BoxDecoration(
                   color: _kHomeAccent,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Text(
                 l10n.overviewNotesTitle,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: _kHomeText,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           if (matchHeight) Expanded(child: notesField) else notesField,
         ],
       ),
@@ -433,12 +508,12 @@ class _HomeOverviewState extends State<HomeOverview> {
       final title = task['t'] as String? ?? '';
       final done = task['d'] as bool? ?? false;
       return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.only(bottom: 4),
         child: Row(
           children: [
             SizedBox(
-              height: 24,
-              width: 24,
+              height: 20,
+              width: 20,
               child: Checkbox(
                 value: done,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -453,25 +528,25 @@ class _HomeOverviewState extends State<HomeOverview> {
                 },
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 title.isEmpty ? '—' : title,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   decoration: done ? TextDecoration.lineThrough : null,
                   color: done ? _kHomeTextMuted : _kHomeText,
                 ),
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close, size: 20, color: _kHomeTextMuted),
+              icon: const Icon(Icons.close, size: 16, color: _kHomeTextMuted),
               onPressed: () {
                 _overviewTasks.removeAt(i);
                 _saveTasks();
               },
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
           ],
         ),
@@ -486,25 +561,25 @@ class _HomeOverviewState extends State<HomeOverview> {
             controller: _newTaskController,
             decoration: InputDecoration(
               hintText: l10n.overviewNewTaskHint,
-              hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 14),
+              hintStyle: const TextStyle(color: _kHomeTextMuted, fontSize: 13),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: _kHomeTextMuted.withOpacity(0.15)),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: _kHomeAccent, width: 1.5),
               ),
               filled: true,
               fillColor: _kHomeBg,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               isDense: true,
             ),
-            style: const TextStyle(fontSize: 14, color: _kHomeText),
+            style: const TextStyle(fontSize: 13, color: _kHomeText),
             onSubmitted: (value) {
               final t = value.trim();
               if (t.isEmpty) return;
@@ -514,7 +589,7 @@ class _HomeOverviewState extends State<HomeOverview> {
             },
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         FilledButton.icon(
           onPressed: () {
             final t = _newTaskController.text.trim();
@@ -523,21 +598,21 @@ class _HomeOverviewState extends State<HomeOverview> {
             _newTaskController.clear();
             _saveTasks();
           },
-          icon: const Icon(Icons.add_rounded, size: 20, color: Color(0xFF111114)),
+          icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF111114)),
           label: Text(
             l10n.overviewAddTask,
             style: const TextStyle(
               color: Color(0xFF111114),
               fontWeight: FontWeight.w600,
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
           style: FilledButton.styleFrom(
             backgroundColor: _kHomeAccent,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             minimumSize: Size.zero,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
         ),
@@ -546,16 +621,16 @@ class _HomeOverviewState extends State<HomeOverview> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _kHomeCard,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _kHomeTextMuted.withOpacity(0.12), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -565,25 +640,25 @@ class _HomeOverviewState extends State<HomeOverview> {
           Row(
             children: [
               Container(
-                width: 4,
-                height: 22,
+                width: 3,
+                height: 16,
                 decoration: BoxDecoration(
                   color: _kHomeAccent,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Text(
                 l10n.overviewTasksTitle,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: _kHomeText,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           if (matchHeight)
             Expanded(
               child: Column(
@@ -597,7 +672,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   addTaskRow,
                 ],
               ),
@@ -608,7 +683,7 @@ class _HomeOverviewState extends State<HomeOverview> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ...tasksList,
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 addTaskRow,
               ],
             ),
@@ -671,24 +746,31 @@ class _HomeOverviewState extends State<HomeOverview> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _kHomeCard,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kHomeBorder, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.recentMovements,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: _kHomeText,
-            ),
+          Row(
+            children: [
+              Icon(Icons.swap_vert_rounded, size: 14, color: _kHomeAccent),
+              const SizedBox(width: 6),
+              Text(
+                l10n.recentMovements.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: _kHomeTextMuted,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -704,7 +786,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     child: _buildMovementColumn(
                       title: '${l10n.inboundReceipts} (${inboundList.length})',
                       items: inboundList,
@@ -713,7 +795,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                   ),
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
               Expanded(
                 child: InkWell(
                   onTap: () {
@@ -726,7 +808,7 @@ class _HomeOverviewState extends State<HomeOverview> {
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     child: _buildMovementColumn(
                       title: '${l10n.outboundReceipts} (${outboundList.length})',
                       items: outboundList,
@@ -749,7 +831,7 @@ class _HomeOverviewState extends State<HomeOverview> {
   }) {
     final color = positive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
     final prefix = positive ? '+ ' : '- ';
-    final dateFormat = DateFormat('dd.MM.yyyy');
+    final dateFormat = DateFormat('dd.MM.yy');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -757,16 +839,16 @@ class _HomeOverviewState extends State<HomeOverview> {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: _kHomeTextMuted,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         if (items.isEmpty)
           const Text(
             '—',
-            style: TextStyle(fontSize: 13, color: _kHomeTextMuted),
+            style: TextStyle(fontSize: 12, color: _kHomeTextMuted),
           )
         else
           ...items.map((e) {
@@ -781,23 +863,23 @@ class _HomeOverviewState extends State<HomeOverview> {
             final dateStr =
                 dt != null ? dateFormat.format(dt) : '—';
             final amountStr =
-                '${prefix}${NumberFormat.decimalPattern('sk_SK').format(total)} €';
+                '$prefix${NumberFormat.decimalPattern('sk_SK').format(total)} €';
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     dateStr,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: _kHomeTextMuted,
                     ),
                   ),
                   Text(
                     amountStr,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: color,
                     ),
@@ -809,74 +891,77 @@ class _HomeOverviewState extends State<HomeOverview> {
       ],
     );
   }
-
 }
+
 class _DashboardKpiCard extends StatelessWidget {
   final String title;
   final String value;
-  final int trendPercent;
+  final IconData icon;
+  final Color? iconColor;
   final VoidCallback? onTap;
 
   const _DashboardKpiCard({
     required this.title,
     required this.value,
-    required this.trendPercent,
+    required this.icon,
+    this.iconColor,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isPositive = trendPercent >= 0;
-    final trendColor =
-        isPositive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-    final trendText = '${isPositive ? '+' : ''}$trendPercent%';
+    final accent = iconColor ?? _kHomeAccent;
 
     return Container(
       decoration: BoxDecoration(
         color: _kHomeCard,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kHomeBorder, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: _kHomeTextMuted,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _kHomeTextMuted,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(icon, size: 14, color: accent.withOpacity(0.65)),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: _kHomeAccent,
-                  letterSpacing: -0.5,
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                    letterSpacing: -0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                trendText,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: trendColor,
-                ),
-              ),
-            ],
+              ],
             ),
           ),
         ),
