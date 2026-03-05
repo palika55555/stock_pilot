@@ -53,7 +53,7 @@ const defaultOrigins = [
 // Vždy zahrni default origins; ALLOWED_ORIGINS len pridá ďalšie (nikdy nenahradí www.stockpilot.sk).
 const extraOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-  : ['https://stock-pilot-web.vercel.app'];
+  : ['https://app.stockpilot.sk'];
 const envOrigins = [...defaultOrigins, ...extraOrigins];
 
 // Dôležité: Uisti sa, že NODE_ENV je v Coolify nastavené na 'production'
