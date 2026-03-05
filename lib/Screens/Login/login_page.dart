@@ -69,18 +69,49 @@ class _LoginPageState extends State<LoginPage> {
             await _dbService.clearSavedLogin();
           }
           if (!mounted) return;
-          DatabaseService.setCurrentUser(user.username);
+
+          // 1) Backend login – získame accessToken + numerické userId z Postgresu
+          final loginResult = await fetchBackendToken(
+            user.username,
+            user.password,
+            rememberMe: _rememberMe,
+          );
+          final backendUserId = loginResult?.userId;
+          final token = loginResult?.accessToken;
+
+          // 2) Nastavíme aktuálneho používateľa podľa backend ID (ak je k dispozícii),
+          // inak fallback na lokálne username (offline scenár).
+          if (backendUserId != null && backendUserId.isNotEmpty) {
+            await DatabaseService().migrateUserIdForCurrentUser(
+              oldUserId: user.username,
+              newUserId: backendUserId,
+            );
+            await DatabaseService.setCurrentUser(backendUserId);
+            print(
+              'DEBUG LoginPage: setCurrentUser called with backend userId = $backendUserId (currentUserId=${DatabaseService.currentUserId})',
+            );
+          } else {
+            await DatabaseService.setCurrentUser(user.username);
+            print(
+              'DEBUG LoginPage: backend login failed or no userId, setCurrentUser fallback to username = ${user.username} (currentUserId=${DatabaseService.currentUserId})',
+            );
+          }
+
+          // 3) Po nastavení currentUserId môžeme bezpečne pracovať s lokálnou DB
           await syncUserToBackend(user);
           if (!mounted) return;
           final customers = await _dbService.getCustomers();
-          final token = await fetchBackendToken(user.username, user.password, rememberMe: _rememberMe);
+          final products = await _dbService.getProducts();
+
           if (token != null) {
             if (mounted) setState(() => _syncMessage = 'Načítavam vaše dáta...');
             syncCustomersToBackend(customers);
-            final products = await _dbService.getProducts();
             syncProductsToBackend(products);
             await syncBatchesToBackend();
-            final ok = await SyncService.initialSync(user.id?.toString() ?? '0', token);
+            // 4) Počiatočný sync z backendu – NEmažeme viac lokálne dáta vopred,
+            // aby sme pri chybe neskončili s prázdnou DB. Namiesto toho sa spoliehame
+            // na replace/update metódy v DatabaseService.
+            final ok = await SyncService.initialSync(DatabaseService.currentUserId ?? (user.id?.toString() ?? '0'), token);
             if (!mounted) return;
             if (!ok) {
               ScaffoldMessenger.of(context).showSnackBar(

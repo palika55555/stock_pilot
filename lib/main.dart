@@ -13,6 +13,7 @@ import 'models/user.dart';
 import 'services/Shortcuts/app_shortcuts_service.dart';
 import 'Providers/theme_locale_provider.dart';
 import 'l10n/app_localizations.dart';
+import 'services/auth_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +48,14 @@ void main() async {
     if (rememberMe && savedUsername != null && savedUsername.isNotEmpty) {
       initialUser = await db.getUserByUsername(savedUsername);
       if (initialUser != null) {
-        DatabaseService.setCurrentUser(initialUser.username);
+        // Preferuj numerické backend userId zo secure storage; ak nie je k dispozícii,
+        // zostáva fallback na lokálne username.
+        final storedUserId = await AuthStorageService.instance.getUserId();
+        if (storedUserId != null && storedUserId.isNotEmpty) {
+          await DatabaseService.setCurrentUser(storedUserId);
+        } else {
+          await DatabaseService.setCurrentUser(initialUser.username);
+        }
       }
     }
     // Ak žiadny používateľ nie je prihlásený, skontrolujeme či v DB vôbec sú používatelia

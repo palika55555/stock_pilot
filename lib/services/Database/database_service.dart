@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
@@ -29,18 +30,42 @@ class DatabaseService {
   static Database? _database;
   static Future<Database>? _dbFuture;
   static String? _customPath;
+  static const String _kCurrentUserIdKey = 'current_user_id';
 
-  /// Current user identifier (e.g. username) – all reads/writes filter by this. Set on login, cleared on logout.
+  /// Current user identifier (e.g. backend user id as string) – all reads/writes filter by this. Set on login, cleared on logout.
   static String? _currentUserId;
 
   static String? get currentUserId => _currentUserId;
 
-  static void setCurrentUser(String? userId) {
+  /// Set current user for all DB operations and persist to SharedPreferences so it survives static resets.
+  static Future<void> setCurrentUser(String userId) async {
     _currentUserId = userId;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kCurrentUserIdKey, userId);
+    print('DEBUG setCurrentUser: $userId | instance: ${_instance.hashCode}');
+  }
+
+  /// Restore current user from memory or SharedPreferences (used when static field was reset).
+  static Future<String?> restoreCurrentUser() async {
+    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      print('DEBUG restoreCurrentUser: already set to $_currentUserId | instance: ${_instance.hashCode}');
+      return _currentUserId;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    _currentUserId = prefs.getString(_kCurrentUserIdKey);
+    print('DEBUG restoreCurrentUser: restored $_currentUserId | instance: ${_instance.hashCode}');
+    return _currentUserId;
   }
 
   static void clearCurrentUser() {
+    print('DEBUG clearCurrentUser called! Stack:');
+    print(StackTrace.current);
+    print('DEBUG clearCurrentUser previous value: $_currentUserId | instance: ${_instance.hashCode}');
     _currentUserId = null;
+    // Best-effort async cleanup of persisted user id.
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove(_kCurrentUserIdKey);
+    });
   }
 
   factory DatabaseService() => _instance;
@@ -90,6 +115,51 @@ class DatabaseService {
       try {
         await db.delete(table, where: 'user_id = ?', whereArgs: [uid]);
       } catch (_) {}
+    }
+  }
+
+  /// Premigruje lokálne dáta z jedného identifikátora používateľa na iný (napr. z username "admin" na numerické ID "2").
+  /// Používa sa po prvom úspešnom backend logine, aby sa `user_id` v SQLite zhodoval s ID v JWT / Postgres.
+  Future<void> migrateUserIdForCurrentUser({
+    required String oldUserId,
+    required String newUserId,
+  }) async {
+    if (oldUserId == newUserId) return;
+    final db = await database;
+    const dataTables = [
+      'customers',
+      'products',
+      'inbound_receipts',
+      'quotes',
+      'quote_items',
+      'production_batches',
+      'production_batch_recipe',
+      'pallets',
+      'stock_outs',
+      'stock_out_items',
+      'stock_movements',
+      'warehouse_transfers',
+      'transports',
+      'production_orders',
+      'recipes',
+      'recipe_ingredients',
+      'receptura_polozky',
+      'suppliers',
+      'app_notifications',
+      'notification_settings',
+      'notification_preferences',
+    ];
+    for (final table in dataTables) {
+      try {
+        await db.update(
+          table,
+          {'user_id': newUserId},
+          where: 'user_id = ?',
+          whereArgs: [oldUserId],
+        );
+      } catch (_) {
+        // Niektoré tabuľky nemusia existovať na starších schémach – v takom prípade pokračujeme.
+      }
     }
   }
 
@@ -2186,16 +2256,42 @@ class DatabaseService {
 
   // Customer CRUD
   Future<int> insertCustomer(Customer customer) async {
-    Database db = await database;
+    if (_currentUserId == null) {
+      await DatabaseService.restoreCurrentUser();
+    }
+    if (_currentUserId == null) {
+      print(
+        'ERROR insertCustomer: currentUserId still null after restore, refusing to insert customer ${customer.name} | instance: ${_instance.hashCode}',
+      );
+      throw Exception('User not logged in – cannot insert customer');
+    }
+    final db = await database;
     final map = Map<String, dynamic>.from(customer.toMap());
-    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    map['user_id'] = _currentUserId;
+    print('DEBUG insertCustomer: user_id = $_currentUserId | instance: ${_instance.hashCode}');
+    print('DEBUG insertCustomer map: $map');
     return await db.insert('customers', map);
   }
 
   Future<List<Customer>> getCustomers() async {
-    Database db = await database;
-    if (_currentUserId == null) return [];
-    final maps = await db.query('customers', where: _userWhere, whereArgs: _userArgs, orderBy: 'name ASC');
+    if (_currentUserId == null) {
+      await DatabaseService.restoreCurrentUser();
+    }
+    if (_currentUserId == null) {
+      print(
+        'ERROR getCustomers: currentUserId still null after restore – returning empty list | instance: ${_instance.hashCode}',
+      );
+      return [];
+    }
+    print('DEBUG getCustomers: user=$_currentUserId | instance: ${_instance.hashCode}');
+    final db = await database;
+    final maps = await db.query(
+      'customers',
+      where: _userWhere,
+      whereArgs: _userArgs,
+      orderBy: 'name ASC',
+    );
+    print('DEBUG getCustomers result count: ${maps.length}');
     return maps.map((m) => Customer.fromMap(m)).toList();
   }
 

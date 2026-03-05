@@ -24,12 +24,32 @@ String? getBackendToken() => _backendToken;
 String _bearer(String? token) =>
     (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
 
+/// Výsledok backend loginu – prístupový token, refresh token a voliteľné userId (numerické ID používateľa ako reťazec).
+class BackendLoginResult {
+  final String accessToken;
+  final String refreshToken;
+  final String? userId;
+
+  BackendLoginResult({
+    required this.accessToken,
+    required this.refreshToken,
+    this.userId,
+  });
+}
+
 /// Save JWT tokens to secure storage and set in-memory access token.
-Future<void> saveTokensAndSet(String accessToken, String refreshToken) async {
+Future<void> saveTokensAndSet(
+  String accessToken,
+  String refreshToken, {
+  String? userId,
+}) async {
   await AuthStorageService.instance.saveTokens(
     accessToken: accessToken,
     refreshToken: refreshToken,
   );
+  if (userId != null && userId.isNotEmpty) {
+    await AuthStorageService.instance.saveUserId(userId);
+  }
   _backendToken = accessToken;
 }
 
@@ -150,28 +170,56 @@ void syncProductsToBackend(List<Product> products) {
       .ignore();
 }
 
-/// Prihlásenie na backend – JWT. Uloží access + refresh do secure storage a nastaví in-memory token.
-/// [rememberMe] => access token 7 dní, inak 24h. Vráti accessToken alebo null.
-Future<String?> fetchBackendToken(String username, String password, {bool rememberMe = false}) async {
+/// Prihlásenie na backend – JWT. Uloží access + refresh + userId do secure storage a nastaví in-memory token.
+/// [rememberMe] => access token 7 dní, inak 24h. Vráti detaily loginu alebo null.
+Future<BackendLoginResult?> fetchBackendToken(
+  String username,
+  String password, {
+  bool rememberMe = false,
+}) async {
   try {
     final uri = Uri.parse('$_apiBase/auth/login');
+    print('DEBUG backend login request: url=$uri username=$username rememberMe=$rememberMe');
     final res = await http
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
+          // Nikdy nelogujeme heslo.
           body: jsonEncode({'username': username, 'password': password, 'rememberMe': rememberMe}),
         )
         .timeout(const Duration(seconds: 10));
-    if (res.statusCode != 200) return null;
+    print('DEBUG backend login status: ${res.statusCode}');
+    print('DEBUG backend login body: ${res.body}');
+
+    if (res.statusCode != 200) {
+      print('DEBUG backend login failed with status ${res.statusCode}');
+      return null;
+    }
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
     final access = map?['accessToken'] as String?;
     final refresh = map?['refreshToken'] as String?;
-    if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
-      await saveTokensAndSet(access, refresh);
-      return access;
+    String? userId;
+    final user = map?['user'];
+    if (user is Map<String, dynamic>) {
+      final rawId = user['id'];
+      if (rawId != null) {
+        userId = rawId.toString();
+      }
     }
+    print('DEBUG backend login parsed userId=$userId accessPresent=${access != null && access.isNotEmpty} refreshPresent=${refresh != null && refresh.isNotEmpty}');
+    if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
+      await saveTokensAndSet(access, refresh, userId: userId);
+      return BackendLoginResult(
+        accessToken: access,
+        refreshToken: refresh,
+        userId: userId,
+      );
+    }
+    print('DEBUG backend login: missing access/refresh token in response');
     return null;
-  } catch (_) {
+  } catch (e, st) {
+    print('DEBUG backend login error: $e');
+    print(st);
     return null;
   }
 }
@@ -272,7 +320,7 @@ Future<void> syncBatchesToBackend() async {
     }
   } catch (e, st) {
     print('syncBatchesToBackend error: $e');
-    if (st != null) print(st);
+    print(st);
   }
 }
 
