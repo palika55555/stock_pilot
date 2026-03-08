@@ -9,11 +9,13 @@ import 'screens/first_startup/first_startup_screen.dart';
 import 'screens/first_startup/create_first_user_screen.dart';
 import 'screens/Home/Home_screen.dart';
 import 'services/Database/database_service.dart';
+import 'services/user_session.dart';
 import 'models/user.dart';
 import 'services/Shortcuts/app_shortcuts_service.dart';
 import 'Providers/theme_locale_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'services/auth_storage_service.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,14 +50,15 @@ void main() async {
     if (rememberMe && savedUsername != null && savedUsername.isNotEmpty) {
       initialUser = await db.getUserByUsername(savedUsername);
       if (initialUser != null) {
-        // Preferuj numerické backend userId zo secure storage; ak nie je k dispozícii,
-        // zostáva fallback na lokálne username.
         final storedUserId = await AuthStorageService.instance.getUserId();
-        if (storedUserId != null && storedUserId.isNotEmpty) {
-          await DatabaseService.setCurrentUser(storedUserId);
-        } else {
-          await DatabaseService.setCurrentUser(initialUser.username);
-        }
+        final userId = (storedUserId != null && storedUserId.isNotEmpty)
+            ? storedUserId
+            : (initialUser.id?.toString() ?? initialUser.username);
+        UserSession.setUser(
+          userId: userId,
+          username: initialUser.username,
+          role: initialUser.role,
+        );
       }
     }
     // Ak žiadny používateľ nie je prihlásený, skontrolujeme či v DB vôbec sú používatelia
@@ -92,27 +95,12 @@ class MyApp extends StatelessWidget {
   });
 
   static ThemeData _buildLightTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.blue,
-        brightness: Brightness.light,
-      ),
-      appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
-    );
+    // App uses dark-only design — light theme falls back to dark
+    return AppTheme.dark;
   }
 
   static ThemeData _buildDarkTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.blue,
-        brightness: Brightness.dark,
-      ),
-      appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
-      scaffoldBackgroundColor: const Color(0xFF121212),
-    );
+    return AppTheme.dark;
   }
 
   @override

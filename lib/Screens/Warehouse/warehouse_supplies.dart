@@ -9,6 +9,8 @@ import '../../widgets/Warehouse/warehouse_low_stock_modal_widget.dart';
 import '../../widgets/Warehouse/warehouse_supplies_card_view_widget.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
+import '../../services/Database/database_service.dart';
+import '../../services/user_session.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
 import '../../models/warehouse.dart';
@@ -592,6 +594,11 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
 
   Future<void> _loadProducts() async {
     setState(() => _isLoading = true);
+    // Obnov aktuálneho používateľa (session/SharedPreferences), aby getProducts() vrátil produkty pre toho istého usera ako dashboard.
+    await DatabaseService.restoreCurrentUser();
+    if (UserSession.userId != null) {
+      DatabaseService.setCurrentUser(UserSession.userId!);
+    }
     final products = await _productService.getAllProducts();
     if (mounted) {
       setState(() {
@@ -675,10 +682,13 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
 
   void _applyFilters() {
     setState(() {
+      // Pri zvolenom sklade zobraz aj produkty bez priradeného skladu (warehouseId == null),
+      // aby sa napr. produkty stiahnuté z webu vždy zobrazili.
       List<Product> base = _selectedWarehouse == null
           ? List.from(_allProducts)
           : _allProducts
-              .where((p) => p.warehouseId == _selectedWarehouse!.id)
+              .where((p) =>
+                  p.warehouseId == _selectedWarehouse!.id || p.warehouseId == null)
               .toList();
       final query = _searchController.text.trim();
       if (query.isEmpty) {
@@ -963,12 +973,16 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                         color: Color(0xFF6366F1),
                       ),
                     )
-                  : Scrollbar(
-                      controller: _verticalController,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
+                  : RefreshIndicator(
+                      onRefresh: _loadProducts,
+                      color: const Color(0xFF6366F1),
+                      child: Scrollbar(
                         controller: _verticalController,
-                        scrollDirection: Axis.vertical,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _verticalController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          scrollDirection: Axis.vertical,
                         child: Scrollbar(
                           controller: _horizontalController,
                           thumbVisibility: true,
@@ -1007,7 +1021,22 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                     sortAscending: _isAscending,
                                     showCheckboxColumn: isAdmin,
                                     columns: tableColumns,
-                                rows: _foundProducts.asMap().entries.map((
+                                rows: _foundProducts.isEmpty && !_isLoading
+                                    ? [
+                                        DataRow(
+                                          cells: [
+                                            DataCell(Text(
+                                              'Žiadne produkty. Potiahnite nadol pre obnovenie.',
+                                              style: TextStyle(color: Colors.grey[600]),
+                                            )),
+                                            ...List.generate(
+                                              tableColumns.length - 1,
+                                              (_) => const DataCell(Text('')),
+                                            ),
+                                          ],
+                                        ),
+                                      ]
+                                    : _foundProducts.asMap().entries.map((
                                   entry,
                                 ) {
                                   final index = entry.key;
@@ -1053,6 +1082,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                           ),
                         ),
                       ),
+                    ),
                     ),
             ),
           ],

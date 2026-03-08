@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../user_session.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
@@ -45,14 +46,24 @@ class DatabaseService {
     print('DEBUG setCurrentUser: $userId | instance: ${_instance.hashCode}');
   }
 
-  /// Restore current user from memory or SharedPreferences (used when static field was reset).
+  /// Restore current user from memory, then UserSession (reliable on Windows), then SharedPreferences.
   static Future<String?> restoreCurrentUser() async {
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       print('DEBUG restoreCurrentUser: already set to $_currentUserId | instance: ${_instance.hashCode}');
       return _currentUserId;
     }
+    final fromSession = UserSession.userId;
+    if (fromSession != null && fromSession.isNotEmpty) {
+      _currentUserId = fromSession;
+      print('DEBUG restoreCurrentUser: from UserSession $_currentUserId | instance: ${_instance.hashCode}');
+      return _currentUserId;
+    }
     final prefs = await SharedPreferences.getInstance();
-    _currentUserId = prefs.getString(_kCurrentUserIdKey);
+    final allKeys = prefs.getKeys();
+    print('DEBUG SharedPrefs all keys: $allKeys');
+    final value = prefs.getString(_kCurrentUserIdKey);
+    print('DEBUG SharedPrefs current_user_id = $value');
+    _currentUserId = value;
     print('DEBUG restoreCurrentUser: restored $_currentUserId | instance: ${_instance.hashCode}');
     return _currentUserId;
   }
@@ -1639,6 +1650,69 @@ class DatabaseService {
     return count;
   }
 
+  /// Zlúči produkty z backendu do lokálnej DB: chýbajúce vloží, existujúce aktualizuje (EAN, qty, name, plu, unit).
+  /// Používa sa po migrácii alebo keď sú produkty vytvorené na webe – aby sa zobrazili v apke.
+  Future<int> mergeProductsFromBackend(List<Map<String, dynamic>> backendProducts) async {
+    if (backendProducts.isEmpty || _currentUserId == null) return 0;
+    int inserted = 0;
+    int updated = 0;
+    for (final map in backendProducts) {
+      final uniqueId = map['unique_id'] as String?;
+      if (uniqueId == null || uniqueId.isEmpty) continue;
+      final name = (map['name'] as String?)?.trim() ?? '';
+      final plu = (map['plu'] as String?)?.trim() ?? '';
+      final unit = (map['unit'] as String?)?.trim() ?? 'ks';
+      final qty = (map['qty'] as num?)?.toInt() ?? 0;
+      final eanRaw = map['ean'];
+      final ean = eanRaw is String ? eanRaw.trim() : (eanRaw != null ? eanRaw.toString().trim() : null);
+      final existing = await getProductByUniqueId(uniqueId);
+      if (existing != null) {
+        final changed = existing.name != name || existing.plu != plu || existing.unit != unit ||
+            existing.qty != qty || existing.ean != (ean?.isEmpty == true ? null : ean);
+        if (changed) {
+          await updateProduct(existing.copyWith(
+            name: name,
+            plu: plu,
+            unit: unit,
+            qty: qty,
+            ean: ean?.isEmpty == true ? null : ean,
+          ));
+          updated++;
+        }
+      } else {
+        final fullMap = <String, dynamic>{
+          'unique_id': uniqueId,
+          'name': name,
+          'plu': plu,
+          'unit': unit,
+          'qty': qty,
+          'ean': ean?.isEmpty == true ? null : ean,
+          'category': '',
+          'price': 0.0,
+          'without_vat': 0.0,
+          'vat': 23,
+          'discount': 0,
+          'last_purchase_price': 0.0,
+          'last_purchase_date': '',
+          'currency': 'EUR',
+          'location': '',
+          'min_quantity': 0,
+          'allow_at_cash_register': 1,
+          'show_in_price_list': 1,
+          'is_active': 1,
+          'temporarily_unavailable': 0,
+          'card_type': 'jednoduchá',
+          'has_extended_pricing': 0,
+          'iba_cele_mnozstva': 0,
+        };
+        final product = Product.fromMap(fullMap);
+        await insertProduct(product);
+        inserted++;
+      }
+    }
+    return inserted + updated;
+  }
+
   // Receptúra – zložky (suroviny) receptúry
   Future<List<RecepturaPolozka>> getRecepturaPolozky(String recepturaKartaId) async {
     Database db = await database;
@@ -2831,23 +2905,37 @@ class DatabaseService {
     return await db.delete('warehouses', where: 'id = ?', whereArgs: [id]);
   }
 
+  static Map<String, dynamic> _emptyDashboardStats() {
+    return {
+      'products': 0, 'orders': 0, 'customers': 0, 'revenue': 0.0, 'inboundCount': 0, 'outboundCount': 0,
+      'quotesCount': 0, 'receiptsToday': 0, 'pendingReceiptCount': 0, 'receiptsValueThisMonth': 0.0,
+      'lowStockCount': 0, 'lastReceipt': null, 'productionOrdersToday': 0, 'productionInProgressCount': 0,
+      'productionPendingApprovalCount': 0, 'productionCostThisMonth': 0.0,
+    };
+  }
+
   Future<Map<String, dynamic>> getDashboardStats() async {
-    Database db = await database;
-    if (_currentUserId == null) {
-      return {
-        'products': 0, 'orders': 0, 'customers': 0, 'revenue': 0.0, 'inboundCount': 0, 'outboundCount': 0,
-        'quotesCount': 0, 'receiptsToday': 0, 'pendingReceiptCount': 0, 'receiptsValueThisMonth': 0.0,
-        'lowStockCount': 0, 'lastReceipt': null, 'productionOrdersToday': 0, 'productionInProgressCount': 0,
-        'productionPendingApprovalCount': 0, 'productionCostThisMonth': 0.0,
-      };
+    String? uid = _currentUserId;
+    if (uid == null) {
+      uid = UserSession.userId;
+      if (uid != null) _currentUserId = uid;
     }
-    final uid = _currentUserId!;
+    if (uid == null) await DatabaseService.restoreCurrentUser();
+    uid = _currentUserId;
+    if (uid == null) {
+      print('DEBUG getDashboardStats: userId=null, returning empty stats');
+      return _emptyDashboardStats();
+    }
+    print('DEBUG getDashboardStats: userId=$uid');
+
+    Database db = await database;
 
     // Počet produktov
     final productCountResult = await db.rawQuery(
       'SELECT COUNT(*) as count FROM products WHERE user_id = ?', [uid],
     );
     int productCount = Sqflite.firstIntValue(productCountResult) ?? 0;
+    print('DEBUG getDashboardStats: products count=$productCount');
 
     // Počet zákazníkov
     final customerCountResult = await db.rawQuery(
@@ -3042,8 +3130,9 @@ class DatabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getRecentInboundReceiptsWithTotal({int limit = 5}) async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return [];
+    Database db = await database;
     final receipts = await db.query('inbound_receipts', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final r in receipts) {
@@ -3058,8 +3147,9 @@ class DatabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getRecentStockOutsWithTotal({int limit = 5}) async {
-    Database db = await database;
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return [];
+    Database db = await database;
     final outs = await db.query('stock_outs', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final o in outs) {

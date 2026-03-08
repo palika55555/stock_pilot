@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api_sync_service.dart';
 import 'Database/database_service.dart';
+import 'user_session.dart';
 import 'sync_check_service.dart';
 import 'sync_service.dart';
 import '../screens/Login/login_page.dart';
@@ -11,7 +12,7 @@ class LogoutService {
     await DatabaseService().clearCurrentUserData();
     await clearTokensAndToken();
     await DatabaseService().clearSavedLogin();
-    DatabaseService.clearCurrentUser();
+    UserSession.clear();
     SyncCheckService.instance.stop();
     SyncService.stopSync();
     if (!context.mounted) return;

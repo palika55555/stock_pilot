@@ -45,13 +45,14 @@ class SyncService {
   /// Po prihlásení: stiahne dáta používateľa z backendu a uloží do lokálnej DB.
   static Future<bool> initialSync(String userId, String accessToken) async {
     try {
+      DatabaseService.setCurrentUser(userId);
       final customers = await fetchCustomersFromBackendWithToken(accessToken);
       if (customers != null && customers.isNotEmpty) {
         await DatabaseService().replaceCustomersFromBackend(customers);
       }
       final products = await fetchProductsFromBackendWithToken(accessToken);
       if (products != null && products.isNotEmpty) {
-        await DatabaseService().updateProductEanFromBackend(products);
+        await DatabaseService().mergeProductsFromBackend(products);
       }
       final batches = await fetchBatchesFromBackendWithToken(accessToken);
       if (batches != null) {

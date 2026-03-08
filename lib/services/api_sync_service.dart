@@ -8,9 +8,12 @@ import 'auth_storage_service.dart';
 
 /// Backend API pre sync do PostgreSQL (zákazníci, produkty, login).
 /// JWT: access token v pamäti + secure storage, refresh token len v secure storage.
+///
+/// Všetky requesty musia ísť na baseUrl + apiPrefix (napr. /api/sp-9f2a4e1b).
+/// Backend montuje router na /api/:API_PATH_PREFIX/ – bez tohto prefixu 404.
 const String kBackendApiBase = 'https://backend.stockpilot.sk';
-const String kApiPathPrefix = 'sp-9f2a4e1b';
-String get _apiBase => '$kBackendApiBase/api/$kApiPathPrefix';
+const String kApiPrefix = '/api/sp-9f2a4e1b';
+String get _apiBase => '$kBackendApiBase$kApiPrefix';
 
 String? _backendToken;
 
@@ -23,6 +26,20 @@ String? getBackendToken() => _backendToken;
 /// Authorization header value for API: "Bearer <jwt>"
 String _bearer(String? token) =>
     (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
+
+/// Decode JWT payload (middle part) for debug. Returns map or null.
+dynamic _decodeJwt(String? token) {
+  if (token == null || token.isEmpty) return null;
+  final parts = token.split('.');
+  if (parts.length < 2) return null;
+  try {
+    var payload = parts[1];
+    while (payload.length % 4 != 0) payload += '=';
+    return jsonDecode(utf8.decode(base64Url.decode(payload)));
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Výsledok backend loginu – prístupový token, refresh token a voliteľné userId (numerické ID používateľa ako reťazec).
 class BackendLoginResult {
@@ -193,7 +210,7 @@ Future<BackendLoginResult?> fetchBackendToken(
         )
         .timeout(const Duration(seconds: 10));
     print('DEBUG backend login status: ${res.statusCode}');
-    print('DEBUG backend login body: ${res.body}');
+    print('DEBUG login response: ${res.body}');
 
     if (res.statusCode != 200) {
       print('DEBUG backend login failed with status ${res.statusCode}');
@@ -209,6 +226,20 @@ Future<BackendLoginResult?> fetchBackendToken(
       if (rawId != null) {
         userId = rawId.toString();
       }
+    }
+    print('DEBUG login userId: ${map?['user']?['id']}');
+    print('DEBUG login accessToken decoded: ${_decodeJwt(access)}');
+    final token = access;
+    if (token != null && token.isNotEmpty) {
+      try {
+        final parts = token.split('.');
+        if (parts.length >= 2) {
+          var payloadPart = parts[1];
+          while (payloadPart.length % 4 != 0) payloadPart += '=';
+          final payload = utf8.decode(base64Url.decode(payloadPart));
+          print('DEBUG JWT payload: $payload');
+        }
+      } catch (_) {}
     }
     print('DEBUG backend login parsed userId=$userId accessPresent=${access != null && access.isNotEmpty} refreshPresent=${refresh != null && refresh.isNotEmpty}');
     if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
