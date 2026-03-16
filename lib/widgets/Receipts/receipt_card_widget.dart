@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class ReceiptCard extends StatelessWidget {
   final String title;
@@ -26,21 +27,18 @@ class ReceiptCard extends StatelessWidget {
       width: 140,
       height: 100,
       child: Card(
-        elevation: 6,
-        shadowColor: Colors.black26,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.08), color.withOpacity(0.03)],
+              colors: [color.withOpacity(0.12), color.withOpacity(0.04)],
             ),
           ),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -67,13 +65,13 @@ class ReceiptCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
+                      color: AppColors.textPrimary,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                 ],

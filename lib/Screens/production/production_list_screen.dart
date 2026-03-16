@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/screens/production/production_batch_form_screen.dart';
@@ -64,26 +65,27 @@ class _ProductionListScreenState extends State<ProductionListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
-              title: const Text(
+              title: Text(
                 'Výroba',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 26,
                 ),
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF3F3D56)),
+                  icon: Icon(Icons.bar_chart_rounded, color: AppColors.accentGold),
                   tooltip: 'Vyrobené produkty',
                   onPressed: () {
                     Navigator.push(
@@ -103,7 +105,7 @@ class _ProductionListScreenState extends State<ProductionListScreen> {
         children: [
           const SizedBox(height: 80),
           Material(
-            color: Colors.white,
+            color: AppColors.bgCard,
             elevation: 2,
             child: InkWell(
               onTap: _pickDate,

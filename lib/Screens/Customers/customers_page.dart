@@ -6,6 +6,7 @@ import 'package:stock_pilot/services/customer/customer_service.dart';
 import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/services/sync_check_service.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/customers/add_customer_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 
@@ -163,27 +164,27 @@ class _CustomersPageState extends State<CustomersPage>
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               title: Text(
                 l10n.customers,
-                style: const TextStyle(
-                  color: Colors.black,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 26,
                 ),
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.tune, color: Colors.black87),
+                  icon: Icon(Icons.tune, color: AppColors.textPrimary),
                   onPressed: () {},
                 ),
                 const SizedBox(width: 8),
@@ -383,17 +384,7 @@ class _CustomerCardState extends State<_CustomerCard> {
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
+            decoration: AppColors.cardDecoration,
             child: Row(
               children: [
                 _buildAvatar(c.name),
@@ -407,9 +398,10 @@ class _CustomerCardState extends State<_CustomerCard> {
                           Expanded(
                             child: Text(
                               c.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ),
@@ -420,8 +412,8 @@ class _CustomerCardState extends State<_CustomerCard> {
                             ),
                             decoration: BoxDecoration(
                               color: c.isActive
-                                  ? Colors.teal.withOpacity(0.15)
-                                  : Colors.grey.withOpacity(0.2),
+                                  ? AppColors.successSubtle
+                                  : AppColors.textMuted.withOpacity(0.3),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -430,8 +422,8 @@ class _CustomerCardState extends State<_CustomerCard> {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: c.isActive
-                                    ? Colors.teal[700]
-                                    : Colors.grey[700],
+                                    ? AppColors.success
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           ),
@@ -440,13 +432,13 @@ class _CustomerCardState extends State<_CustomerCard> {
                       const SizedBox(height: 4),
                       Text(
                         'IČO: ${c.ico}${c.city != null && c.city!.isNotEmpty ? ' • ${c.city}' : ''}',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
                       if (c.defaultVatRate > 0)
                         Text(
                           'DPH: ${c.defaultVatRate}%',
                           style: TextStyle(
-                            color: Colors.grey[500],
+                            color: AppColors.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -454,12 +446,12 @@ class _CustomerCardState extends State<_CustomerCard> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.request_quote, color: Colors.teal),
+                  icon: Icon(Icons.request_quote, color: AppColors.accentGold),
                   tooltip: l10n.priceQuote,
                   onPressed: widget.onPriceQuote,
                 ),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.black54),
+                  icon: Icon(Icons.more_vert, color: AppColors.textSecondary),
                   onSelected: (v) {
                     if (v == 'edit') widget.onEdit();
                     if (v == 'quote') widget.onPriceQuote();
@@ -480,7 +472,7 @@ class _CustomerCardState extends State<_CustomerCard> {
                       value: 'quote',
                       child: Row(
                         children: [
-                          const Icon(Icons.request_quote, color: Colors.teal),
+                          Icon(Icons.request_quote, color: AppColors.accentGold),
                           const SizedBox(width: 8),
                           Text(l10n.priceQuote),
                         ],
@@ -490,11 +482,11 @@ class _CustomerCardState extends State<_CustomerCard> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          const Icon(Icons.delete, color: Colors.red),
+                          Icon(Icons.delete, color: AppColors.danger),
                           const SizedBox(width: 8),
                           Text(
                             l10n.delete,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(color: AppColors.danger),
                           ),
                         ],
                       ),
@@ -515,16 +507,16 @@ class _CustomerCardState extends State<_CustomerCard> {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: Colors.teal.withOpacity(0.12),
+        color: AppColors.accentGoldSubtle,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Center(
         child: Text(
           letter,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.teal,
+            color: AppColors.accentGold,
           ),
         ),
       ),

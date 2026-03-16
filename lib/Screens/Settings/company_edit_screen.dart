@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/company.dart';
 import '../../services/company/company_service.dart';
+import '../../services/External/finstat_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/common/standard_text_field.dart';
 
 class CompanyEditScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class CompanyEditScreen extends StatefulWidget {
 
 class _CompanyEditScreenState extends State<CompanyEditScreen> {
   final CompanyService _companyService = CompanyService();
+  final FinstatService _finstatService = FinstatService();
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nameController = TextEditingController();
@@ -24,6 +27,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
   final TextEditingController _postalCodeController = TextEditingController();
   final TextEditingController _countryController = TextEditingController(text: 'Slovensko');
   final TextEditingController _icoController = TextEditingController();
+  final TextEditingController _dicController = TextEditingController();
   final TextEditingController _icDphController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -38,6 +42,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
   bool _vatPayer = true;
   bool _loading = true;
   bool _saving = false;
+  bool _fetchingIco = false;
 
   @override
   void initState() {
@@ -53,6 +58,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
     _postalCodeController.dispose();
     _countryController.dispose();
     _icoController.dispose();
+    _dicController.dispose();
     _icDphController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
@@ -75,6 +81,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
       _postalCodeController.text = company.postalCode ?? '';
       _countryController.text = company.country ?? 'Slovensko';
       _icoController.text = company.ico ?? '';
+      _dicController.text = company.dic ?? '';
       _icDphController.text = company.icDph ?? '';
       _vatPayer = company.vatPayer;
       _phoneController.text = company.phone ?? '';
@@ -118,6 +125,50 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
     setState(() => _logoPath = null);
   }
 
+  Future<void> _fetchFinstatData() async {
+    final ico = _icoController.text.trim();
+    if (ico.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Zadajte najprv IČO')),
+      );
+      return;
+    }
+    if (ico.length != 8 || !RegExp(r'^\d+$').hasMatch(ico)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('IČO musí obsahovať presne 8 číslic')),
+      );
+      return;
+    }
+    setState(() => _fetchingIco = true);
+    try {
+      final data = await _finstatService.fetchSupplierData(ico);
+      if (data != null && mounted) {
+        setState(() {
+          if (data.name.isNotEmpty && !data.name.startsWith('Firma IČO:')) {
+            _nameController.text = data.name;
+          }
+          if (data.address != null) _addressController.text = data.address!;
+          if (data.city != null) _cityController.text = data.city!;
+          if (data.postalCode != null) _postalCodeController.text = data.postalCode!;
+          if (data.dic != null && data.dic!.isNotEmpty) _dicController.text = data.dic!;
+          if (data.icDph != null && data.icDph!.isNotEmpty) _icDphController.text = data.icDph!;
+          if (data.email != null && data.email!.isNotEmpty) _emailController.text = data.email!;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Údaje načítané z registra'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chyba pri načítaní: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _fetchingIco = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -130,6 +181,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
       postalCode: _postalCodeController.text.trim().isEmpty ? null : _postalCodeController.text.trim(),
       country: _countryController.text.trim().isEmpty ? null : _countryController.text.trim(),
       ico: _icoController.text.trim().isEmpty ? null : _icoController.text.trim(),
+      dic: _dicController.text.trim().isEmpty ? null : _dicController.text.trim(),
       icDph: _icDphController.text.trim().isEmpty ? null : _icDphController.text.trim(),
       vatPayer: _vatPayer,
       phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
@@ -156,11 +208,6 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
 
   Widget _sectionCard({required String title, required IconData icon, required List<Widget> children}) {
     return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16), 
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
       margin: const EdgeInsets.only(bottom: 20),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -172,13 +219,20 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.teal.withOpacity(0.1), 
+                    color: AppColors.accentGoldSubtle,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: Colors.teal, size: 22),
+                  child: Icon(icon, color: AppColors.accentGold, size: 22),
                 ),
                 const SizedBox(width: 12),
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -208,12 +262,9 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
     final l10n = AppLocalizations.of(context)!;
     
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: AppBar(
         title: Text(l10n.ourCompany),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        elevation: 0,
         actions: [
           if (!_loading)
             Padding(
@@ -221,9 +272,9 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
               child: TextButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving 
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
-                    : const Icon(Icons.save, size: 20, color: Colors.white),
-                label: Text(l10n.saveChanges, style: const TextStyle(color: Colors.white)),
+                    ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bgPrimary)) 
+                    : Icon(Icons.save, size: 20, color: AppColors.bgPrimary),
+                label: Text(l10n.saveChanges, style: TextStyle(color: AppColors.bgPrimary)),
               ),
             ),
         ],
@@ -239,7 +290,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                     title: 'Logo firmy',
                     icon: Icons.image_outlined,
                     children: [
-                      const Text('Logo sa zobrazí na tlačených dokladoch', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                      Text('Logo sa zobrazí na tlačených dokladoch', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -251,8 +302,8 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                           else
                             Container(
                               width: 100, height: 100,
-                              decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(12)),
-                              child: Icon(Icons.business, size: 40, color: Colors.grey.shade400),
+                              decoration: BoxDecoration(color: AppColors.bgInput, borderRadius: BorderRadius.circular(12)),
+                              child: Icon(Icons.business, size: 40, color: AppColors.textMuted),
                             ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -267,8 +318,8 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                                 if (_logoPath != null)
                                   TextButton.icon(
                                     onPressed: _removeLogo,
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                    label: const Text('Odstrániť', style: TextStyle(color: Colors.red)),
+                                    icon: Icon(Icons.delete_outline, color: AppColors.danger),
+                                    label: Text('Odstrániť', style: TextStyle(color: AppColors.danger)),
                                   ),
                               ],
                             ),
@@ -294,7 +345,35 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                       _input('Registračné údaje', _registerInfoController, maxLines: 2),
                       Row(
                         children: [
-                          Expanded(child: _input('IČO', _icoController)),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: StandardTextField(
+                                controller: _icoController,
+                                labelText: 'IČO',
+                                keyboardType: TextInputType.number,
+                                suffixIcon: _fetchingIco
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.accentGold,
+                                          ),
+                                        ),
+                                      )
+                                    : IconButton(
+                                        icon: const Icon(Icons.search, color: AppColors.accentGold),
+                                        onPressed: _fetchFinstatData,
+                                        tooltip: 'Načítať z registra',
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: _input('DIČ', _dicController)),
                           const SizedBox(width: 12),
                           Expanded(child: _input('IČ DPH', _icDphController)),
                         ],
@@ -303,7 +382,7 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                         title: Text(l10n.vatPayer),
                         value: _vatPayer,
                         onChanged: (v) => setState(() => _vatPayer = v),
-                        activeColor: Colors.teal,
+                        activeColor: AppColors.accentGold,
                       ),
                     ],
                   ),
@@ -317,6 +396,22 @@ class _CompanyEditScreenState extends State<CompanyEditScreen> {
                       _input('SWIFT', _swiftController),
                     ],
                   ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bgPrimary),
+                            )
+                          : const Icon(Icons.save),
+                      label: Text(l10n.saveChanges),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),

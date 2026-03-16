@@ -48,7 +48,7 @@ class SyncService {
       DatabaseService.setCurrentUser(userId);
       final customers = await fetchCustomersFromBackendWithToken(accessToken);
       if (customers != null && customers.isNotEmpty) {
-        await DatabaseService().replaceCustomersFromBackend(customers);
+        await DatabaseService().mergeCustomersFromBackend(customers);
       }
       final products = await fetchProductsFromBackendWithToken(accessToken);
       if (products != null && products.isNotEmpty) {

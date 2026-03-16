@@ -105,9 +105,8 @@ export default function DashboardPage() {
     return () => { cancelled = true }
   }, [auth, navigate])
 
-  useEffect(() => {
-    refresh()
-  }, [refresh])
+  // Notifikácie sa načítajú automaticky cez NotificationContext (addFromApi s 30s cooldown).
+  // Manuálne volanie refresh() tu spôsobovalo duplicate API calls na každý mount.
 
   const scrollToNotifications = () => {
     notificationsRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,7 +114,8 @@ export default function DashboardPage() {
 
   const handleSync = () => {
     setSyncing(true)
-    refresh()
+    // Refresh notifikácií s force=true (obíde 30s cooldown)
+    refresh({ force: true })
     setTimeout(() => setSyncing(false), 1500)
   }
 

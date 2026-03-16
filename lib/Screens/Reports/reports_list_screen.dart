@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import 'receipt_summary_report_screen.dart';
 
 /// Sekcia Reporty – zoznam typov reportov.
@@ -8,10 +9,8 @@ class ReportsListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
         title: const Text('Reporty'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -89,14 +88,24 @@ class _ReportTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFF10B981).withOpacity(0.2),
-          child: Icon(icon, color: const Color(0xFF10B981)),
+          backgroundColor: AppColors.accentGoldSubtle,
+          child: Icon(icon, color: AppColors.accentGold),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-        trailing: const Icon(Icons.chevron_right),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        trailing: Icon(Icons.chevron_right, color: AppColors.textSecondary),
         onTap: onTap,
       ),
     );

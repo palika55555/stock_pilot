@@ -14,6 +14,7 @@ import '../../services/user_session.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
 import '../../models/warehouse.dart';
+import '../../theme/app_theme.dart';
 
 /// Stĺpce tabuľky, ktoré môže používateľ skryť/zobraziť (v poradí zobrazenia).
 const List<({String id, String label})> _warehouseSupplyTableColumns = [
@@ -200,16 +201,18 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   /// Vizuálne stavy skladovej karty (OBERON): neaktívna = prečiarknuté, nedostupná = sivá, rozšírená cenotvorba = fialová.
   TextStyle? _rowStyleForProduct(Product product) {
     if (!product.isActive) {
-      return TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey[700]);
+      return TextStyle(decoration: TextDecoration.lineThrough, color: AppColors.textMuted);
     }
     if (product.temporarilyUnavailable) {
-      return TextStyle(color: Colors.grey[600]);
+      return TextStyle(color: AppColors.textMuted);
     }
     if (product.hasExtendedPricing) {
-      return const TextStyle(color: Color(0xFF6A1B9A));
+      return TextStyle(color: AppColors.accentGold);
     }
     return null;
   }
+
+  static TextStyle get _defaultRowStyle => TextStyle(color: AppColors.textPrimary);
 
   List<DataCell> _buildRowCells(
     Product product,
@@ -218,10 +221,11 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     bool isAdmin,
   ) {
     final rowStyle = _rowStyleForProduct(product);
+    final baseStyle = rowStyle ?? _defaultRowStyle;
     final cells = <DataCell>[
-      DataCell(Text('${index + 1}.', style: rowStyle ?? const TextStyle(color: Colors.grey))),
-      DataCell(Text(product.plu, style: (rowStyle ?? const TextStyle()).copyWith(fontWeight: FontWeight.bold))),
-      DataCell(Text(product.name, style: rowStyle ?? const TextStyle())),
+      DataCell(Text('${index + 1}.', style: baseStyle)),
+      DataCell(Text(product.plu, style: baseStyle.copyWith(fontWeight: FontWeight.bold))),
+      DataCell(Text(product.name, style: baseStyle)),
     ];
     for (final c in _warehouseSupplyTableColumns) {
       if (_columnVisibility[c.id] != true) continue;
@@ -232,12 +236,12 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 22),
+            icon: Icon(Icons.edit_outlined, size: 22, color: AppColors.textSecondary),
             tooltip: 'Upraviť produkt',
             onPressed: () => _openEditProductModal(product),
           ),
           IconButton(
-            icon: const Icon(Icons.history_edu_outlined, size: 22),
+            icon: Icon(Icons.history_edu_outlined, size: 22, color: AppColors.textSecondary),
             tooltip: 'História nákupných cien',
             onPressed: () {
               showModalBottomSheet(
@@ -250,12 +254,9 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
           ),
           if (isAdmin)
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 22),
+              icon: Icon(Icons.delete_outline, size: 22, color: AppColors.danger),
               tooltip: 'Vymazať produkt',
               onPressed: () => _confirmDeleteProduct(product),
-              style: IconButton.styleFrom(
-                foregroundColor: Colors.red.shade700,
-              ),
             ),
         ],
       ),
@@ -303,7 +304,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   }
 
   DataCell _cellForColumn(String id, Product product, bool lowStock, TextStyle? rowStyle) {
-    TextStyle merge(TextStyle base) => rowStyle != null ? base.merge(rowStyle) : base;
+    TextStyle merge(TextStyle base) => (rowStyle ?? _defaultRowStyle).merge(base);
     switch (id) {
       case 'predaj_bez_dph':
         return DataCell(Text('${product.withoutVat.toStringAsFixed(2)} €', style: merge(const TextStyle())));
@@ -321,13 +322,13 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: lowStock ? Colors.red[50]! : Colors.green[50]!,
+              color: lowStock ? AppColors.dangerSubtle : AppColors.successSubtle,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               '${product.qty} ${product.unit}',
               style: merge(TextStyle(
-                color: lowStock ? Colors.red[700]! : Colors.green[700]!,
+                color: lowStock ? AppColors.danger : AppColors.success,
                 fontWeight: FontWeight.bold,
               )),
             ),
@@ -392,10 +393,6 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           return Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            elevation: 8,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
               child: Column(
@@ -406,7 +403,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   Container(
                     padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+                      color: AppColors.accentGoldSubtle,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(20),
                       ),
@@ -416,14 +413,14 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                         Icon(
                           Icons.view_column_rounded,
                           size: 28,
-                          color: const Color(0xFF6366F1),
+                          color: AppColors.accentGold,
                         ),
                         const SizedBox(width: 12),
                         Text(
                           'Zobrazenie stĺpcov',
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1E293B),
+                                color: AppColors.textPrimary,
                               ),
                         ),
                       ],
@@ -475,10 +472,10 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                             }
                             setModalState(() {});
                           },
-                          icon: const Icon(Icons.restore_rounded, size: 20),
-                          label: const Text('Obnoviť predvolené'),
+                          icon: Icon(Icons.restore_rounded, size: 20, color: AppColors.textSecondary),
+                          label: Text('Obnoviť predvolené', style: TextStyle(color: AppColors.textSecondary)),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF64748B),
+                            foregroundColor: AppColors.textSecondary,
                           ),
                         ),
                         const Spacer(),
@@ -489,7 +486,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                             Navigator.pop(context);
                           },
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF6366F1),
+                            backgroundColor: AppColors.accentGold,
+                            foregroundColor: AppColors.bgPrimary,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -526,7 +524,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
           sectionTitle,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF64748B),
+                color: AppColors.textSecondary,
                 letterSpacing: 0.5,
               ),
         ),
@@ -547,13 +545,13 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isChecked
-                        ? const Color(0xFF6366F1).withValues(alpha: 0.12)
-                        : Colors.grey.shade100,
+                        ? AppColors.accentGoldSubtle
+                        : AppColors.bgInput,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isChecked
-                          ? const Color(0xFF6366F1).withValues(alpha: 0.4)
-                          : Colors.grey.shade300,
+                          ? AppColors.accentGold.withOpacity(0.5)
+                          : AppColors.borderDefault,
                       width: isChecked ? 1.5 : 1,
                     ),
                   ),
@@ -563,7 +561,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                       Icon(
                         isChecked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
                         size: 22,
-                        color: isChecked ? const Color(0xFF6366F1) : Colors.grey.shade600,
+                        color: isChecked ? AppColors.accentGold : AppColors.textMuted,
                       ),
                       const SizedBox(width: 10),
                       Text(
@@ -573,7 +571,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: isChecked ? FontWeight.w600 : FontWeight.w500,
-                          color: isChecked ? const Color(0xFF1E293B) : Colors.grey.shade700,
+                          color: isChecked ? AppColors.textPrimary : AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -635,7 +633,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                     ? Icons.check_circle
                     : Icons.radio_button_unchecked,
                 color: _selectedWarehouse == null
-                    ? const Color(0xFF6366F1)
+                    ? AppColors.accentGold
                     : null,
               ),
               title: const Text('Všetky sklady'),
@@ -650,7 +648,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
               return ListTile(
                 leading: Icon(
                   isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: isSelected ? const Color(0xFF6366F1) : null,
+                  color: isSelected ? AppColors.accentGold : null,
                 ),
                 title: Text(w.name),
                 subtitle: Text(
@@ -779,27 +777,23 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   @override
   Widget build(BuildContext context) {
     bool isAdmin = widget.userRole == 'admin';
-    final primaryColor = isAdmin
-        ? const Color(0xFFB71C1C)
-        : const Color(0xFF1565C0);
     double screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FA),
+      backgroundColor: AppColors.bgPrimary,
       body: Stack(
         children: [
-          // Horný gradientný podklad
+          // Horný tmavý pás
           Container(
             height: 160,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primaryColor, primaryColor.withOpacity(0.8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.bgElevated,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(30),
                 bottomRight: Radius.circular(30),
+              ),
+              border: Border(
+                bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
               ),
             ),
           ),
@@ -834,15 +828,15 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       floatingActionButton: isAdmin && _selectedIds.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: _deleteSelected,
-              backgroundColor: Colors.redAccent,
+              backgroundColor: AppColors.danger,
               icon: const Icon(Icons.delete_outline),
               label: Text("Vymazať (${_selectedIds.length})"),
             )
           : isAdmin
           ? FloatingActionButton(
               onPressed: _openAddProductModal,
-              backgroundColor: primaryColor,
-              child: const Icon(Icons.add),
+              backgroundColor: AppColors.accentGold,
+              child: Icon(Icons.add, color: AppColors.bgPrimary),
             )
           : null,
     );
@@ -865,13 +859,18 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   Widget _buildContentCard(bool isAdmin, double screenWidth) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 5, 20, 0),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(25),
           topRight: Radius.circular(25),
         ),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+        border: Border(
+          left: BorderSide(color: AppColors.borderSubtle, width: 1),
+          right: BorderSide(color: AppColors.borderSubtle, width: 1),
+          top: BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
+        boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 20, offset: Offset(0, 4))],
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.only(
@@ -888,23 +887,25 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   Expanded(
                     child: TextField(
                       controller: _searchController,
+                      style: TextStyle(color: AppColors.textPrimary),
                       decoration: InputDecoration(
                         hintText: 'Hľadať produkt...',
-                        prefixIcon: const Icon(
+                        hintStyle: TextStyle(color: AppColors.textMuted),
+                        prefixIcon: Icon(
                           Icons.search_rounded,
-                          color: Color(0xFF6366F1),
+                          color: AppColors.accentGold,
                         ),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close_rounded),
+                                icon: Icon(Icons.close_rounded, color: AppColors.textSecondary),
                                 onPressed: () => _searchController.clear(),
                               )
                             : null,
                         filled: true,
-                        fillColor: const Color(0xFFF1F4F8),
+                        fillColor: AppColors.bgInput,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide.none,
+                          borderSide: BorderSide(color: AppColors.borderDefault),
                         ),
                       ),
                     ),
@@ -917,8 +918,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                       icon: Icon(
                         Icons.table_chart_rounded,
                         color: _isCardView
-                            ? Colors.grey[400]
-                            : const Color(0xFF6366F1),
+                            ? AppColors.textMuted
+                            : AppColors.accentGold,
                         size: 26,
                       ),
                     ),
@@ -930,8 +931,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                       icon: Icon(
                         Icons.view_module_rounded,
                         color: _isCardView
-                            ? const Color(0xFF6366F1)
-                            : Colors.grey[400],
+                            ? AppColors.accentGold
+                            : AppColors.textMuted,
                         size: 26,
                       ),
                     ),
@@ -943,9 +944,9 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
             Expanded(
               child: _isCardView
                   ? _isLoading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
-                            color: Color(0xFF6366F1),
+                            color: AppColors.accentGold,
                           ),
                         )
                       :                       WarehouseSuppliesCardView(
@@ -968,14 +969,14 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                           onDeleteProduct: isAdmin ? _confirmDeleteProduct : null,
                         )
                   : _isLoading
-                  ? const Center(
+                  ? Center(
                       child: CircularProgressIndicator(
-                        color: Color(0xFF6366F1),
+                        color: AppColors.accentGold,
                       ),
                     )
                   : RefreshIndicator(
                       onRefresh: _loadProducts,
-                      color: const Color(0xFF6366F1),
+                      color: AppColors.accentGold,
                       child: Scrollbar(
                         controller: _verticalController,
                         thumbVisibility: true,
@@ -1011,11 +1012,11 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                   return DataTable(
                                     columnSpacing: 20,
                                     headingRowColor: WidgetStateProperty.all(
-                                      Colors.grey[200],
+                                      AppColors.bgElevated,
                                     ),
-                                    headingTextStyle: const TextStyle(
+                                    headingTextStyle: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF263238),
+                                      color: AppColors.textPrimary,
                                     ),
                                     sortColumnIndex: sortIndex,
                                     sortAscending: _isAscending,
@@ -1027,7 +1028,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                           cells: [
                                             DataCell(Text(
                                               'Žiadne produkty. Potiahnite nadol pre obnovenie.',
-                                              style: TextStyle(color: Colors.grey[600]),
+                                              style: TextStyle(color: AppColors.textSecondary),
                                             )),
                                             ...List.generate(
                                               tableColumns.length - 1,
@@ -1064,8 +1065,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                                     color:
                                         WidgetStateProperty.resolveWith<Color?>(
                                           (states) => index % 2 == 0
-                                              ? Colors.white
-                                              : Colors.grey[50],
+                                              ? AppColors.bgCard
+                                              : AppColors.bgElevated,
                                         ),
                                     cells: _buildRowCells(
                                       product,

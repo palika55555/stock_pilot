@@ -197,7 +197,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 30,
+      version: 32,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -288,8 +288,11 @@ class DatabaseService {
         postal_code TEXT,
         dic TEXT,
         ic_dph TEXT,
+        contact_person TEXT,
+        phone TEXT,
         default_vat_rate INTEGER NOT NULL DEFAULT 20,
-        is_active INTEGER NOT NULL DEFAULT 1
+        is_active INTEGER NOT NULL DEFAULT 1,
+        vat_payer INTEGER NOT NULL DEFAULT 1
       )
     ''');
     await db.execute('''
@@ -301,6 +304,7 @@ class DatabaseService {
         postal_code TEXT,
         country TEXT,
         ico TEXT,
+        dic TEXT,
         ic_dph TEXT,
         vat_payer INTEGER NOT NULL DEFAULT 1,
         phone TEXT,
@@ -339,6 +343,10 @@ class DatabaseService {
         prices_include_vat INTEGER NOT NULL DEFAULT 1,
         default_vat_rate INTEGER NOT NULL DEFAULT 20,
         status TEXT NOT NULL DEFAULT 'draft',
+        delivery_cost REAL NOT NULL DEFAULT 0,
+        other_fees REAL NOT NULL DEFAULT 0,
+        payment_method TEXT,
+        delivery_terms TEXT,
         FOREIGN KEY (customer_id) REFERENCES customers(id)
       )
     ''');
@@ -349,11 +357,14 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
         discount_percent INTEGER NOT NULL DEFAULT 0,
         vat_percent INTEGER NOT NULL DEFAULT 20,
+        item_type TEXT NOT NULL DEFAULT 'Tovar',
+        description TEXT,
+        surcharge_percent INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (quote_id) REFERENCES quotes(id),
         FOREIGN KEY (product_unique_id) REFERENCES products(unique_id)
       )
@@ -1247,6 +1258,50 @@ class DatabaseService {
       }
     }
 
+    // Version 31: new quote fields (delivery, conditions) + customer contact/phone + company dic
+    if (oldVersion < 31) {
+      final quotesInfo = await db.rawQuery('PRAGMA table_info(quotes)');
+      for (final col in ['delivery_cost', 'other_fees']) {
+        if (!quotesInfo.any((c) => c['name'] == col)) {
+          await db.execute('ALTER TABLE quotes ADD COLUMN $col REAL NOT NULL DEFAULT 0');
+        }
+      }
+      for (final col in ['payment_method', 'delivery_terms']) {
+        if (!quotesInfo.any((c) => c['name'] == col)) {
+          await db.execute('ALTER TABLE quotes ADD COLUMN $col TEXT');
+        }
+      }
+      final qiInfo = await db.rawQuery('PRAGMA table_info(quote_items)');
+      if (!qiInfo.any((c) => c['name'] == 'item_type')) {
+        await db.execute("ALTER TABLE quote_items ADD COLUMN item_type TEXT NOT NULL DEFAULT 'Tovar'");
+      }
+      if (!qiInfo.any((c) => c['name'] == 'description')) {
+        await db.execute('ALTER TABLE quote_items ADD COLUMN description TEXT');
+      }
+      if (!qiInfo.any((c) => c['name'] == 'surcharge_percent')) {
+        await db.execute('ALTER TABLE quote_items ADD COLUMN surcharge_percent INTEGER NOT NULL DEFAULT 0');
+      }
+      final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
+      if (!custInfo.any((c) => c['name'] == 'contact_person')) {
+        await db.execute('ALTER TABLE customers ADD COLUMN contact_person TEXT');
+      }
+      if (!custInfo.any((c) => c['name'] == 'phone')) {
+        await db.execute('ALTER TABLE customers ADD COLUMN phone TEXT');
+      }
+      final compInfo = await db.rawQuery('PRAGMA table_info(company)');
+      if (!compInfo.any((c) => c['name'] == 'dic')) {
+        await db.execute('ALTER TABLE company ADD COLUMN dic TEXT');
+      }
+    }
+
+    // Version 32: customer vatPayer flag
+    if (oldVersion < 32) {
+      final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
+      if (!custInfo.any((c) => c['name'] == 'vat_payer')) {
+        await db.execute('ALTER TABLE customers ADD COLUMN vat_payer INTEGER NOT NULL DEFAULT 1');
+      }
+    }
+
     // Version 30: per-user data isolation – add user_id to all data tables
     if (oldVersion < 30) {
       const dataTables = [
@@ -1369,8 +1424,11 @@ class DatabaseService {
         postal_code TEXT,
         dic TEXT,
         ic_dph TEXT,
+        contact_person TEXT,
+        phone TEXT,
         default_vat_rate INTEGER NOT NULL DEFAULT 20,
-        is_active INTEGER NOT NULL DEFAULT 1
+        is_active INTEGER NOT NULL DEFAULT 1,
+        vat_payer INTEGER NOT NULL DEFAULT 1
       )
     ''');
 
@@ -1386,6 +1444,10 @@ class DatabaseService {
         prices_include_vat INTEGER NOT NULL DEFAULT 1,
         default_vat_rate INTEGER NOT NULL DEFAULT 20,
         status TEXT NOT NULL DEFAULT 'draft',
+        delivery_cost REAL NOT NULL DEFAULT 0,
+        other_fees REAL NOT NULL DEFAULT 0,
+        payment_method TEXT,
+        delivery_terms TEXT,
         FOREIGN KEY (customer_id) REFERENCES customers(id)
       )
     ''');
@@ -1396,11 +1458,14 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
         discount_percent INTEGER NOT NULL DEFAULT 0,
         vat_percent INTEGER NOT NULL DEFAULT 20,
+        item_type TEXT NOT NULL DEFAULT 'Tovar',
+        description TEXT,
+        surcharge_percent INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (quote_id) REFERENCES quotes(id),
         FOREIGN KEY (product_unique_id) REFERENCES products(unique_id)
       )
@@ -1415,6 +1480,7 @@ class DatabaseService {
         postal_code TEXT,
         country TEXT,
         ico TEXT,
+        dic TEXT,
         ic_dph TEXT,
         vat_payer INTEGER NOT NULL DEFAULT 1,
         phone TEXT,
@@ -2251,8 +2317,8 @@ class DatabaseService {
       SELECT r.receipt_number, r.created_at, r.prices_include_vat,
              i.unit_price, i.qty, i.unit
       FROM inbound_receipt_items i
-      JOIN inbound_receipts r ON i.receipt_id = r.id AND r.user_id = i.user_id
-      WHERE i.product_unique_id = ? AND i.user_id = ?
+      JOIN inbound_receipts r ON i.receipt_id = r.id
+      WHERE i.product_unique_id = ? AND r.user_id = ?
       ORDER BY r.created_at DESC
     ''',
       [productUniqueId, _currentUserId],
@@ -2417,6 +2483,7 @@ class DatabaseService {
   }
 
   /// Nahradí lokálnych zákazníkov zoznamom z backendu. Vkladá s user_id = _currentUserId.
+  /// POZOR: deštruktívna operácia – maže všetkých lokálnych zákazníkov. Používaj len pri prvom sync.
   Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> list) async {
     if (list.isEmpty || _currentUserId == null) return;
     Database db = await database;
@@ -2426,6 +2493,46 @@ class DatabaseService {
       final row = Map<String, dynamic>.from(c.toMap());
       row['user_id'] = _currentUserId;
       await db.insert('customers', row);
+    }
+  }
+
+  /// Zlúči zákazníkov z backendu s lokálnymi. Zachová lokálne polia (vat_payer, pallet_balance,
+  /// default_vat_rate) pre existujúcich zákazníkov (spárovaných podľa ICO).
+  /// Noví zákazníci sa vložia, existujúci sa aktualizujú – lokálne polia sa neprepíšu.
+  Future<void> mergeCustomersFromBackend(List<Map<String, dynamic>> list) async {
+    if (list.isEmpty || _currentUserId == null) return;
+    Database db = await database;
+
+    // Načítaj existujúcich lokálnych zákazníkov zindexovaných podľa ICO
+    final existing = await db.query('customers', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    final localByIco = <String, Map<String, dynamic>>{};
+    for (final row in existing) {
+      final ico = (row['ico'] as String?) ?? '';
+      if (ico.isNotEmpty) localByIco[ico] = row;
+    }
+
+    for (final map in list) {
+      final c = Customer.fromMap(Map<String, dynamic>.from(map));
+      final row = Map<String, dynamic>.from(c.toMap());
+      row['user_id'] = _currentUserId;
+
+      final localRow = localByIco[c.ico];
+      if (localRow != null) {
+        // Zachovaj lokálne polia – server ich nepozná
+        row['vat_payer'] = localRow['vat_payer'] ?? 1;
+        row['pallet_balance'] = localRow['pallet_balance'] ?? 0;
+        row['default_vat_rate'] = localRow['default_vat_rate'] ?? 20;
+        row.remove('id');
+        await db.update(
+          'customers',
+          row,
+          where: 'id = ?',
+          whereArgs: [localRow['id']],
+        );
+      } else {
+        row.remove('id');
+        await db.insert('customers', row, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
     }
   }
 
@@ -2979,7 +3086,7 @@ class DatabaseService {
       final sumResult = await db.rawQuery('''
         SELECT SUM(i.qty * i.unit_price) as total
         FROM inbound_receipt_items i
-        JOIN inbound_receipts r ON r.id = i.receipt_id AND r.user_id = i.user_id
+        JOIN inbound_receipts r ON r.id = i.receipt_id
         WHERE r.user_id = ? AND r.status = 'schvalena' AND r.approved_at >= ?
       ''', [uid, monthStart]);
       if (sumResult.isNotEmpty && sumResult[0]['total'] != null) {
@@ -3136,7 +3243,7 @@ class DatabaseService {
     final receipts = await db.query('inbound_receipts', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final r in receipts) {
-      final items = await db.query('inbound_receipt_items', where: 'receipt_id = ? AND user_id = ?', whereArgs: [r['id'], _currentUserId]);
+      final items = await db.query('inbound_receipt_items', where: 'receipt_id = ?', whereArgs: [r['id']]);
       double total = 0;
       for (final i in items) {
         total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
@@ -3153,7 +3260,7 @@ class DatabaseService {
     final outs = await db.query('stock_outs', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC', limit: limit);
     final result = <Map<String, dynamic>>[];
     for (final o in outs) {
-      final items = await db.query('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [o['id'], _currentUserId]);
+      final items = await db.query('stock_out_items', where: 'stock_out_id = ?', whereArgs: [o['id']]);
       double total = 0;
       for (final i in items) {
         total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
@@ -3214,7 +3321,7 @@ class DatabaseService {
   Future<List<StockOutItem>> getStockOutItems(int stockOutId) async {
     Database db = await database;
     if (_currentUserId == null) return [];
-    final maps = await db.query('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
+    final maps = await db.query('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
     return maps.map((m) => StockOutItem.fromMap(m)).toList();
   }
 
@@ -3247,7 +3354,7 @@ class DatabaseService {
   Future<void> deleteStockOutItemsByStockOutId(int stockOutId) async {
     Database db = await database;
     if (_currentUserId == null) return;
-    await db.delete('stock_out_items', where: 'stock_out_id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
+    await db.delete('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
   }
 
   Future<int> updateStockOut(StockOut stockOut) async {
@@ -3333,7 +3440,7 @@ class DatabaseService {
     final sql = '''
       SELECT i.id, r.receipt_number AS document_number, r.created_at, i.product_unique_id, i.product_name, i.plu, i.qty, i.unit, r.warehouse_id
       FROM inbound_receipt_items i
-      JOIN inbound_receipts r ON i.receipt_id = r.id AND r.user_id = i.user_id
+      JOIN inbound_receipts r ON i.receipt_id = r.id
       WHERE r.user_id = ? ${warehouseId != null ? 'AND r.warehouse_id = ?' : ''}
       ORDER BY r.created_at DESC
     ''';

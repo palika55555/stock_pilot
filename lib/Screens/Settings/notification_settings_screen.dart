@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../theme/app_theme.dart';
 import '../../services/Database/database_service.dart';
 
 /// Nastavenia notifikácií: tiché hodiny, interval pripomienky, prah zmeny ceny.
@@ -100,10 +101,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
         title: const Text('Nastavenia notifikácií'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),

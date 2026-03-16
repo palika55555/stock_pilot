@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:stock_pilot/models/supplier.dart';
 import 'package:stock_pilot/services/supplier/supplier_service.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/suppliers/add_supplier_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 
@@ -147,27 +148,27 @@ class _SuppliersPageState extends State<SuppliersPage>
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               title: Text(
                 l10n.suppliers,
-                style: const TextStyle(
-                  color: Colors.black,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 26,
                 ),
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.tune, color: Colors.black87),
+                  icon: Icon(Icons.tune, color: AppColors.textPrimary),
                   onPressed: () {},
                 ),
                 const SizedBox(width: 8),
@@ -340,20 +341,9 @@ class _SupplierCard extends StatelessWidget {
         ).animate(animation),
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6366F1).withOpacity(0.03),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
+          decoration: AppColors.cardDecoration,
           child: InkWell(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
             onTap: onEdit,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -369,9 +359,9 @@ class _SupplierCard extends StatelessWidget {
                           children: [
                             Text(
                               s.ico,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF6366F1),
+                                color: AppColors.accentGold,
                                 fontSize: 12,
                               ),
                             ),
@@ -381,37 +371,37 @@ class _SupplierCard extends StatelessWidget {
                         ),
                         Text(
                           s.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: Color(0xFF1E293B),
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
                             if (s.city != null && s.city!.isNotEmpty) ...[
-                              const Icon(
+                              Icon(
                                 Icons.location_on_rounded,
                                 size: 14,
-                                color: Color(0xFF94A3B8),
+                                color: AppColors.textSecondary,
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 s.city!,
-                                style: const TextStyle(
-                                  color: Color(0xFF64748B),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
                                   fontSize: 13,
                                 ),
                               ),
                             ],
                             if (s.defaultVatRate > 0) ...[
                               if (s.city != null && s.city!.isNotEmpty)
-                                const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8))),
+                                Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
                               Text(
                                 'DPH: ${s.defaultVatRate}%',
-                                style: const TextStyle(
-                                  color: Color(0xFF64748B),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -442,16 +432,16 @@ class _SupplierCard extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF6366F1).withOpacity(0.1),
+        color: AppColors.accentGoldSubtle,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Center(
         child: Text(
           letter,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF6366F1),
+            color: AppColors.accentGold,
           ),
         ),
       ),
@@ -463,11 +453,11 @@ class _SupplierCard extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? Colors.green : Colors.red,
+        color: active ? AppColors.success : AppColors.danger,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: (active ? Colors.green : Colors.red).withOpacity(0.4),
+            color: (active ? AppColors.success : AppColors.danger).withOpacity(0.4),
             blurRadius: 4,
             spreadRadius: 1,
           ),
@@ -480,7 +470,7 @@ class _SupplierCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8)),
+        icon: Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
         itemBuilder: (context) => [

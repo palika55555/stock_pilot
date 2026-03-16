@@ -6,6 +6,7 @@ import '../../models/warehouse.dart';
 import '../../models/product.dart';
 import '../../services/Database/database_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 
 /// Bottom sheet pre inventúru skladu so skenerom a zoznamom produktov.
 class WarehouseInventorySheetWidget extends StatefulWidget {
@@ -191,9 +192,14 @@ class _WarehouseInventorySheetWidgetState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(
+          top: BorderSide(color: AppColors.borderSubtle, width: 1),
+          left: BorderSide(color: AppColors.borderSubtle, width: 1),
+          right: BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
       ),
       child: DraggableScrollableSheet(
         initialChildSize: 0.9,
@@ -206,14 +212,14 @@ class _WarehouseInventorySheetWidgetState
             _buildHeader(l10n, scrollController),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+                  ? Center(
+                      child: CircularProgressIndicator(color: AppColors.accentGold),
                     )
                   : _filtered.isEmpty
                       ? Center(
                           child: Text(
                             l10n.noResults,
-                            style: const TextStyle(color: Colors.grey),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
                         )
                       : ListView.builder(
@@ -255,9 +261,9 @@ class _WarehouseInventorySheetWidgetState
   Widget _buildHeader(AppLocalizations l10n, ScrollController scrollController) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,20 +273,20 @@ class _WarehouseInventorySheetWidgetState
               Expanded(
                 child: Text(
                   '${l10n.inventoryTitle}: ${widget.warehouse.name}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
               IconButton(
                 onPressed: _openScanner,
-                icon: const Icon(Icons.camera_alt_rounded),
+                icon: Icon(Icons.camera_alt_rounded, color: AppColors.bgPrimary),
                 tooltip: l10n.scanProduct,
                 style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.accentGold,
+                  foregroundColor: AppColors.bgPrimary,
                 ),
               ),
             ],
@@ -288,14 +294,16 @@ class _WarehouseInventorySheetWidgetState
           const SizedBox(height: 12),
           TextField(
             controller: _searchController,
+            style: TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: l10n.inventorySearchHint,
-              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6366F1)),
+              hintStyle: TextStyle(color: AppColors.textMuted),
+              prefixIcon: Icon(Icons.search_rounded, color: AppColors.accentGold),
               filled: true,
-              fillColor: const Color(0xFFF1F5F9),
+              fillColor: AppColors.bgInput,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(color: AppColors.borderDefault),
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
@@ -308,9 +316,9 @@ class _WarehouseInventorySheetWidgetState
   Widget _buildSaveBar(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: SafeArea(
         child: SizedBox(
@@ -318,26 +326,28 @@ class _WarehouseInventorySheetWidgetState
           child: FilledButton(
             onPressed: _saving ? null : _saveInventory,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
+              backgroundColor: AppColors.accentGold,
+              foregroundColor: AppColors.bgPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: _saving
-                ? const SizedBox(
+                ? SizedBox(
                     height: 24,
                     width: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppColors.bgPrimary,
                       strokeWidth: 2,
                     ),
                   )
                 : Text(
                     l10n.saveInventory,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
+                      color: AppColors.bgPrimary,
                     ),
                   ),
           ),
@@ -435,9 +445,10 @@ class _InventoryRowState extends State<_InventoryRow> {
                 children: [
                   Text(
                     p.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
+                      color: AppColors.textPrimary,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -445,17 +456,17 @@ class _InventoryRowState extends State<_InventoryRow> {
                   const SizedBox(height: 4),
                   Text(
                     p.plu,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     '${AppLocalizations.of(context)!.inSystemKs} ${systemQty} ${p.unit}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF64748B),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],

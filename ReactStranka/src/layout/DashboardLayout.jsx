@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import { API_BASE_FOR_CALLS } from '../config'
@@ -9,12 +9,10 @@ const NAV_ITEMS = [
   { path: '/dashboard', label: 'Prehľad', icon: '◉' },
   { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
   { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
+  { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '📄' },
   { path: '/dashboard/production', label: 'Výroba', icon: '🏭' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
   { path: '/dashboard/production/new', label: 'Príjemky', icon: '📥' },
-  { path: '/dashboard', label: 'Výdajky', icon: '📤' },
-  { path: '/dashboard', label: 'Štatistiky', icon: '📊' },
-  { path: '/dashboard', label: 'Nastavenia', icon: '⚙' },
 ]
 
 function formatSyncAgo(ts) {
@@ -36,23 +34,34 @@ export default function DashboardLayout() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [syncStatus, setSyncStatus] = useState({ last_sync_at: 0, loading: false })
   const notifRef = useRef(null)
+  const lastSyncCheckRef = useRef(0)
 
   useEffect(() => {
     const a = getAuth()
     setAuth(a)
   }, [])
 
-  useEffect(() => {
-    if (!auth?.token) return
-    const headers = getAuthHeaders(auth)
+  const doSyncCheck = useCallback((authObj, { force = false } = {}) => {
+    if (!authObj?.token) return
+    const now = Date.now()
+    // Cooldown 30s – zabrání duplicitným requestom pri re-renderoch
+    if (!force && now - lastSyncCheckRef.current < 30_000) return
+    lastSyncCheckRef.current = now
+    const headers = getAuthHeaders(authObj)
+    setSyncStatus((s) => ({ ...s, loading: true }))
     fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
       .then((r) => {
         if (r.status === 401) { navigate('/', { replace: true }); return {} }
         return r.ok ? r.json() : {}
       })
-      .then((d) => d && Object.keys(d).length && setSyncStatus((s) => ({ ...s, last_sync_at: d.last_sync_at ?? 0 })))
-      .catch(() => {})
-  }, [auth, navigate])
+      .then((d) => d && Object.keys(d).length && setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false }))
+      .catch(() => setSyncStatus((s) => ({ ...s, loading: false })))
+  }, [navigate])
+
+  useEffect(() => {
+    if (!auth?.token) return
+    doSyncCheck(auth)
+  }, [auth, doSyncCheck])
 
   useEffect(() => {
     function close(e) {
@@ -65,13 +74,9 @@ export default function DashboardLayout() {
   }, [notifOpen])
 
   const handleSyncClick = () => {
-    setSyncStatus((s) => ({ ...s, loading: true }))
-    refreshNotifications()
-    const headers = getAuthHeaders(auth)
-    fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((d) => setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false }))
-      .catch(() => setSyncStatus((s) => ({ ...s, loading: false })))
+    // Force sync/check + obnov notifikácie (products fetch s force=true)
+    doSyncCheck(auth, { force: true })
+    refreshNotifications({ force: true })
   }
 
   const handleLogout = () => {

@@ -1,8 +1,11 @@
+import 'dart:io' show File;
 import 'dart:ui';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../Providers/theme_locale_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../services/Database/database_service.dart';
 import '../../l10n/app_localizations.dart';
 import 'company_edit_screen.dart';
@@ -71,6 +74,53 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// Admin: vytvorí zálohu DB a umožní ju stiahnuť (uložiť súbor).
+  Future<void> _downloadDatabaseBackup(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final dbPath = await DatabaseService().getDatabasePath();
+    if (dbPath == null || dbPath.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.backupDatabaseError)),
+        );
+      }
+      return;
+    }
+    final file = File(dbPath);
+    if (!await file.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.backupDatabaseError)),
+        );
+      }
+      return;
+    }
+    try {
+      final bytes = await file.readAsBytes();
+      final dateStr = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+      final fileName = 'stock_pilot_zaloha_$dateStr.db';
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: l10n.backupDatabaseDownload,
+        fileName: fileName,
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['db'],
+      );
+      if (!context.mounted) return;
+      if (savedPath != null && savedPath.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.backupDatabaseSuccess)),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${l10n.backupDatabaseError} $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -78,7 +128,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
@@ -86,17 +136,10 @@ class _SettingsPageState extends State<SettingsPage> {
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.8),
-                    Colors.white.withOpacity(0.6),
-                  ],
-                ),
+                color: AppColors.bgCard.withOpacity(0.9),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.3),
+                    color: AppColors.borderSubtle,
                     width: 1,
                   ),
                 ),
@@ -108,22 +151,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 leading: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.5),
+                    color: AppColors.bgInput,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
+                      color: AppColors.borderSubtle,
                       width: 1,
                     ),
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                    icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
                 title: Text(
                   l10n.settings,
-                  style: const TextStyle(
-                    color: Colors.black,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
                     fontSize: 26,
                   ),
@@ -133,19 +176,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFFF0F2F5),
-              const Color(0xFFE8EBF0),
-              const Color(0xFFF0F2F5),
-            ],
-          ),
-        ),
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -191,13 +222,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       : l10n.defaultPath,
                   onTap: () => _showDbPathInfo(),
                 ),
-                if (widget.userRole == 'admin')
+                if (widget.userRole == 'admin') ...[
+                  _buildListTile(
+                    icon: Icons.backup_rounded,
+                    title: l10n.backupDatabaseDownload,
+                    trailing: l10n.download,
+                    onTap: () => _downloadDatabaseBackup(context),
+                  ),
                   _buildListTile(
                     icon: Icons.delete_forever_outlined,
                     title: l10n.clearDatabase,
                     trailing: l10n.delete,
                     onTap: () => _showClearDatabaseDialog(context),
                   ),
+                ],
               ],
             ),
             _buildSection(
@@ -296,7 +334,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -325,14 +362,14 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+              Icon(icon, size: 20, color: AppColors.accentGold),
               const SizedBox(width: 8),
               Text(
                 title,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: Color(0xFF1E293B),
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -344,24 +381,18 @@ class _SettingsPageState extends State<SettingsPage> {
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.7),
+                  color: AppColors.bgCard,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
+                    color: AppColors.borderSubtle,
                     width: 1.5,
                   ),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black45,
                       blurRadius: 20,
-                      offset: const Offset(0, 10),
+                      offset: Offset(0, 10),
                       spreadRadius: 0,
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withOpacity(0.8),
-                      blurRadius: 6,
-                      offset: const Offset(0, -3),
-                      spreadRadius: -2,
                     ),
                   ],
                 ),
@@ -374,7 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (!isLast)
                           Divider(
                             height: 1,
-                            color: Colors.white.withOpacity(0.3),
+                            color: AppColors.borderSubtle,
                             indent: 16,
                             endIndent: 16,
                           ),
@@ -407,21 +438,14 @@ class _SettingsPageState extends State<SettingsPage> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF6366F1).withOpacity(0.2),
-                  const Color(0xFF6366F1).withOpacity(0.1),
-                ],
-              ),
+              color: AppColors.accentGoldSubtle,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withOpacity(0.5),
+                color: AppColors.borderSubtle,
                 width: 1,
               ),
             ),
-            child: Icon(icon, color: const Color(0xFF6366F1), size: 22),
+            child: Icon(icon, color: AppColors.accentGold, size: 22),
           ),
         ),
       ),
@@ -430,7 +454,7 @@ class _SettingsPageState extends State<SettingsPage> {
         style: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
-          color: Color(0xFF1E293B),
+          color: AppColors.textPrimary,
         ),
       ),
       subtitle: Padding(
@@ -439,28 +463,15 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle,
           style: const TextStyle(
             fontSize: 13,
-            color: Color(0xFF64748B),
+            color: AppColors.textSecondary,
           ),
         ),
       ),
-      trailing: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: value
-                  ? const Color(0xFF6366F1).withOpacity(0.3)
-                  : Colors.grey.withOpacity(0.2),
-              blurRadius: 8,
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Switch(
-          value: value,
-          onChanged: onChanged,
-          activeColor: const Color(0xFF6366F1),
-        ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeTrackColor: AppColors.accentGold,
+        activeColor: AppColors.accentGold,
       ),
     );
   }
@@ -481,21 +492,14 @@ class _SettingsPageState extends State<SettingsPage> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF6366F1).withOpacity(0.2),
-                  const Color(0xFF6366F1).withOpacity(0.1),
-                ],
-              ),
+              color: AppColors.accentGoldSubtle,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withOpacity(0.5),
+                color: AppColors.borderSubtle,
                 width: 1,
               ),
             ),
-            child: Icon(icon, color: const Color(0xFF6366F1), size: 22),
+            child: Icon(icon, color: AppColors.accentGold, size: 22),
           ),
         ),
       ),
@@ -504,7 +508,7 @@ class _SettingsPageState extends State<SettingsPage> {
         style: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
-          color: Color(0xFF1E293B),
+          color: AppColors.textPrimary,
         ),
       ),
       trailing: Row(
@@ -515,7 +519,7 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing,
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF64748B),
+                color: AppColors.textSecondary,
               ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
@@ -524,7 +528,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(width: 8),
           const Icon(
             Icons.chevron_right_rounded,
-            color: Color(0xFF94A3B8),
+            color: AppColors.textMuted,
             size: 20,
           ),
         ],

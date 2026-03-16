@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
+import '../../theme/app_theme.dart';
 import '../purchase/purchase_price_history_sheet_widget.dart';
 
 /// Kartové zobrazenie skladových zásob – mriežka kariet s PLU, názvom, cenou a množstvom.
@@ -32,13 +33,13 @@ class WarehouseSuppliesCardView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppColors.bgCard,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.inventory_2_outlined,
                 size: 56,
-                color: Colors.grey[500],
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 20),
@@ -47,13 +48,13 @@ class WarehouseSuppliesCardView extends StatelessWidget {
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'Skúste zmeniť vyhľadávanie alebo pridať produkt',
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -132,35 +133,33 @@ class _ProductCard extends StatelessWidget {
 
   bool get _lowStock => product.qty < 10;
 
-  static const _cardRadius = 20.0;
-  static const _accentColor = Color(0xFF6366F1);
+  static const _cardRadius = 16.0;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppColors.bgCard,
       borderRadius: BorderRadius.circular(_cardRadius),
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
+      elevation: 0,
       child: InkWell(
         onTap: isAdmin && onSelectionChanged != null
             ? () => onSelectionChanged!()
             : null,
         borderRadius: BorderRadius.circular(_cardRadius),
-        splashColor: _accentColor.withValues(alpha: 0.12),
-        highlightColor: _accentColor.withValues(alpha: 0.06),
+        splashColor: AppColors.accentGold.withValues(alpha: 0.12),
+        highlightColor: AppColors.accentGold.withValues(alpha: 0.06),
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(_cardRadius),
             border: Border.all(
-              color: isSelected ? _accentColor : Colors.grey.shade200,
-              width: isSelected ? 2.5 : 1,
+              color: isSelected ? AppColors.accentGold : AppColors.borderSubtle,
+              width: isSelected ? 2 : 1,
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: _accentColor.withValues(alpha: 0.2),
+                      color: AppColors.accentGold.withValues(alpha: 0.2),
                       blurRadius: 12,
                       offset: const Offset(0, 2),
                     ),
@@ -181,7 +180,7 @@ class _ProductCard extends StatelessWidget {
                       child: Checkbox(
                         value: isSelected,
                         onChanged: (_) => onSelectionChanged!(),
-                        activeColor: _accentColor,
+                        activeColor: AppColors.accentGold,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(5),
                         ),
@@ -198,27 +197,27 @@ class _ProductCard extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: _accentColor.withValues(alpha: 0.1),
+                            color: AppColors.accentGoldSubtle,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             product.plu,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                               letterSpacing: 0.3,
-                              color: _accentColor,
+                              color: AppColors.accentGold,
                             ),
                           ),
                         ),
                         const SizedBox(height: 10),
                         Text(
                           product.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
                             height: 1.3,
-                            color: Color(0xFF1E293B),
+                            color: AppColors.textPrimary,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -230,17 +229,17 @@ class _ProductCard extends StatelessWidget {
                     Tooltip(
                       message: 'Upraviť produkt',
                       child: Material(
-                        color: Colors.grey.shade100,
+                        color: AppColors.bgInput,
                         borderRadius: BorderRadius.circular(12),
                         child: InkWell(
                           onTap: onEditTap,
                           borderRadius: BorderRadius.circular(12),
-                          child: const Padding(
-                            padding: EdgeInsets.all(10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
                             child: Icon(
                               Icons.edit_outlined,
                               size: 22,
-                              color: Color(0xFF64748B),
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -251,7 +250,7 @@ class _ProductCard extends StatelessWidget {
                     Tooltip(
                       message: 'Vymazať produkt',
                       child: Material(
-                        color: Colors.grey.shade100,
+                        color: AppColors.bgInput,
                         borderRadius: BorderRadius.circular(12),
                         child: InkWell(
                           onTap: onDeleteTap,
@@ -261,7 +260,7 @@ class _ProductCard extends StatelessWidget {
                             child: Icon(
                               Icons.delete_outline,
                               size: 22,
-                              color: Colors.red.shade700,
+                              color: AppColors.danger,
                             ),
                           ),
                         ),
@@ -271,17 +270,17 @@ class _ProductCard extends StatelessWidget {
                   Tooltip(
                     message: 'História nákupných cien',
                     child: Material(
-                      color: Colors.grey.shade100,
+                      color: AppColors.bgInput,
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: onHistoryTap,
                         borderRadius: BorderRadius.circular(12),
-                        child: const Padding(
-                          padding: EdgeInsets.all(10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
                           child: Icon(
                             Icons.history_edu_rounded,
                             size: 22,
-                            color: Color(0xFF64748B),
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ),
@@ -294,7 +293,7 @@ class _ProductCard extends StatelessWidget {
               Divider(
                 height: 1,
                 thickness: 1,
-                color: Colors.grey.shade200,
+                color: AppColors.borderSubtle,
               ),
               const SizedBox(height: 12),
               // Cena a množstvo
@@ -308,11 +307,11 @@ class _ProductCard extends StatelessWidget {
                       children: [
                         Text(
                           '${product.price.toStringAsFixed(2)} €',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 18,
                             letterSpacing: -0.3,
-                            color: Color(0xFF1E293B),
+                            color: AppColors.accentGold,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -320,7 +319,7 @@ class _ProductCard extends StatelessWidget {
                           'Bez DPH ${product.withoutVat.toStringAsFixed(2)} € · DPH ${product.vat}%',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[600],
+                            color: AppColors.textSecondary,
                             height: 1.2,
                           ),
                         ),
@@ -330,7 +329,7 @@ class _ProductCard extends StatelessWidget {
                             'Posl. nákup bez DPH: ${product.lastPurchasePriceWithoutVat.toStringAsFixed(2)} €',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.grey[600],
+                              color: AppColors.textSecondary,
                               height: 1.2,
                             ),
                           ),
@@ -341,7 +340,7 @@ class _ProductCard extends StatelessWidget {
                             '${AppLocalizations.of(context)!.margin}: ${product.marginPercent!.toStringAsFixed(1)} %',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.grey[600],
+                              color: AppColors.textSecondary,
                               height: 1.2,
                             ),
                           ),
@@ -353,7 +352,7 @@ class _ProductCard extends StatelessWidget {
                             'Dodávateľ: ${product.supplierName}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.grey[600],
+                              color: AppColors.textSecondary,
                               height: 1.2,
                               fontStyle: FontStyle.italic,
                             ),
@@ -370,19 +369,17 @@ class _ProductCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _lowStock ? Colors.red[50]! : Colors.green[50]!,
+                      color: _lowStock ? AppColors.dangerSubtle : AppColors.successSubtle,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _lowStock
-                            ? Colors.red.shade200
-                            : Colors.green.shade200,
+                        color: _lowStock ? AppColors.danger : AppColors.success,
                         width: 1,
                       ),
                     ),
                     child: Text(
                       '${product.qty} ${product.unit}',
                       style: TextStyle(
-                        color: _lowStock ? Colors.red[800] : Colors.green[800],
+                        color: _lowStock ? AppColors.danger : AppColors.success,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                       ),

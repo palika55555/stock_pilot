@@ -21,11 +21,14 @@ import '../../theme/app_theme.dart';
 class AppDrawer extends StatelessWidget {
   final String userRole;
   final void Function(String role)? onSwitchRole;
+  /// Otvorí modal na ručné vytvorenie produktu / produktovej karty.
+  final VoidCallback? onAddProduct;
 
   const AppDrawer({
     super.key,
     required this.userRole,
     this.onSwitchRole,
+    this.onAddProduct,
   });
 
   @override
@@ -73,13 +76,10 @@ class AppDrawer extends StatelessWidget {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehousesPage()));
                     },
                   ),
-                  _DrawerMenuItem(
-                    icon: Icons.inventory_2_rounded,
-                    title: l10n.warehouseSupplies,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseSuppliesScreen(userRole: userRole)));
-                    },
+                  _ProductsDrawerSection(
+                    userRole: userRole,
+                    onAddProduct: onAddProduct,
+                    l10nWarehouseSupplies: l10n.warehouseSupplies,
                   ),
                   _DrawerMenuItem(
                     icon: Icons.swap_horiz_rounded,
@@ -314,6 +314,72 @@ class _DrawerHeader extends StatelessWidget {
             onTap: () => Navigator.pop(context),
             child: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 22),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductsDrawerSection extends StatelessWidget {
+  final String userRole;
+  final VoidCallback? onAddProduct;
+  final String l10nWarehouseSupplies;
+
+  const _ProductsDrawerSection({
+    required this.userRole,
+    required this.l10nWarehouseSupplies,
+    this.onAddProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      child: ExpansionTile(
+        leading: Icon(Icons.inventory_2_rounded, size: 20, color: AppColors.textSecondary),
+        title: Text(
+          'Produkty',
+          style: GoogleFonts.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        iconColor: AppColors.textSecondary,
+        collapsedIconColor: AppColors.textSecondary,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.list_rounded,
+              title: l10nWarehouseSupplies,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseSuppliesScreen(userRole: userRole)));
+              },
+            ),
+          ),
+          if (onAddProduct != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, top: 4, bottom: 6),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onAddProduct!();
+                  },
+                  icon: const Icon(Icons.add_box_rounded, size: 18),
+                  label: const Text('Nový produkt'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accentGold,
+                    foregroundColor: AppColors.bgPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

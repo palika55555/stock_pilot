@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/receipt_pdf_style_config.dart';
+import '../../theme/app_theme.dart';
 
 /// Konfigurátor štýlu PDF pre príjemky – Nastavenia → Generovanie PDF.
 class ReceiptPdfStyleScreen extends StatefulWidget {
@@ -72,24 +73,24 @@ class _ReceiptPdfStyleScreenState extends State<ReceiptPdfStyleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.8),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text(
+              title: Text(
                 'Štýl PDF pre príjemky',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 22,
                 ),
@@ -99,7 +100,7 @@ class _ReceiptPdfStyleScreenState extends State<ReceiptPdfStyleScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.accentGold))
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 90, 20, 24),
               child: Column(

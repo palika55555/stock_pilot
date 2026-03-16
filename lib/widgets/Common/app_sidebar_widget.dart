@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../models/user.dart';
 import '../../screens/warehouse/warehouse_supplies.dart';
+import '../../screens/Warehouse/warehouses_page.dart';
+import '../../screens/Warehouse/warehouse_movements_screen.dart';
 import '../../screens/customers/customers_page.dart';
 import '../../screens/Suppliers/suppliers_page.dart';
 import '../../screens/production/production_list_screen.dart';
@@ -11,6 +13,9 @@ import '../../screens/stock_out/stock_out_screen.dart';
 import '../../screens/price_quote/price_quotes_list_screen.dart';
 import '../../screens/Reports/reports_list_screen.dart';
 import '../../screens/Settings/settings_page.dart';
+import '../../screens/Recipe/recipe_list_screen.dart';
+import '../../screens/ProductionOrder/production_order_list_screen.dart';
+import '../../screens/pallet/customers_pallets_screen.dart';
 import '../../services/logout_service.dart';
 
 class _NavItem {
@@ -24,12 +29,17 @@ class _NavItem {
 const _navItems = [
   _NavItem(icon: Icons.dashboard_rounded, label: 'Prehľad', index: 0),
   _NavItem(icon: Icons.inventory_2_rounded, label: 'Produkty', index: 1),
+  _NavItem(icon: Icons.warehouse_rounded, label: 'Sklady', index: 10),
+  _NavItem(icon: Icons.swap_horiz_rounded, label: 'Pohyby skladu', index: 11),
   _NavItem(icon: Icons.people_rounded, label: 'Zákazníci', index: 2),
   _NavItem(icon: Icons.local_shipping_rounded, label: 'Dodávatelia', index: 3),
   _NavItem(icon: Icons.precision_manufacturing_rounded, label: 'Výroba', index: 4),
+  _NavItem(icon: Icons.menu_book_rounded, label: 'Receptúry', index: 12),
+  _NavItem(icon: Icons.assignment_rounded, label: 'Výrobné príkazy', index: 13),
   _NavItem(icon: Icons.arrow_downward_rounded, label: 'Príjemky', index: 5),
   _NavItem(icon: Icons.arrow_upward_rounded, label: 'Výdajky', index: 6),
   _NavItem(icon: Icons.request_quote_rounded, label: 'Cenové ponuky', index: 7),
+  _NavItem(icon: Icons.local_shipping_outlined, label: 'Zákazníci / Palety', index: 14),
   _NavItem(icon: Icons.bar_chart_rounded, label: 'Štatistiky', index: 8),
   _NavItem(icon: Icons.settings_rounded, label: 'Nastavenia', index: 9),
 ];
@@ -39,6 +49,8 @@ class AppSidebar extends StatefulWidget {
   final String userRole;
   final int activeIndex;
   final void Function(String role)? onSwitchRole;
+  /// Otvorí modal na ručné vytvorenie produktu / produktovej karty.
+  final VoidCallback? onAddProduct;
 
   const AppSidebar({
     super.key,
@@ -46,6 +58,7 @@ class AppSidebar extends StatefulWidget {
     required this.userRole,
     this.activeIndex = 0,
     this.onSwitchRole,
+    this.onAddProduct,
   });
 
   @override
@@ -54,18 +67,27 @@ class AppSidebar extends StatefulWidget {
 
 class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateMixin {
   bool _isCollapsed = false;
+  bool _productsExpanded = false;
   late AnimationController _animController;
   late Animation<double> _widthAnim;
+  late Animation<double> _labelOpacityAnim;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 300),
     );
     _widthAnim = Tween<double>(begin: 260, end: 72).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeInOutCubic),
+      CurvedAnimation(parent: _animController, curve: Curves.easeInOutQuart),
+    );
+    // Labely vyblednú rýchlejšie než sa sidebar zúži – vyzerá prirodzenejšie
+    _labelOpacityAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+      ),
     );
   }
 
@@ -114,6 +136,21 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
       case 9:
         Navigator.push(context, _fadeRoute(SettingsPage(userRole: widget.userRole)));
         break;
+      case 10:
+        Navigator.push(context, _fadeRoute(const WarehousesPage()));
+        break;
+      case 11:
+        Navigator.push(context, _fadeRoute(WarehouseMovementsScreen(userRole: widget.userRole)));
+        break;
+      case 12:
+        Navigator.push(context, _fadeRoute(RecipeListScreen(userRole: widget.userRole)));
+        break;
+      case 13:
+        Navigator.push(context, _fadeRoute(ProductionOrderListScreen(userRole: widget.userRole)));
+        break;
+      case 14:
+        Navigator.push(context, _fadeRoute(const CustomersPalletsScreen()));
+        break;
     }
   }
 
@@ -139,123 +176,143 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _widthAnim,
+      animation: _animController,
       builder: (context, _) {
         final width = _widthAnim.value;
-        final showLabels = width > 140;
-        return Container(
-          width: width,
-          decoration: const BoxDecoration(
-            color: AppColors.bgCard,
-            border: Border(
-              right: BorderSide(color: AppColors.borderSubtle, width: 1),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(showLabels),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  children: _navItems.map((item) {
-                    return _SidebarNavItem(
-                      item: item,
-                      isActive: item.index == widget.activeIndex,
-                      showLabel: showLabels,
-                      onTap: () => _navigate(context, item.index),
-                    );
-                  }).toList(),
-                ),
+        final labelOpacity = _labelOpacityAnim.value;
+        final isNarrow = labelOpacity < 0.01;
+        return ClipRect(
+          clipBehavior: Clip.hardEdge,
+          child: Container(
+            width: width,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              color: AppColors.bgCard,
+              border: Border(
+                right: BorderSide(color: AppColors.borderSubtle, width: 1),
               ),
-              const Divider(height: 1),
-              _buildUserSection(showLabels),
-            ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(labelOpacity, isNarrow),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: isNarrow ? 4 : 8,
+                    ),
+                    children: _navItems.map((item) {
+                      if (item.index == 1) {
+                        return _SidebarProductsExpandable(
+                          isActive: widget.activeIndex == 1,
+                          labelOpacity: labelOpacity,
+                          isExpanded: _productsExpanded,
+                          isNarrow: isNarrow,
+                          onToggle: () => setState(() => _productsExpanded = !_productsExpanded),
+                          onNavigateToSupplies: () => _navigate(context, 1),
+                          onAddProduct: widget.onAddProduct,
+                        );
+                      }
+                      return _SidebarNavItem(
+                        item: item,
+                        isActive: item.index == widget.activeIndex,
+                        labelOpacity: labelOpacity,
+                        isNarrow: isNarrow,
+                        onTap: () => _navigate(context, item.index),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Divider(height: 1),
+                _buildUserSection(labelOpacity),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildHeader(bool showLabels) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 8, 12),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.accentGoldSubtle,
-              borderRadius: BorderRadius.circular(10),
+  Widget _buildHeader(double labelOpacity, bool isNarrow) {
+    final hPadding = isNarrow ? 4.0 : 16.0;
+    final rPadding = isNarrow ? 4.0 : 8.0;
+    final iconSize = isNarrow ? 32.0 : 36.0;
+    final btnSize = isNarrow ? 24.0 : 28.0;
+    return SizedBox(
+      height: 68,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(hPadding, 16, rPadding, 12),
+        child: Row(
+          children: [
+            Container(
+              width: iconSize,
+              height: iconSize,
+              decoration: BoxDecoration(
+                color: AppColors.accentGoldSubtle,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.inventory_2_rounded, color: AppColors.accentGold, size: isNarrow ? 18 : 20),
             ),
-            child: const Icon(Icons.inventory_2_rounded, color: AppColors.accentGold, size: 20),
-          ),
-          if (showLabels) ...[
-            const SizedBox(width: 10),
-            Flexible(
-              child: RichText(
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'STOCK ',
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: 0.8,
+            Expanded(
+              child: labelOpacity < 0.01
+                  ? const SizedBox.shrink()
+                  : Opacity(
+                      opacity: labelOpacity,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: RichText(
+                          overflow: TextOverflow.ellipsis,
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'STOCK ',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'PILOT',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.accentGold,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    TextSpan(
-                      text: 'PILOT',
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.accentGold,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
+            ),
+            GestureDetector(
+              onTap: _toggleCollapse,
+              child: Container(
+                width: btnSize,
+                height: btnSize,
+                decoration: BoxDecoration(
+                  color: AppColors.bgInput,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _isCollapsed ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
+                  size: isNarrow ? 16.0 : 18.0,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ),
-          ] else ...[
-            const SizedBox(width: 4),
-            Text(
-              'SP',
-              style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: AppColors.accentGold,
-                letterSpacing: 0.5,
-              ),
-            ),
           ],
-          const Spacer(),
-          GestureDetector(
-            onTap: _toggleCollapse,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.bgInput,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                _isCollapsed ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
-                size: 18,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildUserSection(bool showLabels) {
+  Widget _buildUserSection(double labelOpacity) {
     final user = widget.user;
     final initials = user != null
         ? user.fullName.split(' ').take(2).map((w) => w.isNotEmpty ? w[0] : '').join().toUpperCase()
@@ -288,49 +345,216 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
                   ),
                 ),
               ),
-              if (showLabels) ...[
-                const SizedBox(width: 10),
+              Expanded(
+                child: labelOpacity < 0.01
+                    ? const SizedBox.shrink()
+                    : Opacity(
+                        opacity: labelOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                name,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              Text(
+                                role.toUpperCase(),
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                  letterSpacing: 0.8,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          Opacity(
+            opacity: labelOpacity,
+            child: IgnorePointer(
+              ignoring: labelOpacity < 0.1,
+              child: Column(
+                children: [
+                  if (widget.onSwitchRole != null) ...[
+                    const SizedBox(height: 8),
+                    _SidebarRoleSwitch(
+                      currentRole: widget.userRole,
+                      onSwitchRole: widget.onSwitchRole!,
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  _LogoutButton(userRole: widget.userRole),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarProductsExpandable extends StatelessWidget {
+  final bool isActive;
+  final double labelOpacity;
+  final bool isExpanded;
+  final bool isNarrow;
+  final VoidCallback onToggle;
+  final VoidCallback onNavigateToSupplies;
+  final VoidCallback? onAddProduct;
+
+  const _SidebarProductsExpandable({
+    required this.isActive,
+    required this.labelOpacity,
+    required this.isExpanded,
+    required this.isNarrow,
+    required this.onToggle,
+    required this.onNavigateToSupplies,
+    this.onAddProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SidebarNavItem(
+          item: const _NavItem(icon: Icons.inventory_2_rounded, label: 'Produkty', index: 1),
+          isActive: isActive && !isExpanded,
+          labelOpacity: labelOpacity,
+          isNarrow: isNarrow,
+          onTap: onToggle,
+          trailing: Opacity(
+            opacity: labelOpacity,
+            child: Icon(
+              isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        if (isExpanded) ...[
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.list_rounded,
+              label: 'Skladové zásoby',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToSupplies,
+            ),
+          ),
+          if (onAddProduct != null)
+            Padding(
+              padding: EdgeInsets.only(left: isNarrow ? 4 : 12, top: 4, bottom: 6),
+              child: labelOpacity < 0.5
+                  ? SizedBox(
+                      width: double.infinity,
+                      child: IconButton(
+                        onPressed: onAddProduct,
+                        icon: const Icon(Icons.add_box_rounded, size: 22),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.accentGold,
+                          foregroundColor: AppColors.bgPrimary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onAddProduct,
+                        icon: const Icon(Icons.add_box_rounded, size: 18),
+                        label: const Text('Nový produkt'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.accentGold,
+                          foregroundColor: AppColors.bgPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SidebarSubItem extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final double labelOpacity;
+  final VoidCallback onTap;
+
+  const _SidebarSubItem({
+    required this.icon,
+    required this.label,
+    required this.labelOpacity,
+    required this.onTap,
+  });
+
+  @override
+  State<_SidebarSubItem> createState() => _SidebarSubItemState();
+}
+
+class _SidebarSubItemState extends State<_SidebarSubItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: _hovered ? AppColors.bgElevated : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(widget.icon, size: 18, color: AppColors.textSecondary),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
+                  child: Opacity(
+                    opacity: widget.labelOpacity,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                      child: Text(
+                        widget.label,
                         style: GoogleFonts.dmSans(
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
                         ),
                         overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
                       ),
-                      Text(
-                        role.toUpperCase(),
-                        style: GoogleFonts.dmSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-          if (showLabels) ...[
-            if (widget.onSwitchRole != null) ...[
-              const SizedBox(height: 8),
-              _SidebarRoleSwitch(
-                currentRole: widget.userRole,
-                onSwitchRole: widget.onSwitchRole!,
-              ),
-            ],
-            const SizedBox(height: 10),
-            _LogoutButton(userRole: widget.userRole),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -339,14 +563,18 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
 class _SidebarNavItem extends StatefulWidget {
   final _NavItem item;
   final bool isActive;
-  final bool showLabel;
+  final double labelOpacity;
+  final bool isNarrow;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const _SidebarNavItem({
     required this.item,
     required this.isActive,
-    required this.showLabel,
+    required this.labelOpacity,
+    required this.isNarrow,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -359,17 +587,17 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
   @override
   Widget build(BuildContext context) {
     final isActive = widget.isActive;
-    final showLabel = widget.showLabel;
 
+    final horizontalPadding = widget.isNarrow ? 4.0 : 8.0;
+    final innerPadding = widget.isNarrow ? 4.0 : 10.0;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 2),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+          child: Container(
             decoration: BoxDecoration(
               color: isActive
                   ? AppColors.accentGoldSubtle
@@ -384,31 +612,36 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                 ),
               ),
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: showLabel ? 12 : 14,
-              vertical: 12,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: innerPadding, vertical: 12),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   widget.item.icon,
                   size: 20,
                   color: isActive ? AppColors.accentGold : AppColors.textSecondary,
                 ),
-                if (showLabel) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.item.label,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 14,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                        color: isActive ? AppColors.accentGold : AppColors.textSecondary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+                Expanded(
+                  child: widget.isNarrow || widget.labelOpacity < 0.01
+                      ? const SizedBox.shrink()
+                      : Opacity(
+                          opacity: widget.labelOpacity,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Text(
+                              widget.item.label,
+                              style: GoogleFonts.dmSans(
+                                fontSize: 14,
+                                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                                color: isActive ? AppColors.accentGold : AppColors.textSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                ),
+                if (widget.trailing != null && widget.labelOpacity > 0.01)
+                  widget.trailing!,
               ],
             ),
           ),
@@ -549,11 +782,13 @@ class _LogoutButton extends StatelessWidget {
 class AppBottomNavBar extends StatelessWidget {
   final int activeIndex;
   final GlobalKey<ScaffoldState> scaffoldKey;
+  final String userRole;
 
   const AppBottomNavBar({
     super.key,
     required this.activeIndex,
     required this.scaffoldKey,
+    this.userRole = 'user',
   });
 
   @override
@@ -581,7 +816,7 @@ class AppBottomNavBar extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
+                    MaterialPageRoute(builder: (_) => WarehouseSuppliesScreen(userRole: userRole)),
                   );
                 },
               ),
@@ -600,7 +835,12 @@ class AppBottomNavBar extends StatelessWidget {
                 icon: Icons.arrow_upward_rounded,
                 label: 'Výdajky',
                 isActive: activeIndex == 5,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => StockOutScreen(userRole: userRole)),
+                  );
+                },
               ),
               _BottomNavItem(
                 icon: Icons.menu_rounded,

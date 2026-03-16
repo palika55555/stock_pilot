@@ -6,6 +6,7 @@ import '../../models/warehouse_transfer.dart';
 import '../../services/warehouse/warehouse_service.dart';
 import '../../services/Product/product_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 import 'add_warehouse_modal_widget.dart';
 import 'warehouse_inventory_sheet_widget.dart';
 
@@ -88,23 +89,23 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      color: const Color(0xFFF8FAFC), // Svetlé, čisté pozadie
+      color: AppColors.bgPrimary,
       child: Column(
         children: [
           _buildHeader(l10n),
           if (_loading)
-            const Expanded(
+            Expanded(
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+                child: CircularProgressIndicator(color: AppColors.accentGold),
               ),
             )
           else
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _loadWarehouses,
-                color: const Color(0xFF6366F1),
+                color: AppColors.accentGold,
                 child: _filteredWarehouses.isEmpty
-                    ? const Center(child: Text('Žiadne sklady neboli nájdené'))
+                    ? Center(child: Text('Žiadne sklady neboli nájdené', style: TextStyle(color: AppColors.textSecondary)))
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
                         physics: const BouncingScrollPhysics(),
@@ -158,16 +159,12 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
   Widget _buildHeader(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, kToolbarHeight + 10, 20, 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          ),
-        ],
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
       ),
       child: Column(
         children: [
@@ -175,18 +172,19 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
             controller: _searchController,
             decoration: InputDecoration(
               hintText: l10n.searchHintWarehouses,
-              prefixIcon: const Icon(
+              hintStyle: TextStyle(color: AppColors.textMuted),
+              prefixIcon: Icon(
                 Icons.search_rounded,
-                color: Color(0xFF6366F1),
+                color: AppColors.textSecondary,
               ),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close_rounded),
+                      icon: Icon(Icons.close_rounded, color: AppColors.textSecondary),
                       onPressed: () => _searchController.clear(),
                     )
                   : null,
               filled: true,
-              fillColor: const Color(0xFFF1F5F9),
+              fillColor: AppColors.bgInput,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
@@ -668,20 +666,9 @@ class _WarehouseCard extends StatelessWidget {
         ).animate(animation),
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6366F1).withOpacity(0.03),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
+          decoration: AppColors.cardDecoration,
           child: InkWell(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
             onTap: onEdit,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -697,9 +684,9 @@ class _WarehouseCard extends StatelessWidget {
                           children: [
                             Text(
                               w.code,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF6366F1),
+                                color: AppColors.accentGold,
                                 fontSize: 12,
                               ),
                             ),
@@ -709,27 +696,27 @@ class _WarehouseCard extends StatelessWidget {
                         ),
                         Text(
                           w.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: Color(0xFF1E293B),
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.location_on_rounded,
-                              size: 14,
-                              color: Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(width: 4),
+                              Icon(
+                                Icons.location_on_rounded,
+                                size: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
                             Text(
                               w.address != null && w.address!.isNotEmpty
                                   ? w.address!
                                   : (w.city ?? 'Nezadané'),
-                              style: const TextStyle(
-                                color: Color(0xFF64748B),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
                                 fontSize: 13,
                               ),
                             ),
@@ -775,12 +762,12 @@ class _WarehouseCard extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF6366F1).withOpacity(0.1),
+        color: AppColors.accentGoldSubtle,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.warehouse_rounded,
-        color: Color(0xFF6366F1),
+        color: AppColors.accentGold,
         size: 28,
       ),
     );
@@ -790,12 +777,12 @@ class _WarehouseCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.grey[600]),
+        Icon(icon, size: 14, color: AppColors.textSecondary),
         const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(
-            color: Colors.grey[600],
+            color: AppColors.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -828,11 +815,11 @@ class _WarehouseCard extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? Colors.green : Colors.red,
+        color: active ? AppColors.success : AppColors.danger,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: (active ? Colors.green : Colors.red).withOpacity(0.4),
+            color: (active ? AppColors.success : AppColors.danger).withOpacity(0.4),
             blurRadius: 4,
             spreadRadius: 1,
           ),
@@ -845,7 +832,7 @@ class _WarehouseCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8)),
+        icon: Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
         itemBuilder: (context) => [
@@ -880,13 +867,13 @@ class _MenuEntry extends StatelessWidget {
         Icon(
           icon,
           size: 20,
-          color: isDestructive ? Colors.red : const Color(0xFF6366F1),
+          color: isDestructive ? AppColors.danger : AppColors.accentGold,
         ),
         const SizedBox(width: 12),
         Text(
           label,
           style: TextStyle(
-            color: isDestructive ? Colors.red : const Color(0xFF1E293B),
+            color: isDestructive ? AppColors.danger : AppColors.textPrimary,
             fontWeight: FontWeight.w500,
           ),
         ),

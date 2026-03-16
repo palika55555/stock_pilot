@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/common/app_drawer_widget.dart';
 import '../../widgets/common/app_sidebar_widget.dart';
 import '../../widgets/Home/home_overview_widget.dart';
+import '../../widgets/Products/add_product_modal_widget.dart';
 import '../../models/user.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
@@ -116,6 +117,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  void _showAddProductModal() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => const AddProductModal(),
+    );
+  }
+
   void _showSyncNeededSnackBar() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -151,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     final list = await fetchCustomersFromBackendWithToken(token);
     if (list != null && list.isNotEmpty && mounted) {
-      await _db.replaceCustomersFromBackend(list);
+      await _db.mergeCustomersFromBackend(list);
     }
     if (mounted && token != null) {
       final backendProducts = await fetchProductsFromBackendWithToken(token);
@@ -266,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             userRole: _currentRole,
             activeIndex: 0,
             onSwitchRole: _switchRole,
+            onAddProduct: _showAddProductModal,
           ),
           Expanded(
             child: HomeOverview(
@@ -295,6 +308,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       drawer: AppDrawer(
         userRole: _currentRole,
         onSwitchRole: _switchRole,
+        onAddProduct: _showAddProductModal,
       ),
       appBar: _buildMobileAppBar(),
       body: HomeOverview(
@@ -313,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       bottomNavigationBar: AppBottomNavBar(
         activeIndex: 0,
         scaffoldKey: _scaffoldKey,
+        userRole: _currentRole,
       ),
     );
   }

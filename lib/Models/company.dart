@@ -7,6 +7,7 @@ class Company {
   final String? postalCode;
   final String? country;
   final String? ico;
+  final String? dic;
   final String? icDph;
   final bool vatPayer;
   final String? phone;
@@ -28,6 +29,7 @@ class Company {
     this.postalCode,
     this.country,
     this.ico,
+    this.dic,
     this.icDph,
     this.vatPayer = true,
     this.phone,
@@ -64,6 +66,7 @@ class Company {
       'postal_code': postalCode,
       'country': country,
       'ico': ico,
+      'dic': dic,
       'ic_dph': icDph,
       'vat_payer': vatPayer ? 1 : 0,
       'phone': phone,
@@ -87,6 +90,7 @@ class Company {
       postalCode: map['postal_code'] as String?,
       country: map['country'] as String?,
       ico: map['ico'] as String?,
+      dic: map['dic'] as String?,
       icDph: map['ic_dph'] as String?,
       vatPayer: (map['vat_payer'] as int?) != 0,
       phone: map['phone'] as String?,
@@ -109,6 +113,7 @@ class Company {
     String? postalCode,
     String? country,
     String? ico,
+    String? dic,
     String? icDph,
     bool? vatPayer,
     String? phone,
@@ -129,6 +134,7 @@ class Company {
       postalCode: postalCode ?? this.postalCode,
       country: country ?? this.country,
       ico: ico ?? this.ico,
+      dic: dic ?? this.dic,
       icDph: icDph ?? this.icDph,
       vatPayer: vatPayer ?? this.vatPayer,
       phone: phone ?? this.phone,

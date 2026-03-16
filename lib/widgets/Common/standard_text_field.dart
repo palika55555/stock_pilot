@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme.dart';
 
 /// Znovupoužiteľné štandardné textové pole pre formuláre
 /// Používa sa na obrazovkách s pevným pozadím
@@ -19,6 +20,7 @@ class StandardTextField extends StatelessWidget {
   final bool readOnly;
   final int? maxLines;
   final List<TextInputFormatter>? inputFormatters;
+  final Widget? suffixIcon;
 
   const StandardTextField({
     super.key,
@@ -37,6 +39,7 @@ class StandardTextField extends StatelessWidget {
     this.readOnly = false,
     this.maxLines,
     this.inputFormatters,
+    this.suffixIcon,
   });
 
   @override
@@ -53,26 +56,30 @@ class StandardTextField extends StatelessWidget {
       readOnly: readOnly,
       maxLines: maxLines ?? (isPassword ? 1 : null),
       inputFormatters: inputFormatters,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: AppColors.textPrimary,
+      ),
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
-        labelStyle: TextStyle(
-          color: Colors.grey[600],
+        labelStyle: const TextStyle(
+          color: AppColors.textSecondary,
           fontWeight: FontWeight.w500,
         ),
         prefixIcon: icon != null
             ? Icon(icon, color: defaultIconColor, size: 22)
             : null,
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: AppColors.bgInput,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: defaultBorderColor),
+          borderSide: const BorderSide(color: AppColors.borderDefault),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[200]!),
+          borderSide: const BorderSide(color: AppColors.borderDefault),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -94,11 +101,11 @@ class StandardTextField extends StatelessWidget {
             ? IconButton(
                 icon: Icon(
                   obscureText ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey[600],
+                  color: AppColors.textSecondary,
                 ),
                 onPressed: onToggleVisibility,
               )
-            : null,
+            : suffixIcon,
       ),
     );
   }

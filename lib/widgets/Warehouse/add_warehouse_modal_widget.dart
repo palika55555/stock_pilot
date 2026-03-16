@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/warehouse.dart';
 import '../../services/warehouse/warehouse_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 
 class AddWarehouseModal extends StatefulWidget {
   final Warehouse? warehouse;
@@ -102,11 +104,11 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
           _isEditMode
               ? AppLocalizations.of(context)!.warehouseUpdated
               : AppLocalizations.of(context)!.warehouseSaved,
-          Colors.green,
+          AppColors.success,
         );
       }
     } catch (e) {
-      if (mounted) _showSnackBar('Chyba: $e', Colors.red);
+      if (mounted) _showSnackBar('Chyba: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -122,32 +124,6 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
     );
   }
 
-  InputDecoration _buildInputDecoration(
-    String label,
-    IconData icon, {
-    String? hint,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF6366F1), size: 22),
-      filled: true,
-      fillColor: Colors.grey[50],
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[200]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -155,8 +131,11 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.bgCard,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: AppColors.borderDefault, width: 1),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
       child: Form(
@@ -165,78 +144,108 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Držiak pre BottomSheet
+              // Handle bar
               Container(
                 width: 40,
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: AppColors.borderDefault,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
 
+              // Header
               Row(
                 children: [
-                  CircleAvatar(
-                    backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGoldSubtle,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: const Icon(
                       Icons.warehouse_rounded,
-                      color: Color(0xFF6366F1),
+                      color: AppColors.accentGold,
+                      size: 22,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       _isEditMode ? l10n.editWarehouse : l10n.addNewWarehouse,
-                      style: const TextStyle(
+                      style: GoogleFonts.outfit(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey[100],
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.borderDefault),
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textSecondary,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
 
+              // Názov skladu
               TextFormField(
                 controller: _nameController,
-                decoration: _buildInputDecoration(
-                  l10n.warehouseName,
-                  Icons.drive_file_rename_outline_rounded,
+                style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: l10n.warehouseName,
+                  prefixIcon: const Icon(Icons.drive_file_rename_outline_rounded,
+                      color: AppColors.accentGold, size: 20),
                 ),
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Zadajte názov skladu' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
+              // Kód skladu
               TextFormField(
                 controller: _codeController,
                 readOnly: _isEditMode,
-                decoration: _buildInputDecoration(
-                  l10n.warehouseCode,
-                  Icons.fingerprint_rounded,
-                  hint: 'SKLAD-01',
+                style: GoogleFonts.dmSans(
+                  color: _isEditMode
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
                 ),
-                style: _isEditMode ? TextStyle(color: Colors.grey[600]) : null,
+                decoration: InputDecoration(
+                  labelText: l10n.warehouseCode,
+                  hintText: 'SKLAD-01',
+                  prefixIcon: const Icon(Icons.fingerprint_rounded,
+                      color: AppColors.accentGold, size: 20),
+                ),
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Zadajte kód skladu' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
+              // Typ skladu
               DropdownButtonFormField<String>(
                 value: _warehouseType,
-                decoration: _buildInputDecoration(
-                  l10n.warehouseType,
-                  Icons.category_rounded,
+                dropdownColor: AppColors.bgElevated,
+                style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: l10n.warehouseType,
+                  prefixIcon: const Icon(Icons.category_rounded,
+                      color: AppColors.accentGold, size: 20),
                 ),
                 items: [
                   DropdownMenuItem(
@@ -256,29 +265,36 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
                     child: Text(l10n.warehouseTypeSklad),
                   ),
                 ],
-                onChanged: (v) => setState(() => _warehouseType = v ?? WarehouseType.predaj),
+                onChanged: (v) =>
+                    setState(() => _warehouseType = v ?? WarehouseType.predaj),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
+              // Adresa
               TextFormField(
                 controller: _addressController,
-                decoration: _buildInputDecoration(
-                  'Adresa',
-                  Icons.location_on_outlined,
-                  hint: 'Ulica a číslo',
+                style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  labelText: 'Adresa',
+                  hintText: 'Ulica a číslo',
+                  prefixIcon: Icon(Icons.location_on_outlined,
+                      color: AppColors.textSecondary, size: 20),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
+              // Mesto + PSČ
               Row(
                 children: [
                   Expanded(
                     flex: 2,
                     child: TextFormField(
                       controller: _cityController,
-                      decoration: _buildInputDecoration(
-                        'Mesto',
-                        Icons.location_city_rounded,
+                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Mesto',
+                        prefixIcon: Icon(Icons.location_city_rounded,
+                            color: AppColors.textSecondary, size: 20),
                       ),
                     ),
                   ),
@@ -287,62 +303,64 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
                     child: TextFormField(
                       controller: _postalCodeController,
                       keyboardType: TextInputType.number,
-                      decoration: _buildInputDecoration(
-                        'PSČ',
-                        Icons.local_post_office_outlined,
+                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'PSČ',
+                        prefixIcon: Icon(Icons.local_post_office_outlined,
+                            color: AppColors.textSecondary, size: 20),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
+              // Aktívny switch
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey[200]!),
+                  color: AppColors.bgElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: SwitchListTile(
                   title: Text(
                     l10n.active,
-                    style: const TextStyle(
+                    style: GoogleFonts.dmSans(
                       fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   subtitle: Text(
                     _isActive
                         ? 'Zobrazuje sa v aplikácii'
                         : 'Sklad je dočasne skrytý',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   value: _isActive,
-                  activeColor: const Color(0xFF6366F1),
+                  activeThumbColor: AppColors.accentGold,
+                  activeTrackColor: AppColors.accentGoldSubtle,
                   onChanged: (v) => setState(() => _isActive = v),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
+              // Tlačidlo uložiť
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _submitData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
                   child: _isSaving
                       ? const SizedBox(
-                          height: 24,
-                          width: 24,
+                          height: 22,
+                          width: 22,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: AppColors.bgPrimary,
                           ),
                         )
                       : Row(
@@ -352,15 +370,16 @@ class _AddWarehouseModalState extends State<AddWarehouseModal> {
                               _isEditMode
                                   ? Icons.check_circle_outline
                                   : Icons.add_circle_outline,
+                              size: 20,
                             ),
                             const SizedBox(width: 10),
                             Text(
                               _isEditMode
                                   ? l10n.saveChanges
                                   : l10n.saveWarehouse,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              style: GoogleFonts.dmSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],

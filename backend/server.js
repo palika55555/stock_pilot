@@ -1135,6 +1135,200 @@ apiRouter.post('/admin/migrate-user-data', async (req, res) => {
   }
 });
 
+// --- API: Cenové ponuky (Quotes) ---
+
+apiRouter.get('/quotes', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { status, search } = req.query;
+  try {
+    let where = 'WHERE q.user_id = $1';
+    const params = [req.userId];
+    if (status) { params.push(status); where += ` AND q.status = $${params.length}`; }
+    if (search) { params.push(`%${search}%`); where += ` AND (q.quote_number ILIKE $${params.length} OR q.customer_name ILIKE $${params.length})`; }
+    const { rows } = await pool.query(
+      `SELECT q.id, q.local_id, q.quote_number, q.customer_id, q.customer_name, q.customer_ico,
+              q.issue_date, q.valid_until, q.status, q.notes, q.delivery_cost, q.other_fees,
+              q.prices_include_vat, q.total_amount, q.created_at, q.updated_at
+       FROM quotes q ${where} ORDER BY q.created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/quotes]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/quotes/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rows: qRows } = await pool.query(
+      'SELECT * FROM quotes WHERE id = $1 AND user_id = $2', [id, req.userId]
+    );
+    if (qRows.length === 0) return res.status(404).json({ error: 'Ponuka nenájdená' });
+    const { rows: items } = await pool.query(
+      'SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id', [id]
+    );
+    res.json({ ...qRows[0], items });
+  } catch (err) {
+    console.error('[GET /api/quotes/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/quotes', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const {
+    local_id, quote_number, customer_id, customer_name, customer_ico, customer_address,
+    issue_date, valid_until, status = 'draft', notes, delivery_cost = 0, other_fees = 0,
+    prices_include_vat = 0, total_amount = 0, items = []
+  } = req.body || {};
+  if (!quote_number) return res.status(400).json({ error: 'quote_number je povinný' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO quotes (user_id, local_id, quote_number, customer_id, customer_name, customer_ico,
+        customer_address, issue_date, valid_until, status, notes, delivery_cost, other_fees,
+        prices_include_vat, total_amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ON CONFLICT (user_id, local_id) DO UPDATE SET
+         quote_number=EXCLUDED.quote_number, customer_id=EXCLUDED.customer_id,
+         customer_name=EXCLUDED.customer_name, customer_ico=EXCLUDED.customer_ico,
+         customer_address=EXCLUDED.customer_address, issue_date=EXCLUDED.issue_date,
+         valid_until=EXCLUDED.valid_until, status=EXCLUDED.status, notes=EXCLUDED.notes,
+         delivery_cost=EXCLUDED.delivery_cost, other_fees=EXCLUDED.other_fees,
+         prices_include_vat=EXCLUDED.prices_include_vat, total_amount=EXCLUDED.total_amount,
+         updated_at=NOW()
+       RETURNING *`,
+      [req.userId, local_id || null, quote_number, customer_id || null, customer_name || null,
+       customer_ico || null, customer_address || null, issue_date || null, valid_until || null,
+       status, notes || null, delivery_cost, other_fees, prices_include_vat, total_amount]
+    );
+    const quote = rows[0];
+    if (items.length > 0) {
+      await client.query('DELETE FROM quote_items WHERE quote_id = $1', [quote.id]);
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        await client.query(
+          `INSERT INTO quote_items (quote_id, user_id, product_unique_id, item_type, name, unit,
+            qty, unit_price, vat_percent, discount_percent, surcharge_percent, description, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [quote.id, req.userId, it.product_unique_id || null, it.item_type || 'Tovar',
+           it.name, it.unit || 'ks', it.qty || 1, it.unit_price || 0,
+           it.vat_percent ?? 20, it.discount_percent ?? 0, it.surcharge_percent ?? 0,
+           it.description || null, i]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    const { rows: fullItems } = await pool.query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id', [quote.id]);
+    res.status(201).json({ ...quote, items: fullItems });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /api/quotes]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
+  }
+});
+
+apiRouter.put('/quotes/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const {
+    quote_number, customer_id, customer_name, customer_ico, customer_address,
+    issue_date, valid_until, status, notes, delivery_cost, other_fees,
+    prices_include_vat, total_amount, items
+  } = req.body || {};
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `UPDATE quotes SET
+         quote_number = COALESCE($3, quote_number),
+         customer_id = $4, customer_name = $5, customer_ico = $6, customer_address = $7,
+         issue_date = $8, valid_until = $9,
+         status = COALESCE($10, status),
+         notes = $11,
+         delivery_cost = COALESCE($12, delivery_cost),
+         other_fees = COALESCE($13, other_fees),
+         prices_include_vat = COALESCE($14, prices_include_vat),
+         total_amount = COALESCE($15, total_amount),
+         updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [id, req.userId, quote_number, customer_id || null, customer_name || null,
+       customer_ico || null, customer_address || null, issue_date || null,
+       valid_until || null, status, notes || null, delivery_cost, other_fees,
+       prices_include_vat, total_amount]
+    );
+    if (rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Ponuka nenájdená' }); }
+    if (Array.isArray(items)) {
+      await client.query('DELETE FROM quote_items WHERE quote_id = $1', [id]);
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        await client.query(
+          `INSERT INTO quote_items (quote_id, user_id, product_unique_id, item_type, name, unit,
+            qty, unit_price, vat_percent, discount_percent, surcharge_percent, description, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [id, req.userId, it.product_unique_id || null, it.item_type || 'Tovar',
+           it.name, it.unit || 'ks', it.qty || 1, it.unit_price || 0,
+           it.vat_percent ?? 20, it.discount_percent ?? 0, it.surcharge_percent ?? 0,
+           it.description || null, i]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    const { rows: fullItems } = await pool.query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id', [id]);
+    res.json({ ...rows[0], items: fullItems });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /api/quotes/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
+  }
+});
+
+apiRouter.delete('/quotes/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const { rowCount } = await pool.query('DELETE FROM quotes WHERE id = $1 AND user_id = $2', [id, req.userId]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Ponuka nenájdená' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/quotes/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Vytvorenie produktu ---
+
+apiRouter.post('/products', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { unique_id, name, plu, ean, unit = 'ks', qty = 0, warehouse_id = null } = req.body || {};
+  if (!unique_id || !name || !plu) return res.status(400).json({ error: 'unique_id, name a plu sú povinné' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO products (unique_id, warehouse_id, name, plu, ean, unit, qty, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (unique_id, warehouse_id) DO UPDATE SET
+         name = EXCLUDED.name, plu = EXCLUDED.plu, ean = EXCLUDED.ean, unit = EXCLUDED.unit
+       RETURNING unique_id, name, plu, ean, unit, qty`,
+      [unique_id, warehouse_id, name, plu, ean || null, unit, qty, req.userId]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[POST /api/products]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 // Montovanie API routera pod tajný prefix – bez znalosti cesty /api/:prefix/ sa nikto nedostane k dátam
 app.use(`/api/${API_PATH_PREFIX}`, apiRouter);
 

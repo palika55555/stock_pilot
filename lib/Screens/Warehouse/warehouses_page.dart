@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/warehouse/warehouse_list_widget.dart';
 import 'package:stock_pilot/widgets/warehouse/add_warehouse_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
@@ -45,32 +46,32 @@ class _WarehousesPageState extends State<WarehousesPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               title: Text(
                 l10n.warehouses,
-                style: const TextStyle(
-                  color: Colors.black,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 26,
                 ),
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.upload_file_rounded, color: Colors.black87),
+                  icon: Icon(Icons.upload_file_rounded, color: AppColors.textPrimary),
                   tooltip: l10n.exportReport,
                   onPressed: () => _showExportReportDialog(context),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.tune, color: Colors.black87),
+                  icon: Icon(Icons.tune, color: AppColors.textPrimary),
                   onPressed: () {},
                 ),
                 const SizedBox(width: 8),

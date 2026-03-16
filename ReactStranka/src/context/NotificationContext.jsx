@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { API_BASE_FOR_CALLS } from '../config'
 
 const NOTIFICATION_STORAGE_KEY = 'stockpilot_notifications'
@@ -47,32 +47,27 @@ export function NotificationProvider({ children, auth }) {
     load()
   }, [load])
 
+  // Auto-fetch pri prvom moute s tokenom (1x, cooldown bráni ďalším)
+  useEffect(() => {
+    if (auth?.token) addFromApi(auth.token)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth?.token])
+
+  // Cooldown: zabrání opakovanému fetch pri rýchlej navigácii (min. 30s medzi volaniami)
+  const lastFetchRef = useRef(0)
+
   const addFromApi = useCallback(
-    async (token) => {
+    async (token, { force = false } = {}) => {
       if (!token) return
+      const now = Date.now()
+      if (!force && now - lastFetchRef.current < 30_000) return
+      lastFetchRef.current = now
+
       const headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
       const newItems = []
       try {
-        const [statsRes, productsRes, syncRes] = await Promise.all([
-          fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, { headers }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`${API_BASE_FOR_CALLS}/products`, { headers }).then((r) => (r.ok ? r.json() : [])),
-          fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers }).then((r) => (r.ok ? r.json() : null)),
-        ])
-        const now = Date.now()
-        const lastSync = syncRes?.last_sync_at || 0
-        const syncAgeMin = lastSync ? (now - lastSync) / 60000 : 999
-        if (lastSync === 0 || syncAgeMin > 30) {
-          newItems.push({
-            id: 'sync-failed',
-            type: 'critical',
-            title: 'Synchronizácia',
-            body: 'Posledná synchronizácia bola pred viac ako 30 minútami alebo ešte neprebehla.',
-            createdAt: now,
-            read: false,
-            link: null,
-          })
-        }
-        const lowStockCount = statsRes?.low_stock_count ?? 0
+        // Len products – stats a sync/check fetchuje DashboardLayout samostatne
+        const productsRes = await fetch(`${API_BASE_FOR_CALLS}/products`, { headers }).then((r) => (r.ok ? r.json() : []))
         if (Array.isArray(productsRes)) {
           const low = productsRes.filter((p) => (p.qty ?? 0) < 5)
           low.slice(0, 10).forEach((p) => {
@@ -105,9 +100,9 @@ export function NotificationProvider({ children, auth }) {
     [userId, load]
   )
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(({ force = false } = {}) => {
     load()
-    if (auth?.token) addFromApi(auth.token)
+    if (auth?.token) addFromApi(auth.token, { force })
   }, [auth?.token, load, addFromApi])
 
   const markAsRead = useCallback(

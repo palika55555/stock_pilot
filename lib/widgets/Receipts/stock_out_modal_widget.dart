@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme.dart';
 import '../../models/product.dart';
 import '../../models/stock_out.dart';
 import '../../models/warehouse.dart';
@@ -188,23 +189,20 @@ class _StockOutModalState extends State<StockOutModal> {
   }
 
   static const _radius = 12.0;
-  static const _primaryBlue = Color(0xFF2563EB);
-  static const _borderColor = Color(0xFFE2E8F0);
-  static const _fillColor = Color(0xFFF8FAFC);
 
   InputDecoration _styledInputDecoration(String label, {Widget? prefixIcon}) {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: _fillColor,
+      fillColor: AppColors.bgInput,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(_radius)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
-        borderSide: const BorderSide(color: _borderColor),
+        borderSide: const BorderSide(color: AppColors.borderDefault),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
-        borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.accentGold, width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       prefixIcon: prefixIcon,
@@ -278,7 +276,7 @@ class _StockOutModalState extends State<StockOutModal> {
             content: Text(
               'Riadok ${i + 1}: na sklade je len ${row.product!.qty} ${row.product!.unit}. Nie je možné vydať $qty.',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
         return null;
@@ -292,7 +290,7 @@ class _StockOutModalState extends State<StockOutModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Riadok ${i + 1}: zadajte platnú cenu za jednotku'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
         return null;
@@ -323,7 +321,7 @@ class _StockOutModalState extends State<StockOutModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vyberte sklad pre výdajku'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.danger,
         ),
       );
       return;
@@ -380,14 +378,14 @@ class _StockOutModalState extends State<StockOutModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Výdajka uložená ako rozpracovaná'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -403,7 +401,7 @@ class _StockOutModalState extends State<StockOutModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pri type Odpis / Likvidácia je povinný dôvod odpisu (napr. expirácia, poškodenie).'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
         return;
@@ -448,7 +446,7 @@ class _StockOutModalState extends State<StockOutModal> {
                     ? 'Výdajka bola vykázaná'
                     : 'Výdajka bola upravená',
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -457,7 +455,7 @@ class _StockOutModalState extends State<StockOutModal> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Vyberte sklad pre výdajku'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.danger,
             ),
           );
           setState(() => _isSaving = false);
@@ -481,7 +479,7 @@ class _StockOutModalState extends State<StockOutModal> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Výdajka bola uložená'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -491,14 +489,14 @@ class _StockOutModalState extends State<StockOutModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -538,14 +536,14 @@ class _StockOutModalState extends State<StockOutModal> {
                     _isEditMode ? 'Upraviť výdajku' : 'Nová výdajka',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E293B),
+                          color: AppColors.textPrimary,
                         ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
                     style: IconButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
+                      foregroundColor: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -556,14 +554,14 @@ class _StockOutModalState extends State<StockOutModal> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
                     'Vysporiadaná výdajka – len na prezeranie',
-                    style: TextStyle(fontSize: 13, color: Colors.orange[800]),
+                    style: const TextStyle(fontSize: 13, color: AppColors.warning),
                   ),
                 ),
               TextFormField(
                 controller: _documentNumberController,
                 readOnly: _isReadOnly || (!_manualDocumentNumber && !_isEditMode),
                 decoration: _styledInputDecoration('Číslo výdajky',
-                        prefixIcon: const Icon(Icons.tag, size: 22, color: Color(0xFF64748B)))
+                        prefixIcon: const Icon(Icons.tag, size: 22, color: AppColors.textMuted))
                     .copyWith(
                   hintText: '# VD-2026-0001',
                   suffixIcon: _isEditMode
@@ -573,7 +571,7 @@ class _StockOutModalState extends State<StockOutModal> {
                             _manualDocumentNumber
                                 ? Icons.auto_fix_high
                                 : Icons.edit_rounded,
-                            color: const Color(0xFF2563EB),
+                            color: AppColors.accentGold,
                             size: 22,
                           ),
                           onPressed: () {
@@ -590,7 +588,8 @@ class _StockOutModalState extends State<StockOutModal> {
               DropdownButtonFormField<int?>(
                 value: _selectedWarehouseId,
                 decoration: _styledInputDecoration('Sklad *',
-                    prefixIcon: const Icon(Icons.warehouse_outlined, size: 22, color: Color(0xFF64748B))),
+                    prefixIcon: const Icon(Icons.warehouse_outlined, size: 22, color: AppColors.textMuted)),
+                dropdownColor: AppColors.bgInput,
                 items: [
                   const DropdownMenuItem<int?>(value: null, child: Text('— Vyberte sklad —')),
                   ..._warehouses.map(
@@ -604,13 +603,14 @@ class _StockOutModalState extends State<StockOutModal> {
                 controller: _recipientController,
                 readOnly: _isReadOnly,
                 decoration: _styledInputDecoration('Odberateľ / účel',
-                    prefixIcon: const Icon(Icons.person_outline_rounded, size: 22, color: Color(0xFF64748B))),
+                    prefixIcon: const Icon(Icons.person_outline_rounded, size: 22, color: AppColors.textMuted)),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<StockOutIssueType>(
                 value: _issueType,
                 decoration: _styledInputDecoration('Typ výdaja',
-                    prefixIcon: const Icon(Icons.folder_outlined, size: 22, color: Color(0xFF64748B))),
+                    prefixIcon: const Icon(Icons.folder_outlined, size: 22, color: AppColors.textMuted)),
+                dropdownColor: AppColors.bgInput,
                 items: StockOutIssueType.values
                     .map((t) => DropdownMenuItem(
                           value: t,
@@ -625,7 +625,7 @@ class _StockOutModalState extends State<StockOutModal> {
                 TextFormField(
                   controller: _writeOffReasonController,
                   decoration: _styledInputDecoration('Dôvod odpisu *',
-                      prefixIcon: const Icon(Icons.warning_amber_rounded, size: 22, color: Color(0xFF64748B))),
+                      prefixIcon: const Icon(Icons.warning_amber_rounded, size: 22, color: AppColors.textMuted)),
                   maxLines: 2,
                 ),
               ],
@@ -634,7 +634,7 @@ class _StockOutModalState extends State<StockOutModal> {
                 controller: _notesController,
                 maxLines: 2,
                 decoration: _styledInputDecoration('Poznámka',
-                    prefixIcon: const Icon(Icons.note_outlined, size: 22, color: Color(0xFF64748B))),
+                    prefixIcon: const Icon(Icons.note_outlined, size: 22, color: AppColors.textMuted)),
               ),
               const SizedBox(height: 8),
               Material(
@@ -642,11 +642,11 @@ class _StockOutModalState extends State<StockOutModal> {
                 child: CheckboxListTile(
                   value: _zeroVat,
                   onChanged: (v) => setState(() => _zeroVat = v ?? false),
-                  title: const Text('Výdaj za 0 % DPH', style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
-                  subtitle: const Text('Výber pre vývoz alebo oslobodené dodania', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  title: const Text('Výdaj za 0 % DPH', style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                  subtitle: const Text('Výber pre vývoz alebo oslobodené dodania', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
-                  activeColor: _primaryBlue,
+                  activeColor: AppColors.accentGold,
                 ),
               ),
               const SizedBox(height: 24),
@@ -658,7 +658,7 @@ class _StockOutModalState extends State<StockOutModal> {
                     'Položky',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E293B),
+                          color: AppColors.textPrimary,
                         ),
                   ),
                   if (!_isReadOnly)
@@ -667,8 +667,8 @@ class _StockOutModalState extends State<StockOutModal> {
                       icon: const Icon(Icons.add_rounded, size: 20),
                       label: const Text('Pridať položku'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: _primaryBlue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.accentGold,
+                        foregroundColor: AppColors.bgPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
                       ),
@@ -693,8 +693,8 @@ class _StockOutModalState extends State<StockOutModal> {
                   child: FilledButton(
                     onPressed: _isSaving ? null : _submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.accentGold,
+                    foregroundColor: AppColors.bgPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
                     elevation: 0,
                   ),
@@ -702,7 +702,7 @@ class _StockOutModalState extends State<StockOutModal> {
                       ? const SizedBox(
                           height: 24,
                           width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bgPrimary),
                         )
                       : Text(
                           _isEditMode && _editStockOut?.isDraft == true
@@ -722,8 +722,8 @@ class _StockOutModalState extends State<StockOutModal> {
                     icon: const Icon(Icons.save_outlined, size: 20),
                     label: const Text('Uložiť ako rozpracovaný'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
-                      side: const BorderSide(color: _borderColor),
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.borderDefault),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
                     ),
                   ),
@@ -740,9 +740,9 @@ class _StockOutModalState extends State<StockOutModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _fillColor,
+        color: AppColors.bgInput,
         borderRadius: BorderRadius.circular(_radius),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderDefault),
       ),
       child: Column(
         children: [
@@ -756,7 +756,7 @@ class _StockOutModalState extends State<StockOutModal> {
                       : 'DPH:'),
               _vatAmount),
           const Divider(height: 20),
-          _summaryRow('Celkom k úhrade:', _total, bold: true, valueColor: _primaryBlue),
+          _summaryRow('Celkom k úhrade:', _total, bold: true, valueColor: AppColors.accentGold),
         ],
       ),
     );
@@ -766,8 +766,8 @@ class _StockOutModalState extends State<StockOutModal> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, color: const Color(0xFF64748B), fontWeight: bold ? FontWeight.w600 : FontWeight.w500)),
-        Text('${value.toStringAsFixed(2)} €', style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.bold : FontWeight.w600, color: valueColor ?? const Color(0xFF1E293B))),
+        Text(label, style: TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: bold ? FontWeight.w600 : FontWeight.w500)),
+        Text('${value.toStringAsFixed(2)} €', style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.bold : FontWeight.w600, color: valueColor ?? AppColors.textPrimary)),
       ],
     );
   }
@@ -775,7 +775,7 @@ class _StockOutModalState extends State<StockOutModal> {
   Widget _buildItemsTable() {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderDefault),
         borderRadius: BorderRadius.circular(_radius),
       ),
       child: ClipRRect(
@@ -791,7 +791,7 @@ class _StockOutModalState extends State<StockOutModal> {
           },
           children: [
             TableRow(
-              decoration: BoxDecoration(color: _fillColor),
+              decoration: BoxDecoration(color: AppColors.bgInput),
               children: [
                 _tableHeader('Produkt / Tovar'),
                 _tableHeader('Skladom'),
@@ -811,7 +811,7 @@ class _StockOutModalState extends State<StockOutModal> {
   Widget _tableHeader(String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF64748B))),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textSecondary)),
     );
   }
 
@@ -820,7 +820,7 @@ class _StockOutModalState extends State<StockOutModal> {
     final hasProduct = row.product != null;
     return TableRow(
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFFAFAFA),
+        color: index.isEven ? AppColors.bgCard : AppColors.bgElevated,
       ),
       children: [
         Padding(
@@ -829,10 +829,13 @@ class _StockOutModalState extends State<StockOutModal> {
             value: row.product,
             decoration: InputDecoration(
               isDense: true,
+              filled: true,
+              fillColor: AppColors.bgInput,
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderDefault)),
             ),
+            dropdownColor: AppColors.bgInput,
             items: [
               const DropdownMenuItem(value: null, child: Text('— Vyberte tovar —', style: TextStyle(fontSize: 13))),
               ..._products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${p.plu})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
@@ -842,7 +845,7 @@ class _StockOutModalState extends State<StockOutModal> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Center(child: Text(hasProduct ? '${row.product!.qty} ${row.unit}' : '—', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)))),
+          child: Center(child: Text(hasProduct ? '${row.product!.qty} ${row.unit}' : '—', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -855,9 +858,11 @@ class _StockOutModalState extends State<StockOutModal> {
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               isDense: true,
+              filled: true,
+              fillColor: AppColors.bgInput,
               contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderDefault)),
             ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           ),
@@ -873,22 +878,24 @@ class _StockOutModalState extends State<StockOutModal> {
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               isDense: true,
+              filled: true,
+              fillColor: AppColors.bgInput,
               hintText: hasProduct ? row.product!.price.toStringAsFixed(2) : '0.00',
               contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.borderDefault)),
             ),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
           ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Center(child: Text(hasProduct ? '${_rowTotal(row)} €' : '—', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)))),
+          child: Center(child: Text(hasProduct ? '${_rowTotal(row)} €' : '—', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, size: 22, color: Color(0xFF94A3B8)),
+            icon: const Icon(Icons.delete_outline_rounded, size: 22, color: AppColors.textMuted),
             onPressed: _isReadOnly ? null : (_rows.length > 1 ? () => _removeRow(index) : null),
             tooltip: 'Odstrániť',
           ),

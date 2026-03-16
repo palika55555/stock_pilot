@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../theme/app_theme.dart';
 import '../../services/Reports/receipt_report_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
 import '../../models/warehouse.dart';
@@ -72,10 +73,8 @@ class _ReceiptSummaryReportScreenState extends State<ReceiptSummaryReportScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
         title: const Text('Prehľad príjemiek'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),

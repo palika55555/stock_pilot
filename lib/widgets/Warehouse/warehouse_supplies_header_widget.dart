@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class WarehouseSuppliesHeader extends StatelessWidget {
   final bool isAdmin;
@@ -24,9 +25,9 @@ class WarehouseSuppliesHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.arrow_back_ios,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               size: 18,
             ),
             onPressed: () => Navigator.pop(context),
@@ -34,11 +35,11 @@ class WarehouseSuppliesHeader extends StatelessWidget {
             constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
               'Skladové zásoby',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
@@ -46,9 +47,9 @@ class WarehouseSuppliesHeader extends StatelessWidget {
           ),
           if (onColumnsTap != null)
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.view_column_rounded,
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 size: 24,
               ),
               onPressed: onColumnsTap,
@@ -56,9 +57,9 @@ class WarehouseSuppliesHeader extends StatelessWidget {
             ),
           if (onAddRecipeTap != null)
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.restaurant_menu_rounded,
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 size: 24,
               ),
               onPressed: onAddRecipeTap,
@@ -70,7 +71,7 @@ class WarehouseSuppliesHeader extends StatelessWidget {
               children: [
                 Icon(
                   Icons.filter_list_rounded,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   size: 24,
                 ),
                 if (hasFilter)
@@ -80,8 +81,8 @@ class WarehouseSuppliesHeader extends StatelessWidget {
                     child: Container(
                       width: 10,
                       height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.amber,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentGold,
                         shape: BoxShape.circle,
                       ),
                     ),

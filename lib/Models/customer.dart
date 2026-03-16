@@ -8,6 +8,8 @@ class Customer {
   final String? postalCode;
   final String? dic;
   final String? icDph;
+  final String? contactPerson;
+  final String? phone;
 
   /// Predvolená sadzba DPH % pre cenové ponuky pri tomto zákazníkovi.
   final int defaultVatRate;
@@ -17,6 +19,9 @@ class Customer {
 
   /// Bilancia paliet u zákazníka (požičané / dlhované).
   final int palletBalance;
+
+  /// Je zákazník platcom DPH?
+  final bool vatPayer;
 
   Customer({
     this.id,
@@ -28,9 +33,12 @@ class Customer {
     this.postalCode,
     this.dic,
     this.icDph,
+    this.contactPerson,
+    this.phone,
     this.defaultVatRate = 20,
     this.isActive = true,
     this.palletBalance = 0,
+    this.vatPayer = true,
   });
 
   Map<String, dynamic> toMap() {
@@ -44,9 +52,12 @@ class Customer {
       'postal_code': postalCode,
       'dic': dic,
       'ic_dph': icDph,
+      'contact_person': contactPerson,
+      'phone': phone,
       'default_vat_rate': defaultVatRate,
       'is_active': isActive ? 1 : 0,
       'pallet_balance': palletBalance,
+      'vat_payer': vatPayer ? 1 : 0,
     };
   }
 
@@ -61,9 +72,12 @@ class Customer {
       postalCode: map['postal_code'] as String?,
       dic: map['dic'] as String?,
       icDph: map['ic_dph'] as String?,
+      contactPerson: map['contact_person'] as String?,
+      phone: map['phone'] as String?,
       defaultVatRate: map['default_vat_rate'] as int? ?? 20,
       isActive: (map['is_active'] as int?) != 0,
       palletBalance: map['pallet_balance'] as int? ?? 0,
+      vatPayer: (map['vat_payer'] as int? ?? 1) != 0,
     );
   }
 
@@ -77,9 +91,12 @@ class Customer {
     String? postalCode,
     String? dic,
     String? icDph,
+    String? contactPerson,
+    String? phone,
     int? defaultVatRate,
     bool? isActive,
     int? palletBalance,
+    bool? vatPayer,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -91,9 +108,12 @@ class Customer {
       postalCode: postalCode ?? this.postalCode,
       dic: dic ?? this.dic,
       icDph: icDph ?? this.icDph,
+      contactPerson: contactPerson ?? this.contactPerson,
+      phone: phone ?? this.phone,
       defaultVatRate: defaultVatRate ?? this.defaultVatRate,
       isActive: isActive ?? this.isActive,
       palletBalance: palletBalance ?? this.palletBalance,
+      vatPayer: vatPayer ?? this.vatPayer,
     );
   }
 }

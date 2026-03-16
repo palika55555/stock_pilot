@@ -3,6 +3,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
 import '../../models/quote.dart';
+import '../../theme/app_theme.dart';
 
 /// Karta s hlavičkou a telom cenovej ponuky (firma, zákazník, položky, súhrn).
 class QuoteDocumentCard extends StatelessWidget {
@@ -20,6 +21,7 @@ class QuoteDocumentCard extends StatelessWidget {
   final double totalVat;
   final double totalWithVat;
   final VoidCallback onEditCompany;
+  final bool customerVatPayer;
 
   const QuoteDocumentCard({
     super.key,
@@ -37,6 +39,7 @@ class QuoteDocumentCard extends StatelessWidget {
     required this.totalVat,
     required this.totalWithVat,
     required this.onEditCompany,
+    this.customerVatPayer = true,
   });
 
   static String formatDate(DateTime d) => '${d.day}.${d.month}.${d.year}';
@@ -46,14 +49,8 @@ class QuoteDocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = TableBorder.all(color: Colors.grey.shade300, width: 0.5);
+    final border = TableBorder.all(color: AppColors.borderDefault, width: 0.5);
     return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -64,10 +61,10 @@ class QuoteDocumentCard extends StatelessWidget {
               children: [
                 Text(
                   'CENOVÁ PONUKA',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 Text(
@@ -75,6 +72,7 @@ class QuoteDocumentCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.accentGold,
                   ),
                 ),
               ],
@@ -93,110 +91,83 @@ class QuoteDocumentCard extends StatelessWidget {
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         if (company!.fullAddress.isNotEmpty)
                           Text(
                             company!.fullAddress,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade700,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.registerInfo != null &&
                             company!.registerInfo!.isNotEmpty)
                           Text(
                             company!.registerInfo!,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.ico != null && company!.ico!.isNotEmpty)
                           Text(
                             'IČO: ${company!.ico}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade700,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        if (company!.dic != null && company!.dic!.isNotEmpty)
+                          Text(
+                            'DIČ: ${company!.dic}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.icDph != null &&
                             company!.icDph!.isNotEmpty)
                           Text(
                             'IČ DPH: ${company!.icDph}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade700,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.vatPayer)
                           Text(
                             l10n.vatPayer,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.phone != null &&
                             company!.phone!.isNotEmpty)
                           Text(
-                            'TELEFÓN: ${company!.phone}',
-                            style: TextStyle(
+                            'Tel: ${company!.phone}',
+                            style: const TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         if (company!.email != null &&
                             company!.email!.isNotEmpty)
                           Text(
-                            'EMAIL: ${company!.email}',
-                            style: TextStyle(
+                            'Email: ${company!.email}',
+                            style: const TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
-                        if (company!.web != null && company!.web!.isNotEmpty)
-                          Text(
-                            'WEB: ${company!.web}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        if (company!.iban != null &&
-                            company!.iban!.isNotEmpty)
+                        if (company!.iban != null && company!.iban!.isNotEmpty)
                           Text(
                             'IBAN: ${company!.iban}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        if (company!.swift != null &&
-                            company!.swift!.isNotEmpty)
-                          Text(
-                            'SWIFT: ${company!.swift}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        if (company!.bankName != null &&
-                            company!.bankName!.isNotEmpty)
-                          Text(
-                            'BANKA: ${company!.bankName}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        if (company!.account != null &&
-                            company!.account!.isNotEmpty)
-                          Text(
-                            'ÚČET: ${company!.account}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         const SizedBox(height: 8),
@@ -214,9 +185,9 @@ class QuoteDocumentCard extends StatelessWidget {
                           children: [
                             Text(
                               l10n.ourCompany,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey.shade600,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -225,9 +196,7 @@ class QuoteDocumentCard extends StatelessWidget {
                               label: Text(l10n.editCompany),
                               onPressed: onEditCompany,
                               style: FilledButton.styleFrom(
-                                backgroundColor: Colors.teal.withValues(
-                                  alpha: 0.15,
-                                ),
+                                backgroundColor: Colors.teal.withValues(alpha: 0.15),
                                 foregroundColor: Colors.teal,
                               ),
                             ),
@@ -243,9 +212,9 @@ class QuoteDocumentCard extends StatelessWidget {
                     children: [
                       Text(
                         l10n.offerFor,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade700,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -254,24 +223,24 @@ class QuoteDocumentCard extends StatelessWidget {
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       if (customer.address != null &&
                           customer.address!.isNotEmpty)
                         Text(
                           customer.address!,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade700,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       if (customer.city != null && customer.city!.isNotEmpty)
                         Text(
-                          '${customer.postalCode ?? ''} ${customer.city}'
-                              .trim(),
-                          style: TextStyle(
+                          '${customer.postalCode ?? ''} ${customer.city}'.trim(),
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade700,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                     ],
@@ -284,20 +253,20 @@ class QuoteDocumentCard extends StatelessWidget {
               children: [
                 Text(
                   '${l10n.dateOfIssue}: ',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 Text(
                   formatDate(createdAt),
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
                 ),
                 const SizedBox(width: 24),
                 Text(
                   '${l10n.validUntil}: ',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 Text(
                   validUntil != null ? formatDate(validUntil!) : '—',
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
                 ),
               ],
             ),
@@ -305,18 +274,18 @@ class QuoteDocumentCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 l10n.notes,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade700,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 notesText.trim(),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade800,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -334,7 +303,7 @@ class QuoteDocumentCard extends StatelessWidget {
               },
               children: [
                 TableRow(
-                  decoration: BoxDecoration(color: Colors.grey.shade200),
+                  decoration: const BoxDecoration(color: AppColors.bgElevated),
                   children: [
                     _tableCell(l10n.itemDescription, bold: true),
                     _tableCell(l10n.quantity, bold: true),
@@ -346,8 +315,7 @@ class QuoteDocumentCard extends StatelessWidget {
                   ],
                 ),
                 ...items.map((item) {
-                  final withoutVat =
-                      item.getLineTotalWithoutVat(pricesIncludeVat);
+                  final withoutVat = item.getLineTotalWithoutVat(pricesIncludeVat);
                   final withVat = item.getLineTotalWithVat(pricesIncludeVat);
                   return TableRow(
                     children: [
@@ -373,21 +341,44 @@ class QuoteDocumentCard extends StatelessWidget {
                     children: [
                       Text(
                         l10n.totalLabel,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${l10n.totalWithoutVatShort}: ${formatPrice(subtotalWithoutVat)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                       Text(
                         '${l10n.vatShort}: ${formatPrice(totalVat)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                       Text(
                         '${l10n.totalWithVatShort}: ${formatPrice(totalWithVat)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
+                      if (!customerVatPayer) ...[
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Zákazník nie je platcom DPH',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -407,6 +398,7 @@ class QuoteDocumentCard extends StatelessWidget {
         style: TextStyle(
           fontSize: 12,
           fontWeight: bold ? FontWeight.bold : null,
+          color: bold ? AppColors.textPrimary : AppColors.textSecondary,
         ),
         overflow: TextOverflow.ellipsis,
       ),

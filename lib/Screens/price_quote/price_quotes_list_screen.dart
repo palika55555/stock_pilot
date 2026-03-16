@@ -3,6 +3,7 @@ import '../../models/quote.dart';
 import '../../services/customer/customer_service.dart';
 import '../../services/Quote/quote_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 import 'price_quote_screen.dart';
 
 class PriceQuotesListScreen extends StatefulWidget {
@@ -64,11 +65,9 @@ class _PriceQuotesListScreenState extends State<PriceQuotesListScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: AppBar(
         title: Text(l10n.priceQuote),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: _loading
@@ -78,16 +77,16 @@ class _PriceQuotesListScreenState extends State<PriceQuotesListScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.request_quote, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.request_quote, size: 64, color: AppColors.textMuted),
                   const SizedBox(height: 16),
                   Text(
                     l10n.noQuoteItems,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Vytvorte cenovú ponuku zo stránky Zákazníci.',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
                 ],

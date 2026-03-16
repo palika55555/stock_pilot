@@ -4,6 +4,7 @@ import '../../models/product.dart';
 import '../../models/receipt.dart';
 import '../../models/supplier.dart';
 import '../../models/warehouse.dart';
+import '../../theme/app_theme.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/Receipt/receipt_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
@@ -66,9 +67,6 @@ class GoodsReceiptModal extends StatefulWidget {
 
 class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   static const _radius = 12.0;
-  static const _primaryBlue = Color(0xFF2563EB);
-  static const _borderColor = Color(0xFFE2E8F0);
-  static const _fillColor = Color(0xFFF8FAFC);
 
   final _formKey = GlobalKey<FormState>();
   final DatabaseService _db = DatabaseService();
@@ -604,7 +602,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Príjemka uložená ako rozpracovaná'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -654,7 +652,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Príjemka uložená ako rozpracovaná'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -662,7 +660,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -712,7 +710,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 content: Text(
                   'Položka ${i + 1}: pri príjemke S DPH zadajte DPH % pre každú položku (alebo zaškrtnite "Použiť DPH pre všetky položky").',
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: AppColors.danger,
               ),
             );
             return;
@@ -726,7 +724,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Suma obstarávacieho nákladu nemôže byť záporná'),
-                backgroundColor: Colors.red,
+                backgroundColor: AppColors.danger,
               ),
             );
             return;
@@ -739,7 +737,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Zadajte sumu bez DPH > 0 pre pridaný obstarávací náklad'),
-                backgroundColor: Colors.red,
+                backgroundColor: AppColors.danger,
               ),
             );
             return;
@@ -818,7 +816,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                     ? 'Príjemka bola vykázaná'
                     : 'Príjemka bola upravená',
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -879,7 +877,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       : 'Príjemka uložená ako rozpracovaná. Pre vykázanie ju otvorte a zvoľte „Vykázať príjem“.',
                   style: const TextStyle(fontSize: 14),
                 ),
-                backgroundColor: Colors.green,
+                backgroundColor: AppColors.success,
               ),
             );
           }
@@ -890,7 +888,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Chyba: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -915,7 +913,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             child: const Text('Odstrániť'),
           ),
         ],
@@ -930,7 +928,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Príjemka bola odstránená'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.warning,
           ),
         );
         Navigator.of(context).pop(true);
@@ -938,14 +936,14 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Príjemku nebolo možné odstrániť (napr. už je schválená)'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -1157,7 +1155,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                           : null,
                                       errorBorder: _supplierValidationError
                                           ? OutlineInputBorder(
-                                              borderSide: const BorderSide(color: Colors.red),
+                                              borderSide: const BorderSide(color: AppColors.danger),
                                               borderRadius: BorderRadius.circular(4),
                                             )
                                           : null,
@@ -1201,7 +1199,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                 IconButton(
                                   icon: const Icon(
                                     Icons.add_circle_outline,
-                                    color: Colors.blue,
+                                    color: AppColors.accentGold,
                                     size: 20,
                                   ),
                                   tooltip: 'Pridať dodávateľa',
@@ -1306,18 +1304,18 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
+                                color: AppColors.infoSubtle,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue.shade200),
+                                border: Border.all(color: AppColors.info.withOpacity(0.5)),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.info_outline, size: 20, color: Colors.blue.shade700),
+                                  Icon(Icons.info_outline, size: 20, color: AppColors.info),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       'Tovar bude presunutý z vybraného zdrojového skladu do cieľového skladu.',
-                                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                                      style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
                                     ),
                                   ),
                                 ],
@@ -1416,7 +1414,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       'Položky',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1E293B),
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     FilledButton.icon(
@@ -1424,8 +1422,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('Pridať položku', style: TextStyle(fontSize: 13)),
                       style: FilledButton.styleFrom(
-                        backgroundColor: _primaryBlue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.accentGold,
+                        foregroundColor: AppColors.bgPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         minimumSize: const Size(0, 36),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
@@ -1454,16 +1452,16 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.accentGold,
+                      foregroundColor: AppColors.bgPrimary,
                     ),
                     child: _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 24,
                             width: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: AppColors.bgPrimary,
                             ),
                           )
                         : Text(
@@ -1485,7 +1483,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       icon: const Icon(Icons.save_outlined, size: 20),
                       label: const Text('Uložiť ako rozpracovaný'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange,
+                        foregroundColor: AppColors.accentGold,
                       ),
                     ),
                   ),
@@ -1500,7 +1498,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                       icon: const Icon(Icons.delete_outline_rounded, size: 20),
                       label: const Text('Odstrániť'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
+                        foregroundColor: AppColors.danger,
                       ),
                     ),
                   ),
@@ -1518,7 +1516,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     final withCosts = _isWithCosts;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderDefault),
         borderRadius: BorderRadius.circular(_radius),
       ),
       child: ClipRRect(
@@ -1549,7 +1547,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 },
           children: [
             TableRow(
-              decoration: BoxDecoration(color: _fillColor),
+              decoration: BoxDecoration(color: AppColors.bgInput),
               children: [
                 _tableHeader('Produkt / Tovar'),
                 _tableHeader('Skladom'),
@@ -1574,9 +1572,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderDefault),
         borderRadius: BorderRadius.circular(_radius),
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.bgInput,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1588,7 +1586,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
-                  color: Color(0xFF1E293B),
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1734,9 +1732,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: AppColors.borderDefault),
         borderRadius: BorderRadius.circular(_radius),
-        color: const Color(0xFFF0FDF4),
+        color: AppColors.successSubtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1773,7 +1771,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         style: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 11,
-          color: Color(0xFF64748B),
+          color: AppColors.textSecondary,
         ),
       ),
     );
@@ -1892,7 +1890,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     final hasProduct = row.product != null;
     return TableRow(
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFFAFAFA),
+        color: index.isEven ? AppColors.bgCard : AppColors.bgElevated,
       ),
       children: [
         Padding(
@@ -1909,7 +1907,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: _borderColor),
+                      borderSide: const BorderSide(color: AppColors.borderDefault),
                     ),
                   ),
                   items: [
@@ -1932,7 +1930,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.add_box_outlined, size: 18, color: _primaryBlue),
+                icon: const Icon(Icons.add_box_outlined, size: 18, color: AppColors.accentGold),
                 onPressed: () => _addNewProduct(index),
                 tooltip: 'Pridať tovar',
                 padding: const EdgeInsets.all(2),
@@ -1946,14 +1944,14 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           child: Center(
             child: Builder(
               builder: (_) {
-                if (!hasProduct) return const Text('—', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)));
-                if (_selectedWarehouse == null) return const Text('—', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)));
+                if (!hasProduct) return Text('—', style: TextStyle(fontSize: 12, color: AppColors.textSecondary));
+                if (_selectedWarehouse == null) return Text('—', style: TextStyle(fontSize: 12, color: AppColors.textSecondary));
                 final inWarehouse = _products.where((p) =>
                     p.warehouseId == _selectedWarehouse!.id && p.plu == row.product!.plu).toList();
                 final qty = inWarehouse.isNotEmpty ? inWarehouse.first.qty : 0;
                 return Text(
                   '$qty ${row.unit}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 );
               },
             ),
@@ -1973,7 +1971,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: _borderColor),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -1996,7 +1994,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: _borderColor),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
             inputFormatters: [_DecimalInputFormatter()],
@@ -2020,7 +2018,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: _borderColor),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -2036,12 +2034,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             decoration: InputDecoration(
               isDense: true,
               filled: true,
-              fillColor: _fillColor,
+              fillColor: AppColors.bgInput,
               contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: _borderColor),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
           ),
@@ -2051,10 +2049,10 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           child: Center(
             child: Text(
               hasProduct ? '${_rowTotal(row).toStringAsFixed(2)} €' : '—',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1E293B),
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -2076,14 +2074,14 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: _borderColor),
+                          borderSide: const BorderSide(color: AppColors.borderDefault),
                         ),
                       ),
                       inputFormatters: [_DecimalInputFormatter()],
                     )
                   : Text(
                       '${_getAllocatedCostForRow(index).toStringAsFixed(2)} €',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
             ),
           ),
@@ -2093,19 +2091,19 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFDCFCE7),
+                color: AppColors.successSubtle,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF22C55E), width: 1),
+                border: Border.all(color: AppColors.success, width: 1),
               ),
               child: Center(
                 child: Text(
                   hasProduct && (int.tryParse(row.qtyController.text.trim()) ?? 0) > 0
                       ? '${_getTrueUnitPriceWithVatForRow(index).toStringAsFixed(2)} €'
                       : '—',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF166534),
+                    color: AppColors.success,
                   ),
                 ),
               ),
@@ -2117,7 +2115,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             icon: const Icon(
               Icons.delete_outline_rounded,
               size: 18,
-              color: Color(0xFF94A3B8),
+              color: AppColors.textMuted,
             ),
             onPressed: _rows.length > 1 ? () => _removeRow(index) : null,
             tooltip: 'Odstrániť',

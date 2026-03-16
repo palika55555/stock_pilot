@@ -10,6 +10,8 @@ import ScanProductPage from './pages/ScanProductPage'
 import ProductionPage from './pages/ProductionPage'
 import ProductionBatchFormPage from './pages/ProductionBatchFormPage'
 import ProductionBatchDetailPage from './pages/ProductionBatchDetailPage'
+import QuotesPage from './pages/QuotesPage'
+import QuoteFormPage from './pages/QuoteFormPage'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
 import { getAuth } from './utils/auth'
@@ -40,6 +42,8 @@ function App() {
           <Route path="production" element={<ProductionPage />} />
           <Route path="production/new" element={<ProductionBatchFormPage />} />
           <Route path="production/:id" element={<ProductionBatchDetailPage />} />
+          <Route path="quotes" element={<QuotesPage />} />
+          <Route path="quotes/:id" element={<QuoteFormPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

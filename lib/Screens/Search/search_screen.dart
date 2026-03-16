@@ -6,6 +6,7 @@ import '../../services/Product/product_service.dart';
 import '../../services/customer/customer_service.dart';
 import '../../services/supplier/supplier_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
 import '../warehouse/warehouse_supplies.dart';
 import '../customers/customers_page.dart';
 import '../suppliers/suppliers_page.dart';
@@ -143,8 +144,6 @@ class _SearchScreenState extends State<SearchScreen>
                 : null,
           ),
         ),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -205,11 +204,11 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            Icon(Icons.search_off, size: 64, color: AppColors.textMuted),
             const SizedBox(height: 16),
             Text(
               l10n.noResults,
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
             ),
           ],
         ),
@@ -225,29 +224,30 @@ class _SearchScreenState extends State<SearchScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.blue[100],
-              child: const Icon(Icons.inventory_2, color: Colors.blue),
+              backgroundColor: AppColors.accentGoldSubtle,
+              child: Icon(Icons.inventory_2, color: AppColors.accentGold),
             ),
             title: Text(
               product.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                Text('PLU: ${product.plu}'),
+                Text('PLU: ${product.plu}', style: TextStyle(color: AppColors.textSecondary)),
                 Text(
                   '${l10n.warehouseSupplies}: ${product.qty} ${product.unit}',
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
-                Text('${l10n.category}: ${product.category}'),
+                Text('${l10n.category}: ${product.category}', style: TextStyle(color: AppColors.textSecondary)),
               ],
             ),
             trailing: Text(
               '${product.price.toStringAsFixed(2)} ${product.currency}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.blue[700],
+                color: AppColors.accentGold,
                 fontSize: 16,
               ),
             ),
@@ -272,11 +272,11 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            Icon(Icons.search_off, size: 64, color: AppColors.textMuted),
             const SizedBox(height: 16),
             Text(
               l10n.noResults,
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
             ),
           ],
         ),
@@ -292,26 +292,26 @@ class _SearchScreenState extends State<SearchScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.green[100],
-              child: const Icon(Icons.people, color: Colors.green),
+              backgroundColor: AppColors.accentGoldSubtle,
+              child: Icon(Icons.people, color: AppColors.accentGold),
             ),
             title: Text(
               customer.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                Text('IČO: ${customer.ico}'),
+                Text('IČO: ${customer.ico}', style: TextStyle(color: AppColors.textSecondary)),
                 if (customer.city != null)
-                  Text('${l10n.city}: ${customer.city}'),
-                if (customer.email != null) Text('Email: ${customer.email}'),
+                  Text('${l10n.city}: ${customer.city}', style: TextStyle(color: AppColors.textSecondary)),
+                if (customer.email != null) Text('Email: ${customer.email}', style: TextStyle(color: AppColors.textSecondary)),
               ],
             ),
             trailing: Icon(
               customer.isActive ? Icons.check_circle : Icons.cancel,
-              color: customer.isActive ? Colors.green : Colors.grey,
+              color: customer.isActive ? AppColors.success : AppColors.textMuted,
             ),
             onTap: () {
               Navigator.pushReplacement(
@@ -331,11 +331,11 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            Icon(Icons.search_off, size: 64, color: AppColors.textMuted),
             const SizedBox(height: 16),
             Text(
               l10n.noResults,
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
             ),
           ],
         ),
@@ -351,26 +351,26 @@ class _SearchScreenState extends State<SearchScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.orange[100],
-              child: const Icon(Icons.business_center, color: Colors.orange),
+              backgroundColor: AppColors.accentGoldSubtle,
+              child: Icon(Icons.business_center, color: AppColors.accentGold),
             ),
             title: Text(
               supplier.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                Text('IČO: ${supplier.ico}'),
+                Text('IČO: ${supplier.ico}', style: TextStyle(color: AppColors.textSecondary)),
                 if (supplier.city != null)
-                  Text('${l10n.city}: ${supplier.city}'),
-                if (supplier.email != null) Text('Email: ${supplier.email}'),
+                  Text('${l10n.city}: ${supplier.city}', style: TextStyle(color: AppColors.textSecondary)),
+                if (supplier.email != null) Text('Email: ${supplier.email}', style: TextStyle(color: AppColors.textSecondary)),
               ],
             ),
             trailing: Icon(
               supplier.isActive ? Icons.check_circle : Icons.cancel,
-              color: supplier.isActive ? Colors.green : Colors.grey,
+              color: supplier.isActive ? AppColors.success : AppColors.textMuted,
             ),
             onTap: () {
               Navigator.pushReplacement(

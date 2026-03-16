@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../common/responsive_layout_widget.dart';
 
 class DashboardStats extends StatefulWidget {
@@ -210,6 +211,7 @@ class _AnimatedStatCard extends StatelessWidget {
   }
 
   Widget _buildStatCard(BuildContext context) {
+    final radius = isMobile ? 16.0 : 24.0;
     return Container(
       width: isMobile ? null : 150,
       height: isMobile ? 100 : 140,
@@ -217,24 +219,30 @@ class _AnimatedStatCard extends StatelessWidget {
           ? null
           : const BoxConstraints(minWidth: 150, maxWidth: 150),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(isMobile ? 16 : 24),
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.08 * (isMobile ? 1 : 1.2)),
+            color: color.withOpacity(0.12 * (isMobile ? 1 : 1.2)),
             blurRadius: isMobile ? 12 : 20,
             offset: const Offset(0, 8),
             spreadRadius: 0,
           ),
+          const BoxShadow(
+            color: Colors.black45,
+            blurRadius: 24,
+            offset: Offset(0, 8),
+          ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(isMobile ? 16 : 24),
+        borderRadius: BorderRadius.circular(radius),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: () => onTap?.call(cardType),
-            borderRadius: BorderRadius.circular(isMobile ? 16 : 24),
+            borderRadius: BorderRadius.circular(radius),
             child: Padding(
               padding: EdgeInsets.all(isMobile ? 12 : 20),
               child: Column(
@@ -250,7 +258,7 @@ class _AnimatedStatCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.1),
+                            color: color.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(
                               isMobile ? 8 : 12,
                             ),
@@ -269,7 +277,7 @@ class _AnimatedStatCard extends StatelessWidget {
                     title,
                     style: TextStyle(
                       fontSize: isMobile ? 10 : 12,
-                      color: Colors.grey[500],
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

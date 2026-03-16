@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/stock_out.dart';
+import '../../theme/app_theme.dart';
 
 class StockOutList extends StatelessWidget {
   final List<StockOut> stockOuts;
@@ -241,18 +242,9 @@ class StockOutCard extends StatelessWidget {
     final dateStr = _formatDate(stockOut.createdAt);
     final isEditable = stockOut.isEditable;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: AppColors.cardDecorationSmall(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -263,12 +255,12 @@ class StockOutCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626).withOpacity(0.15),
+                  color: AppColors.dangerSubtle,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.north_east_rounded,
-                  color: Color(0xFFDC2626),
+                  color: AppColors.danger,
                   size: 20,
                 ),
               ),
@@ -280,21 +272,22 @@ class StockOutCard extends StatelessWidget {
                   children: [
                     Text(
                       stockOut.documentNumber,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       dateStr,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                     ),
                     if (stockOut.recipientName != null &&
                         stockOut.recipientName!.isNotEmpty)
                       Text(
                         stockOut.recipientName!,
-                        style: TextStyle(color: Colors.grey[500], fontSize: 10),
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 10),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -303,7 +296,7 @@ class StockOutCard extends StatelessWidget {
               ),
               const Icon(
                 Icons.chevron_right,
-                color: Color(0xFFE0E0E0),
+                color: AppColors.textMuted,
                 size: 20,
               ),
             ],
@@ -324,10 +317,10 @@ class StockOutCard extends StatelessWidget {
                         ? 'Stornovaná'
                         : (stockOut.isApproved ? 'Schválená' : 'Vykázaná')),
                 stockOut.isDraft
-                    ? Colors.orange
+                    ? AppColors.warning
                     : (stockOut.isStorned
-                        ? Colors.grey
-                        : (stockOut.isApproved ? Colors.teal : Colors.blue)),
+                        ? AppColors.textMuted
+                        : (stockOut.isApproved ? AppColors.success : AppColors.info)),
               ),
               if (stockOut.isZeroVat)
                 _buildChip('0 % DPH', Colors.deepPurple),
@@ -367,7 +360,7 @@ class StockOutCard extends StatelessWidget {
                       style: TextStyle(fontSize: 12),
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.teal,
+                      backgroundColor: AppColors.accentGold,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 4,
@@ -384,11 +377,11 @@ class StockOutCard extends StatelessWidget {
                     icon: Icon(
                       stockOut.isApproved ? Icons.block : Icons.cancel_outlined,
                       size: 16,
-                      color: Colors.red,
+                      color: AppColors.danger,
                     ),
                     label: Text(
                       stockOut.isApproved ? 'Stornovať' : 'Zrušiť',
-                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                      style: TextStyle(fontSize: 12, color: AppColors.danger),
                     ),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
@@ -404,8 +397,7 @@ class StockOutCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   IconButton(
                     onPressed: () => onExportPdf!(stockOut),
-                    icon: const Icon(Icons.picture_as_pdf, size: 20),
-                    color: const Color(0xFFDC2626),
+                    icon: Icon(Icons.picture_as_pdf, size: 20, color: AppColors.danger),
                     tooltip: 'Export do PDF',
                     style: IconButton.styleFrom(
                       padding: const EdgeInsets.all(4),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class WarehouseQuickStats extends StatelessWidget {
   final int totalQty;
@@ -25,19 +26,19 @@ class WarehouseQuickStats extends StatelessWidget {
             label: "Celkovo",
             value: "$totalQty ks",
             icon: Icons.inventory_2,
-            color: Colors.blue,
+            color: AppColors.info,
           ),
           _StatCard(
             label: "Hodnota",
             value: "${totalValue.toStringAsFixed(0)} €",
             icon: Icons.euro,
-            color: Colors.green,
+            color: AppColors.accentGold,
           ),
           _StatCard(
             label: "Nízky stav",
             value: "$lowStockCount položiek",
             icon: Icons.warning_amber_rounded,
-            color: Colors.orange,
+            color: AppColors.warning,
             onTap: lowStockCount > 0 ? onLowStockTap : null,
           ),
         ],
@@ -68,10 +69,17 @@ class _StatCard extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 24),
         const SizedBox(height: 8),
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+        Text(
+          label,
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+        ),
         Text(
           value,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
         ),
       ],
     );
@@ -80,17 +88,7 @@ class _StatCard extends StatelessWidget {
       width: 150,
       margin: const EdgeInsets.symmetric(horizontal: 6),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          const BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: AppColors.cardDecorationSmall(16),
       child: onTap != null
           ? InkWell(
               onTap: onTap,

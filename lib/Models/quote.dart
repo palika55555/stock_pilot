@@ -34,6 +34,10 @@ class Quote {
   final bool pricesIncludeVat;
   final int defaultVatRate;
   final QuoteStatus status;
+  final double deliveryCost;
+  final double otherFees;
+  final String? paymentMethod;
+  final String? deliveryTerms;
 
   Quote({
     this.id,
@@ -46,6 +50,10 @@ class Quote {
     this.pricesIncludeVat = true,
     this.defaultVatRate = 20,
     this.status = QuoteStatus.draft,
+    this.deliveryCost = 0.0,
+    this.otherFees = 0.0,
+    this.paymentMethod,
+    this.deliveryTerms,
   });
 
   bool get isEditable => status == QuoteStatus.draft;
@@ -62,6 +70,10 @@ class Quote {
       'prices_include_vat': pricesIncludeVat ? 1 : 0,
       'default_vat_rate': defaultVatRate,
       'status': status.value,
+      'delivery_cost': deliveryCost,
+      'other_fees': otherFees,
+      'payment_method': paymentMethod,
+      'delivery_terms': deliveryTerms,
     };
   }
 
@@ -79,6 +91,10 @@ class Quote {
       pricesIncludeVat: (map['prices_include_vat'] as int?) == 1,
       defaultVatRate: map['default_vat_rate'] as int? ?? 20,
       status: QuoteStatus.fromString(map['status'] as String?),
+      deliveryCost: (map['delivery_cost'] as num?)?.toDouble() ?? 0.0,
+      otherFees: (map['other_fees'] as num?)?.toDouble() ?? 0.0,
+      paymentMethod: map['payment_method'] as String?,
+      deliveryTerms: map['delivery_terms'] as String?,
     );
   }
 
@@ -93,6 +109,10 @@ class Quote {
     bool? pricesIncludeVat,
     int? defaultVatRate,
     QuoteStatus? status,
+    double? deliveryCost,
+    double? otherFees,
+    String? paymentMethod,
+    String? deliveryTerms,
   }) {
     return Quote(
       id: id ?? this.id,
@@ -105,6 +125,10 @@ class Quote {
       pricesIncludeVat: pricesIncludeVat ?? this.pricesIncludeVat,
       defaultVatRate: defaultVatRate ?? this.defaultVatRate,
       status: status ?? this.status,
+      deliveryCost: deliveryCost ?? this.deliveryCost,
+      otherFees: otherFees ?? this.otherFees,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      deliveryTerms: deliveryTerms ?? this.deliveryTerms,
     );
   }
 }
@@ -116,11 +140,14 @@ class QuoteItem {
   final String productUniqueId;
   final String? productName;
   final String? plu;
-  final int qty;
+  final double qty;
   final String unit;
   final double unitPrice; // cena za jednotku (s DPH alebo bez podľa hlavičky)
   final int discountPercent;
   final int vatPercent;
+  final String itemType; // napr. "Tovar", "Paleta", "Služba"
+  final String? description; // Popis – napr. "cappuccino 6cm"
+  final int surchargePercent; // Príplatok %
 
   QuoteItem({
     this.id,
@@ -133,11 +160,14 @@ class QuoteItem {
     required this.unitPrice,
     this.discountPercent = 0,
     this.vatPercent = 20,
+    this.itemType = 'Tovar',
+    this.description,
+    this.surchargePercent = 0,
   });
 
   /// Súčet riadku bez DPH. [pricesIncludeVat] = či je unitPrice s DPH.
   double getLineTotalWithoutVat(bool pricesIncludeVat) {
-    final afterDiscount = unitPrice * qty * (1 - discountPercent / 100);
+    final afterDiscount = unitPrice * qty * (1 - discountPercent / 100) * (1 + surchargePercent / 100);
     if (pricesIncludeVat) {
       return (afterDiscount / (1 + vatPercent / 100) * 100).round() / 100;
     }
@@ -157,11 +187,14 @@ class QuoteItem {
       'product_unique_id': productUniqueId,
       'product_name': productName,
       'plu': plu,
-      'qty': qty,
+      'qty': _roundPrice(qty),
       'unit': unit,
       'unit_price': _roundPrice(unitPrice),
       'discount_percent': discountPercent,
       'vat_percent': vatPercent,
+      'item_type': itemType,
+      'description': description,
+      'surcharge_percent': surchargePercent,
     };
   }
 
@@ -176,11 +209,14 @@ class QuoteItem {
       productUniqueId: map['product_unique_id'] as String,
       productName: map['product_name'] as String?,
       plu: map['plu'] as String?,
-      qty: map['qty'] as int,
+      qty: (map['qty'] as num).toDouble(),
       unit: map['unit'] as String,
       unitPrice: (map['unit_price'] as num).toDouble(),
       discountPercent: map['discount_percent'] as int? ?? 0,
       vatPercent: map['vat_percent'] as int? ?? 20,
+      itemType: map['item_type'] as String? ?? 'Tovar',
+      description: map['description'] as String?,
+      surchargePercent: map['surcharge_percent'] as int? ?? 0,
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../models/warehouse.dart';
 import '../../services/StockOut/stock_out_pdf_service.dart';
 import '../../services/StockOut/stock_out_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/Receipts/stock_out_list_widget.dart';
 import '../../widgets/Receipts/stock_out_modal_widget.dart';
 
@@ -411,24 +412,24 @@ class _StockOutScreenState extends State<StockOutScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(_appBarHeight + _appBarFilterHeight),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.85),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text(
+              title: Text(
                 'Výdaj tovaru',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 22,
                 ),

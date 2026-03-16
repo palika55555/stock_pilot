@@ -30,6 +30,26 @@ class AppColors {
   // Borders
   static const Color borderSubtle = Color(0xFF1E2235);
   static const Color borderDefault = Color(0xFF252A3D);
+
+  /// Štýl kariet ako na Home stránke – pre Container/decoration.
+  static BoxDecoration get cardDecoration => BoxDecoration(
+        color: bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderSubtle, width: 1),
+        boxShadow: const [
+          BoxShadow(color: Colors.black45, blurRadius: 24, offset: Offset(0, 8)),
+        ],
+      );
+
+  /// Menší radius pre malé karty (napr. štatistiky).
+  static BoxDecoration cardDecorationSmall([double radius = 12]) => BoxDecoration(
+        color: bgCard,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: borderSubtle, width: 1),
+        boxShadow: const [
+          BoxShadow(color: Colors.black38, blurRadius: 12, offset: Offset(0, 4)),
+        ],
+      );
 }
 
 class AppTheme {
@@ -76,11 +96,17 @@ class AppTheme {
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
-      cardTheme: const CardThemeData(
+      cardTheme: CardThemeData(
         color: AppColors.bgCard,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.black45,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -122,6 +148,39 @@ class AppTheme {
         contentTextStyle: GoogleFonts.dmSans(color: AppColors.textPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.bgCard,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
+        titleTextStyle: GoogleFonts.dmSans(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+        contentTextStyle: GoogleFonts.dmSans(
+          fontSize: 14,
+          color: AppColors.textSecondary,
+        ),
+        alignment: Alignment.center,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.bgCard,
+        surfaceTintColor: Colors.transparent,
+        modalBackgroundColor: AppColors.bgCard,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        dragHandleColor: AppColors.textMuted,
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.accentGold,
+        ),
       ),
     );
   }

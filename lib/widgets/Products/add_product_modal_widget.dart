@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme.dart';
 import '../../models/product.dart';
 import '../../models/product_kind.dart';
 import '../../models/receptura_polozka.dart';
@@ -323,13 +324,13 @@ class _AddProductModalState extends State<AddProductModal> {
       if (mounted) setState(() => _selectedKindId = id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Druh bol pridaný'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Druh bol pridaný'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -472,14 +473,14 @@ class _AddProductModalState extends State<AddProductModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isEditMode ? 'Produkt bol upravený' : 'Produkt bol vytvorený'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Chyba: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Chyba: $e'), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -488,7 +489,6 @@ class _AddProductModalState extends State<AddProductModal> {
   }
 
   static const _radius = 20.0;
-  static const _accent = Color(0xFF6366F1);
 
   InputDecoration _inputDecoration(String label, {Widget? prefixIcon, String? suffixText}) {
     return InputDecoration(
@@ -496,15 +496,15 @@ class _AddProductModalState extends State<AddProductModal> {
       suffixText: suffixText,
       prefixIcon: prefixIcon,
       filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.7),
+      fillColor: AppColors.bgInput,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.9)),
+        borderSide: const BorderSide(color: AppColors.borderDefault),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _accent, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.accentGold, width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -518,9 +518,9 @@ class _AddProductModalState extends State<AddProductModal> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.5),
+            color: AppColors.bgElevated,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+            border: Border.all(color: AppColors.borderSubtle),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,7 +530,7 @@ class _AddProductModalState extends State<AddProductModal> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF475569),
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 12),
@@ -553,14 +553,14 @@ class _AddProductModalState extends State<AddProductModal> {
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: AppColors.bgCard,
               borderRadius: BorderRadius.circular(_radius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
-              boxShadow: [
+              border: Border.all(color: AppColors.borderSubtle),
+              boxShadow: const [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: Colors.black45,
                   blurRadius: 20,
-                  offset: const Offset(0, 10),
+                  offset: Offset(0, 10),
                 ),
               ],
             ),
@@ -582,7 +582,7 @@ class _AddProductModalState extends State<AddProductModal> {
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1E293B),
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           Material(
@@ -593,10 +593,10 @@ class _AddProductModalState extends State<AddProductModal> {
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.05),
+                                  color: AppColors.bgElevated,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close_rounded, size: 22),
+                                child: const Icon(Icons.close_rounded, size: 22, color: AppColors.textPrimary),
                               ),
                             ),
                           ),
@@ -655,7 +655,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                       ? _selectedWarehouseId
                                       : null,
                                   decoration: _inputDecoration('Sklad'),
-                                  dropdownColor: Colors.white,
+                                  dropdownColor: AppColors.bgInput,
                                   borderRadius: BorderRadius.circular(12),
                                   items: [
                                     const DropdownMenuItem<int?>(
@@ -681,7 +681,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                 child: DropdownButtonFormField<String>(
                                   value: _selectedCategory,
                                   decoration: _inputDecoration('Kategória'),
-                                  dropdownColor: Colors.white,
+                                  dropdownColor: AppColors.bgInput,
                                   borderRadius: BorderRadius.circular(12),
                                   items: WarehouseType.all
                                       .map((t) => DropdownMenuItem(value: t, child: Text(t)))
@@ -694,7 +694,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                 child: DropdownButtonFormField<String>(
                                   value: _selectedUnit,
                                   decoration: _inputDecoration('Jednotka'),
-                                  dropdownColor: Colors.white,
+                                  dropdownColor: AppColors.bgInput,
                                   borderRadius: BorderRadius.circular(12),
                                   items: _units
                                       .map((u) => DropdownMenuItem(value: u, child: Text(u)))
@@ -714,7 +714,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                       ? _selectedKindId
                                       : null,
                                   decoration: _inputDecoration('Druh (pre sklady)'),
-                                  dropdownColor: Colors.white,
+                                  dropdownColor: AppColors.bgInput,
                                   borderRadius: BorderRadius.circular(12),
                                   items: [
                                     const DropdownMenuItem<int?>(
@@ -740,15 +740,15 @@ class _AddProductModalState extends State<AddProductModal> {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: _accent.withValues(alpha: 0.5)),
+                                      border: Border.all(color: AppColors.accentGold.withValues(alpha: 0.5)),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.add_rounded, color: _accent, size: 22),
+                                        Icon(Icons.add_rounded, color: AppColors.accentGold, size: 22),
                                         SizedBox(width: 6),
-                                        Text('Pridať druh', style: TextStyle(color: _accent, fontWeight: FontWeight.w600)),
+                                        Text('Pridať druh', style: TextStyle(color: AppColors.accentGold, fontWeight: FontWeight.w600)),
                                       ],
                                     ),
                                   ),
@@ -785,7 +785,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                       controller: _purchasePriceWithVatController,
                                       readOnly: true,
                                       decoration: _inputDecoration('Cena s DPH', suffixText: '€').copyWith(
-                                        fillColor: Colors.white.withValues(alpha: 0.5),
+                                        fillColor: AppColors.bgElevated,
                                       ),
                                     ),
                                   ),
@@ -822,7 +822,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                       controller: _salesPriceWithVatController,
                                       readOnly: true,
                                       decoration: _inputDecoration('Cena s DPH', suffixText: '€').copyWith(
-                                        fillColor: Colors.white.withValues(alpha: 0.5),
+                                        fillColor: AppColors.bgElevated,
                                       ),
                                     ),
                                   ),
@@ -832,9 +832,9 @@ class _AddProductModalState extends State<AddProductModal> {
                                 const SizedBox(height: 8),
                                 Text(
                                   'Marža: ${_marginPercent!.toStringAsFixed(1)} %',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 13,
-                                    color: Colors.grey[700],
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               ],
@@ -869,7 +869,7 @@ class _AddProductModalState extends State<AddProductModal> {
                               DropdownButtonFormField<String>(
                                 value: _selectedCardType,
                                 decoration: _inputDecoration('Typ karty'),
-                                dropdownColor: Colors.white,
+                                dropdownColor: AppColors.bgInput,
                                 borderRadius: BorderRadius.circular(12),
                                 items: _cardTypes
                                     .map((t) => DropdownMenuItem(value: t, child: Text(t)))
@@ -940,7 +940,7 @@ class _AddProductModalState extends State<AddProductModal> {
                               [
                                 Text(
                                   'Receptúra sa skladá z nasledujúcich surovín (produktov). Pri výdaji sa z každého odpočíta potrebné množstvo.',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                 ),
                                 const SizedBox(height: 10),
                                 ...List.generate(_recepturaZlozky.length, (i) {
@@ -964,7 +964,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 22),
+                                          icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger, size: 22),
                                           onPressed: () => _removeRecepturaZlozka(i),
                                           tooltip: 'Odstrániť',
                                         ),
@@ -978,8 +978,8 @@ class _AddProductModalState extends State<AddProductModal> {
                                   icon: const Icon(Icons.add_rounded, size: 20),
                                   label: const Text('Pridať surovinu'),
                                   style: OutlinedButton.styleFrom(
-                                    foregroundColor: _accent,
-                                    side: BorderSide(color: _accent.withValues(alpha: 0.7)),
+                                    foregroundColor: AppColors.accentGold,
+                                    side: BorderSide(color: AppColors.accentGold.withValues(alpha: 0.7)),
                                   ),
                                 ),
                               ],
@@ -992,8 +992,8 @@ class _AddProductModalState extends State<AddProductModal> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _submit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _accent,
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppColors.accentGold,
+                                foregroundColor: AppColors.bgPrimary,
                                 elevation: 0,
                                 shadowColor: Colors.transparent,
                                 shape: RoundedRectangleBorder(
@@ -1005,7 +1005,7 @@ class _AddProductModalState extends State<AddProductModal> {
                                       height: 24,
                                       width: 24,
                                       child: CircularProgressIndicator(
-                                        color: Colors.white,
+                                        color: AppColors.bgPrimary,
                                         strokeWidth: 2,
                                       ),
                                     )
