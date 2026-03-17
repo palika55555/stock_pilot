@@ -5,7 +5,7 @@ import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders, clearAuth } from '../utils/auth'
 import './DashboardLayout.css'
 
-const NAV_ITEMS = [
+const NAV_ITEMS_USER = [
   { path: '/dashboard', label: 'Prehľad', icon: '◉' },
   { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
   { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
@@ -13,7 +13,11 @@ const NAV_ITEMS = [
   { path: '/dashboard/production', label: 'Výroba', icon: '🏭' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
   { path: '/dashboard/production/new', label: 'Príjemky', icon: '📥' },
-  { path: '/dashboard/users', label: 'Používatelia', icon: '👤', adminOnly: true },
+]
+
+const NAV_ITEMS_ADMIN = [
+  { path: '/dashboard', label: 'Prehľad', icon: '◉' },
+  { path: '/dashboard/users', label: 'Používatelia', icon: '👤' },
 ]
 
 function formatSyncAgo(ts) {
@@ -106,7 +110,7 @@ export default function DashboardLayout() {
               </a>
             </div>
             <nav className="dashboard-sidebar__nav">
-              {NAV_ITEMS.filter((item) => !item.adminOnly || auth.user?.role === 'admin').map((item) => {
+              {(auth.user?.role === 'admin' ? NAV_ITEMS_ADMIN : NAV_ITEMS_USER).map((item) => {
                 const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
                 return (
                   <button
