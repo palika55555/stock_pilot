@@ -1,0 +1,746 @@
+/* ═══════════════════════════════════════════════════════════════
+   Prijemka.css — Receipt document  |  Light theme, print-ready
+   Fonts: DM Serif Display (headings), DM Mono (numbers), Outfit (body)
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* ── Design tokens ───────────────────────────────────────────── */
+.prij-root {
+  --prij-font-body:    'Outfit', sans-serif;
+  --prij-font-serif:   'DM Serif Display', serif;
+  --prij-font-mono:    'DM Mono', monospace;
+
+  --prij-bg:           #F7F7F5;
+  --prij-doc-bg:       #FFFFFF;
+  --prij-border:       #E4E4DC;
+  --prij-border-thick: #CACAC0;
+
+  --prij-text:         #1A1A18;
+  --prij-text-mid:     #4A4A42;
+  --prij-text-muted:   #9A9A8E;
+  --prij-text-label:   #6B6B60;
+
+  --prij-accent:       #1A6B3C;
+  --prij-accent-light: #EAF5EE;
+  --prij-accent-mid:   #2D9C5A;
+
+  --prij-gold:         #A07C30;
+  --prij-gold-light:   #FBF4E4;
+
+  --prij-red:          #B91C1C;
+  --prij-red-light:    #FEF2F2;
+
+  --prij-blue:         #1D4ED8;
+  --prij-blue-light:   #EFF6FF;
+
+  --prij-slate:        #475569;
+  --prij-slate-light:  #F1F5F9;
+
+  --prij-row-even:     #FAFAF8;
+  --prij-row-odd:      #FFFFFF;
+
+  --prij-radius-sm:    4px;
+  --prij-radius:       8px;
+  --prij-radius-lg:    12px;
+
+  --prij-shadow-doc:   0 2px 24px 0 rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
+
+  font-family: var(--prij-font-body);
+  background: var(--prij-bg);
+  min-height: 100vh;
+  color: var(--prij-text);
+}
+
+/* ── Root wrapper ────────────────────────────────────────────── */
+.prij-root {
+  padding: 24px 16px 64px;
+}
+
+/* ── Toolbar (screen only) ───────────────────────────────────── */
+.prij-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 940px;
+  margin: 0 auto 20px;
+  gap: 12px;
+}
+
+.prij-toolbar-right {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.prij-btn {
+  font-family: var(--prij-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--prij-radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  line-height: 1;
+}
+
+.prij-btn-ghost {
+  background: transparent;
+  color: var(--prij-text-mid);
+  border: 1px solid var(--prij-border);
+}
+.prij-btn-ghost:hover { background: var(--prij-border); }
+
+.prij-btn-secondary {
+  background: var(--prij-text);
+  color: #fff;
+}
+.prij-btn-secondary:hover { opacity: 0.85; }
+
+/* ── Document card ───────────────────────────────────────────── */
+.prij-doc {
+  max-width: 940px;
+  margin: 0 auto;
+  background: var(--prij-doc-bg);
+  border-radius: var(--prij-radius-lg);
+  box-shadow: var(--prij-shadow-doc);
+  padding: 48px 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* subtle watermark stripe on left edge */
+.prij-doc::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 5px; height: 100%;
+  background: var(--prij-accent);
+  border-radius: var(--prij-radius-lg) 0 0 var(--prij-radius-lg);
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.prij-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.prij-doc-type {
+  font-family: var(--prij-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--prij-accent);
+  margin-bottom: 6px;
+}
+
+.prij-doc-number {
+  font-family: var(--prij-font-serif);
+  font-size: 36px;
+  color: var(--prij-text);
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.prij-movement-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--prij-slate);
+  background: var(--prij-slate-light);
+  border: 1px solid #CBD5E1;
+  border-radius: 100px;
+  padding: 3px 10px;
+}
+
+.prij-header-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.prij-company-name {
+  font-family: var(--prij-font-serif);
+  font-size: 20px;
+  color: var(--prij-text);
+}
+
+.prij-company-sub {
+  font-size: 12px;
+  color: var(--prij-text-muted);
+  margin-top: 2px;
+}
+
+/* ── Status badge ────────────────────────────────────────────── */
+.prij-status-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-radius: 100px;
+  padding: 5px 14px;
+}
+
+.prij-status-draft     { background: var(--prij-slate-light); color: var(--prij-slate); }
+.prij-status-pending   { background: var(--prij-gold-light);  color: var(--prij-gold);  }
+.prij-status-approved  { background: var(--prij-accent-light); color: var(--prij-accent); }
+.prij-status-rejected  { background: var(--prij-red-light);   color: var(--prij-red);   }
+.prij-status-cancelled { background: var(--prij-red-light);   color: var(--prij-red);   }
+
+/* ── Divider ─────────────────────────────────────────────────── */
+.prij-divider {
+  border: none;
+  border-top: 1px solid var(--prij-border);
+  margin: 28px 0;
+}
+.prij-divider-thick {
+  border-top-width: 2px;
+  border-top-color: var(--prij-border-thick);
+}
+
+/* ── Meta row ────────────────────────────────────────────────── */
+.prij-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 40px;
+}
+
+.prij-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+}
+
+.prij-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--prij-text-muted);
+}
+
+.prij-meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--prij-text);
+}
+
+/* ── Parties ─────────────────────────────────────────────────── */
+.prij-parties {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.prij-party-card {
+  flex: 1;
+  background: var(--prij-row-even);
+  border: 1px solid var(--prij-border);
+  border-radius: var(--prij-radius);
+  padding: 20px 24px;
+}
+
+.prij-party-right {
+  border-left: 3px solid var(--prij-accent-light);
+}
+
+.prij-parties-arrow {
+  display: flex;
+  align-items: center;
+  font-size: 22px;
+  color: var(--prij-accent-mid);
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.prij-party-role {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--prij-accent);
+  margin-bottom: 6px;
+}
+
+.prij-party-name {
+  font-family: var(--prij-font-serif);
+  font-size: 18px;
+  color: var(--prij-text);
+  margin-bottom: 8px;
+}
+
+.prij-party-ids {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.prij-party-id {
+  font-size: 13px;
+  color: var(--prij-text-mid);
+}
+
+.prij-party-id strong {
+  font-family: var(--prij-font-mono);
+  font-weight: 500;
+}
+
+.prij-party-address {
+  font-size: 13px;
+  color: var(--prij-text-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* ── Section title ───────────────────────────────────────────── */
+.prij-section-title {
+  font-family: var(--prij-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--prij-text-muted);
+  margin: 0 0 14px;
+}
+
+/* ── Items table ─────────────────────────────────────────────── */
+.prij-table-section {
+  overflow-x: auto;
+}
+
+.prij-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prij-th {
+  font-family: var(--prij-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--prij-text-label);
+  background: var(--prij-row-even);
+  border-top: 1px solid var(--prij-border);
+  border-bottom: 2px solid var(--prij-border-thick);
+  padding: 10px 12px;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.prij-th-num    { width: 36px; text-align: center; }
+.prij-th-center { text-align: center; }
+.prij-th-right  { text-align: right; }
+
+.prij-td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--prij-border);
+  vertical-align: middle;
+  color: var(--prij-text);
+}
+
+.prij-tr-even { background: var(--prij-row-even); }
+.prij-tr-odd  { background: var(--prij-row-odd); }
+
+.prij-td-num    { text-align: center; color: var(--prij-text-muted); font-size: 12px; }
+.prij-td-center { text-align: center; }
+.prij-td-right  { text-align: right; }
+
+.prij-td-name {
+  max-width: 220px;
+}
+
+.prij-item-name {
+  display: block;
+  font-weight: 500;
+}
+
+.prij-item-sku {
+  display: block;
+  font-family: var(--prij-font-mono);
+  font-size: 11px;
+  color: var(--prij-text-muted);
+  margin-top: 2px;
+}
+
+.prij-td-empty {
+  text-align: center;
+  color: var(--prij-text-muted);
+  padding: 32px;
+  font-style: italic;
+}
+
+/* ── Inline badges ───────────────────────────────────────────── */
+.prij-badge {
+  display: inline-block;
+  font-family: var(--prij-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--prij-radius-sm);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.prij-badge-batch {
+  background: var(--prij-blue-light);
+  color: var(--prij-blue);
+  border: 1px solid #BFDBFE;
+}
+
+.prij-badge-exp {
+  background: var(--prij-gold-light);
+  color: var(--prij-gold);
+  border: 1px solid #FDE68A;
+}
+
+.prij-vat-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--prij-accent-light);
+  color: var(--prij-accent);
+  border-radius: var(--prij-radius-sm);
+  padding: 2px 7px;
+}
+
+.prij-muted    { color: var(--prij-text-muted); }
+.prij-bold     { font-weight: 600; }
+.prij-mono     { font-family: var(--prij-font-mono); }
+.prij-vat-col  { color: var(--prij-text-mid); }
+
+/* ── Totals + VAT breakdown ──────────────────────────────────── */
+.prij-totals-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+  justify-content: space-between;
+}
+
+/* VAT breakdown table */
+.prij-vat-breakdown {
+  flex: 1;
+  max-width: 480px;
+}
+
+.prij-breakdown-title {
+  font-family: var(--prij-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--prij-text-muted);
+  margin: 0 0 10px;
+}
+
+.prij-vat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prij-vth {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--prij-text-label);
+  padding: 7px 10px;
+  border-bottom: 2px solid var(--prij-border-thick);
+  text-align: left;
+}
+
+.prij-vth-right { text-align: right; }
+
+.prij-vtd {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--prij-border);
+  vertical-align: middle;
+}
+
+.prij-vtd-right { text-align: right; }
+
+.prij-vat-total-row .prij-vtd {
+  background: var(--prij-row-even);
+  border-top: 2px solid var(--prij-border-thick);
+  border-bottom: none;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* Grand total box */
+.prij-grand-total {
+  background: var(--prij-text);
+  color: #fff;
+  border-radius: var(--prij-radius);
+  padding: 24px 32px;
+  text-align: right;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.prij-grand-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.prij-grand-value {
+  font-family: var(--prij-font-serif);
+  font-size: 32px;
+  line-height: 1;
+  color: #fff;
+}
+
+.prij-grand-sub {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+/* ── Note ────────────────────────────────────────────────────── */
+.prij-note-section {
+  background: #FFFDF0;
+  border: 1px solid #FDE68A;
+  border-radius: var(--prij-radius-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  display: flex;
+  gap: 8px;
+}
+
+.prij-note-label {
+  font-weight: 600;
+  color: var(--prij-gold);
+  white-space: nowrap;
+}
+
+.prij-note-text { color: var(--prij-text-mid); }
+
+/* ── Signature footer ────────────────────────────────────────── */
+.prij-sig-footer {
+  display: flex;
+  gap: 32px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.prij-sig-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prij-sig-line {
+  width: 100%;
+  height: 1px;
+  background: var(--prij-border-thick);
+  margin-bottom: 4px;
+}
+
+.prij-sig-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--prij-text-muted);
+  text-align: center;
+}
+
+.prij-sig-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--prij-text);
+  text-align: center;
+}
+
+.prij-sig-date {
+  font-family: var(--prij-font-mono);
+  font-size: 11px;
+  color: var(--prij-text-muted);
+  text-align: center;
+}
+
+/* Stamp block */
+.prij-stamp-block {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.prij-stamp-inner {
+  width: 96px;
+  height: 96px;
+  border: 2px dashed var(--prij-border-thick);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prij-stamp-text {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--prij-text-muted);
+}
+
+/* ── Document footer strip ───────────────────────────────────── */
+.prij-doc-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--prij-border);
+  font-size: 11px;
+  color: var(--prij-text-muted);
+}
+
+.prij-doc-footer strong { color: var(--prij-text); }
+
+/* ── Skeleton ────────────────────────────────────────────────── */
+.prij-skeleton {
+  background: linear-gradient(90deg, #EBEBEB 25%, #F5F5F5 50%, #EBEBEB 75%);
+  background-size: 400% 100%;
+  animation: prij-shimmer 1.4s ease infinite;
+  border-radius: var(--prij-radius-sm);
+  display: block;
+}
+
+@keyframes prij-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ── Error ───────────────────────────────────────────────────── */
+.prij-error-wrap {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.prij-error-box {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--prij-text-mid);
+}
+
+.prij-error-icon {
+  font-size: 36px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT STYLES
+   ══════════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 16mm;
+  }
+
+  .no-print { display: none !important; }
+
+  body {
+    background: #fff !important;
+  }
+
+  .prij-root {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .prij-doc {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .prij-doc::before {
+    display: none !important;
+  }
+
+  .prij-grand-total {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .prij-status-badge,
+  .prij-vat-badge,
+  .prij-badge,
+  .prij-movement-badge {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .prij-table { font-size: 11px; }
+  .prij-th    { font-size: 10px; }
+
+  .prij-sig-footer { page-break-inside: avoid; }
+  .prij-doc-footer { page-break-inside: avoid; }
+
+  .prij-grand-total { page-break-inside: avoid; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — narrow screens
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+  .prij-doc { padding: 28px 20px; }
+
+  .prij-doc-number { font-size: 26px; }
+
+  .prij-parties {
+    flex-direction: column;
+  }
+
+  .prij-parties-arrow {
+    transform: rotate(90deg);
+    justify-content: center;
+  }
+
+  .prij-totals-section {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .prij-grand-total {
+    width: 100%;
+    align-items: center;
+    text-align: center;
+  }
+
+  .prij-sig-footer {
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  .prij-sig-block { min-width: 120px; }
+}
