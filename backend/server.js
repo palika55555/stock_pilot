@@ -227,7 +227,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     const {
       rows: [user],
     } = await pool.query(
-      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access, owner_id FROM users WHERE username = $1',
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access, owner_id, tier_valid_until FROM users WHERE username = $1',
       [username.toString().trim()]
     );
     if (!user || user.password !== password) {
@@ -253,10 +253,21 @@ apiRouter.post('/auth/login', async (req, res) => {
           error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
         });
       }
-      // Sub-user: skontroluj aj web_access jeho admina (owner)
+      // Admin: platnosť tiera – ak je tier_valid_until v minulosti, prístup zamietnutý
+      if (user.role === 'admin' && user.tier_valid_until) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (user.tier_valid_until < today) {
+          console.warn('[auth] Admin login blocked – tier expired:', username);
+          return res.status(403).json({
+            success: false,
+            error: 'Platnosť vášho plánu vypršala. Kontaktujte administrátora.',
+          });
+        }
+      }
+      // Sub-user: skontroluj web_access a tier_valid_until jeho admina (owner)
       if (user.owner_id) {
         const { rows: [owner] } = await pool.query(
-          'SELECT web_access FROM users WHERE id = $1',
+          'SELECT web_access, tier_valid_until FROM users WHERE id = $1',
           [user.owner_id]
         );
         if (!owner || !owner.web_access) {
@@ -265,6 +276,16 @@ apiRouter.post('/auth/login', async (req, res) => {
             success: false,
             error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
           });
+        }
+        if (owner.tier_valid_until) {
+          const today = new Date().toISOString().slice(0, 10);
+          if (owner.tier_valid_until < today) {
+            console.warn('[auth] Sub-user login blocked – owner tier expired:', username);
+            return res.status(403).json({
+              success: false,
+              error: 'Platnosť plánu vášho administrátora vypršala. Kontaktujte ho.',
+            });
+          }
         }
       }
     }
@@ -1146,17 +1167,74 @@ const requireDbOwner = (req, res, next) => {
   next();
 };
 
+// DB_OWNER: štatistiky – počet používateľov, tieri, registrácie, platnosti
+apiRouter.get('/admin/stats', requireDbOwner, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { rows: totalRows } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM users WHERE role = 'admin') AS admins_count,
+         (SELECT COUNT(*)::int FROM users WHERE role = 'user' AND owner_id IS NOT NULL) AS sub_users_count,
+         (SELECT COUNT(*)::int FROM users WHERE role IN ('admin','user')) AS total_users_count`
+    );
+    const { rows: byTier } = await pool.query(
+      `SELECT COALESCE(tier, 'free') AS tier, COUNT(*)::int AS cnt
+       FROM users WHERE role = 'admin' GROUP BY tier`
+    );
+    const tierCounts = { free: 0, basic: 0, pro: 0, enterprise: 0 };
+    byTier.forEach((r) => { tierCounts[r.tier] = r.cnt; });
+
+    const { rows: adminsList } = await pool.query(
+      `SELECT u.id, u.username, u.full_name, COALESCE(u.tier, 'free') AS tier,
+              u.join_date, u.tier_valid_until, COALESCE(u.web_access, false) AS web_access,
+              COUNT(s.id)::int AS sub_user_count
+       FROM users u
+       LEFT JOIN users s ON s.owner_id = u.id
+       WHERE u.role = 'admin'
+       GROUP BY u.id ORDER BY u.join_date DESC`
+    );
+    const admins = adminsList.map((a) => ({
+      id: a.id,
+      username: a.username,
+      full_name: a.full_name,
+      tier: a.tier,
+      join_date: a.join_date,
+      tier_valid_until: a.tier_valid_until ? a.tier_valid_until.toISOString?.()?.slice(0, 10) : null,
+      web_access: !!a.web_access,
+      sub_user_count: a.sub_user_count,
+      is_expired: a.tier_valid_until ? a.tier_valid_until < today : false,
+    }));
+
+    const expiredCount = admins.filter((a) => a.is_expired).length;
+    const activeCount = admins.length - expiredCount;
+
+    res.json({
+      admins_count: totalRows[0]?.admins_count ?? 0,
+      sub_users_count: totalRows[0]?.sub_users_count ?? 0,
+      total_users_count: totalRows[0]?.total_users_count ?? 0,
+      by_tier: tierCounts,
+      admins_active: activeCount,
+      admins_expired: expiredCount,
+      admins,
+    });
+  } catch (err) {
+    console.error('[GET /admin/stats]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   try {
     if (req.userRole === 'db_owner') {
-      // DB_OWNER vidí všetkých adminov + ich počet sub-userov
+      // DB_OWNER vidí všetkých adminov + ich počet sub-userov + platnosť tiera
       const { rows } = await pool.query(
         `SELECT u.id, u.username, u.full_name, u.email,
                 COALESCE(u.is_blocked, false) AS is_blocked,
                 COALESCE(u.web_access, false) AS web_access,
                 COALESCE(u.tier, 'free') AS tier,
-                u.join_date,
+                u.join_date, u.tier_valid_until,
                 COUNT(s.id) AS sub_user_count
          FROM users u
          LEFT JOIN users s ON s.owner_id = u.id
@@ -1168,6 +1246,7 @@ apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
         is_blocked: !!r.is_blocked, web_access: !!r.web_access,
         tier: r.tier, sub_user_count: parseInt(r.sub_user_count, 10),
         join_date: r.join_date,
+        tier_valid_until: r.tier_valid_until ? r.tier_valid_until.toISOString?.()?.slice(0, 10) : null,
       })));
     } else {
       // Admin vidí iba svojich sub-userov
@@ -1250,23 +1329,40 @@ apiRouter.patch('/admin/users/:id/web-access', requireAdmin, async (req, res) =>
   }
 });
 
-// DB_OWNER: nastavenie tiera pre admina
+// DB_OWNER: nastavenie tiera a platnosti pre admina
 apiRouter.patch('/admin/users/:id/tier', requireDbOwner, async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
-  const { tier } = req.body || {};
-  if (!TIER_LIMITS.hasOwnProperty(tier)) {
+  const { tier, valid_until } = req.body || {};
+  if (tier !== undefined && !TIER_LIMITS.hasOwnProperty(tier)) {
     return res.status(400).json({ error: 'Neplatný tier. Platné hodnoty: free, basic, pro, enterprise' });
   }
   try {
-    const { rowCount } = await pool.query(
-      "UPDATE users SET tier = $1 WHERE id = $2 AND role = 'admin'",
-      [tier, id]
-    );
+    let rowCount;
+    if (tier !== undefined && valid_until !== undefined) {
+      const validDate = valid_until === null || valid_until === '' ? null : String(valid_until).slice(0, 10);
+      rowCount = (await pool.query(
+        "UPDATE users SET tier = $1, tier_valid_until = $2 WHERE id = $3 AND role = 'admin'",
+        [tier, validDate, id]
+      )).rowCount;
+    } else if (valid_until !== undefined) {
+      const validDate = valid_until === null || valid_until === '' ? null : String(valid_until).slice(0, 10);
+      rowCount = (await pool.query(
+        "UPDATE users SET tier_valid_until = $1 WHERE id = $2 AND role = 'admin'",
+        [validDate, id]
+      )).rowCount;
+    } else if (tier !== undefined) {
+      rowCount = (await pool.query(
+        "UPDATE users SET tier = $1 WHERE id = $2 AND role = 'admin'",
+        [tier, id]
+      )).rowCount;
+    } else {
+      return res.status(400).json({ error: 'Zadajte tier alebo valid_until (alebo oboje).' });
+    }
     if (rowCount === 0) return res.status(404).json({ error: 'Admin nenájdený' });
-    console.log('[db_owner] Tier set to', tier, 'for user', id);
-    res.json({ success: true, tier });
+    console.log('[db_owner] Tier/valid_until updated for user', id);
+    res.json({ success: true, tier: tier !== undefined ? tier : undefined, valid_until: valid_until === null || valid_until === '' ? null : valid_until });
   } catch (err) {
     console.error('[PATCH /admin/users/:id/tier]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
@@ -1280,12 +1376,14 @@ apiRouter.post('/admin/subusers', requireAdmin, async (req, res) => {
   const { username, password, full_name, email } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'username a password sú povinné' });
   try {
-    // Skontroluj tier admina
+    // Skontroluj tier admina a platnosť – ak tier vypršal, efektívne free (0)
+    const today = new Date().toISOString().slice(0, 10);
     const { rows: [me] } = await pool.query(
-      'SELECT COALESCE(tier, $1) AS tier FROM users WHERE id = $2',
+      'SELECT COALESCE(tier, $1) AS tier, tier_valid_until FROM users WHERE id = $2',
       ['free', req.userId]
     );
-    const limit = TIER_LIMITS[me?.tier || 'free'];
+    const tierExpired = me?.tier_valid_until && me.tier_valid_until < today;
+    const limit = tierExpired ? 0 : TIER_LIMITS[me?.tier || 'free'];
     if (limit === 0) {
       return res.status(403).json({ error: 'Váš plán (free) neumožňuje pridávať sub-userov. Kontaktujte administrátora pre upgrade.' });
     }

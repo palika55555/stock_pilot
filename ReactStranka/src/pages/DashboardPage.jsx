@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [notifTab, setNotifTab] = useState('all')
   const [syncing, setSyncing] = useState(false)
+  const [adminStats, setAdminStats] = useState(null)
   const notificationsRef = useRef(null)
 
   useEffect(() => {
@@ -80,25 +81,30 @@ export default function DashboardPage() {
     if (!auth?.token) return
     let cancelled = false
     const headers = getAuthHeaders(auth)
-    Promise.all([
+    const promises = [
       fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return {} }; return r.ok ? r.json() : {} }),
       fetch(`${API_BASE_FOR_CALLS}/batches?limit=10`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return [] }; return r.ok ? r.json() : [] }),
-    ])
-      .then(([data, batchList]) => {
-        if (!cancelled) {
-          setStats((s) => ({
-            ...s,
-            products_count: data.products_count ?? data.products ?? 0,
-            customers_count: data.customers_count ?? data.customers ?? 0,
-            total_sales: data.total_sales ?? data.revenue ?? 0,
-            low_stock_count: data.low_stock_count ?? 0,
-            products_trend_week: data.products_trend_week ?? 0,
-            customers_trend_week: data.customers_trend_week ?? 0,
-            sales_trend_week: data.sales_trend_week ?? 0,
-            last_sync_at: data.last_sync_at ?? 0,
-          }))
-          setBatches(Array.isArray(batchList) ? batchList : [])
-        }
+    ]
+    if (auth?.user?.role === 'db_owner') {
+      promises.push(fetch(`${API_BASE_FOR_CALLS}/admin/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return null }; return r.ok ? r.json() : null }))
+    }
+    Promise.all(promises)
+      .then((results) => {
+        if (cancelled) return
+        const [data, batchList, adminStatsData] = results
+        setStats((s) => ({
+          ...s,
+          products_count: data?.products_count ?? data?.products ?? 0,
+          customers_count: data?.customers_count ?? data?.customers ?? 0,
+          total_sales: data?.total_sales ?? data?.revenue ?? 0,
+          low_stock_count: data?.low_stock_count ?? 0,
+          products_trend_week: data?.products_trend_week ?? 0,
+          customers_trend_week: data?.customers_trend_week ?? 0,
+          sales_trend_week: data?.sales_trend_week ?? 0,
+          last_sync_at: data?.last_sync_at ?? 0,
+        }))
+        setBatches(Array.isArray(batchList) ? batchList : [])
+        if (adminStatsData) setAdminStats(adminStatsData)
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -138,6 +144,70 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          {adminStats && (
+            <section className="dashboard-admin-stats" aria-label="Štatistiky platformy">
+              <h2 className="dashboard-admin-stats__title">Štatistiky platformy</h2>
+              <div className="dashboard-admin-stats__grid">
+                <div className="dashboard-admin-stats__card">
+                  <span className="dashboard-admin-stats__card-value">{adminStats.total_users_count}</span>
+                  <span className="dashboard-admin-stats__card-label">Celkom používateľov</span>
+                </div>
+                <div className="dashboard-admin-stats__card">
+                  <span className="dashboard-admin-stats__card-value">{adminStats.admins_count}</span>
+                  <span className="dashboard-admin-stats__card-label">Admini</span>
+                </div>
+                <div className="dashboard-admin-stats__card dashboard-admin-stats__card--ok">
+                  <span className="dashboard-admin-stats__card-value">{adminStats.admins_active}</span>
+                  <span className="dashboard-admin-stats__card-label">Aktívni (platnosť OK)</span>
+                </div>
+                <div className={`dashboard-admin-stats__card ${adminStats.admins_expired > 0 ? 'dashboard-admin-stats__card--warn' : ''}`}>
+                  <span className="dashboard-admin-stats__card-value">{adminStats.admins_expired}</span>
+                  <span className="dashboard-admin-stats__card-label">S vypršanou platnosťou</span>
+                </div>
+                <div className="dashboard-admin-stats__card">
+                  <span className="dashboard-admin-stats__card-value">{adminStats.sub_users_count}</span>
+                  <span className="dashboard-admin-stats__card-label">Sub-useri (kolegovia)</span>
+                </div>
+              </div>
+              <div className="dashboard-admin-stats__tiers">
+                <span className="dashboard-admin-stats__tiers-label">Tieri:</span>
+                <span>Free: <strong>{adminStats.by_tier?.free ?? 0}</strong></span>
+                <span>Basic: <strong>{adminStats.by_tier?.basic ?? 0}</strong></span>
+                <span>Pro: <strong>{adminStats.by_tier?.pro ?? 0}</strong></span>
+                <span>Enterprise: <strong>{adminStats.by_tier?.enterprise ?? 0}</strong></span>
+              </div>
+              <div className="dashboard-admin-stats__table-wrap">
+                <table className="dashboard-admin-stats__table">
+                  <thead>
+                    <tr>
+                      <th>Admin</th>
+                      <th>Tier</th>
+                      <th>Registrovaný</th>
+                      <th>Platnosť do</th>
+                      <th>Sub-useri</th>
+                      <th>Stav</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(adminStats.admins || []).map((a) => (
+                      <tr key={a.id}>
+                        <td><strong>{a.username}</strong></td>
+                        <td><span className={`users-tier-badge users-tier-badge--${a.tier}`}>{a.tier}</span></td>
+                        <td>{a.join_date ? new Date(a.join_date).toLocaleDateString('sk-SK') : '—'}</td>
+                        <td>{a.tier_valid_until ? new Date(a.tier_valid_until).toLocaleDateString('sk-SK') : 'Neobmedzene'}</td>
+                        <td>{a.sub_user_count}</td>
+                        <td>{a.is_expired ? <span className="users-badge users-badge--blocked">Vypršané</span> : <span className="users-badge users-badge--ok">Aktívny</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" className="dashboard-admin-stats__btn" onClick={() => navigate('/dashboard/users')}>
+                Spravovať používateľov →
+              </button>
+            </section>
+          )}
+
           <section className="dashboard-kpis" aria-label="KPI karty">
             <div
               className="dashboard-kpi-card dashboard-kpi-card--gold"

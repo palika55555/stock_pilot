@@ -54,6 +54,19 @@ function DbOwnerView({ auth }) {
     finally { setActionLoading(null) }
   }
 
+  const doValidUntil = async (id, validUntil) => {
+    setActionLoading(`valid-${id}`)
+    try {
+      const res = await fetch(`${API_BASE_FOR_CALLS}/admin/users/${id}/tier`, {
+        method: 'PATCH', headers: getAuthHeaders(auth), body: JSON.stringify({ valid_until: validUntil === '' ? null : validUntil }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Chyba')
+      await fetchAdmins()
+    } catch (e) { alert(e.message) }
+    finally { setActionLoading(null) }
+  }
+
   const doDelete = async (id, username) => {
     if (!window.confirm(`Vymazať admina "${username}" a všetky jeho dáta?`)) return
     setActionLoading(`del-${id}`)
@@ -88,6 +101,7 @@ function DbOwnerView({ auth }) {
                 <th>Email</th>
                 <th>Web prístup</th>
                 <th>Tier</th>
+                <th>Platnosť do</th>
                 <th>Sub-users</th>
                 <th>Registrovaný</th>
                 <th>Akcie</th>
@@ -108,6 +122,26 @@ function DbOwnerView({ auth }) {
                     <span className={`users-tier-badge users-tier-badge--${a.tier || 'free'}`}>
                       {TIER_LABELS[a.tier] || 'Free'}
                     </span>
+                  </td>
+                  <td className="users-valid-until-cell">
+                    {actionLoading === `valid-${a.id}` ? (
+                      <span className="btn-spinner" />
+                    ) : (
+                      <>
+                        <input
+                          type="date"
+                          className="users-valid-until-input"
+                          value={a.tier_valid_until || ''}
+                          onChange={(e) => doValidUntil(a.id, e.target.value)}
+                          title="Platnosť tiera – prázdne = neobmedzené"
+                        />
+                        {a.tier_valid_until && (
+                          <button type="button" className="users-btn users-btn--small" onClick={() => doValidUntil(a.id, null)} title="Nastaviť neobmedzene">
+                            Neobmedz.
+                          </button>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td className="users-center">
                     {a.sub_user_count} / {TIER_LIMITS[a.tier] === -1 ? '∞' : TIER_LIMITS[a.tier]}

@@ -33,6 +33,35 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local editor / OS
+.vscode/
+.cursor/
+*.code-workspace
+
+# Logs
+*.log
+logs/
+backend/*.log
+ReactStranka/*.log
+
+# Node / backend
+backend/node_modules/
+backend/.env
+backend/.env.local
+backend/.vercel/
+
+# React frontend
+ReactStranka/node_modules/
+ReactStranka/dist/
+ReactStranka/.vercel/
+ReactStranka/.env
+ReactStranka/.env.local
+
+# Coolify / Docker / misc
+docker-compose.override.yml
+.DS_Store
+
+
 # Symbolication related
 app.*.symbols
 

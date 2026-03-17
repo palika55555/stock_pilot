@@ -38,6 +38,129 @@
   50% { opacity: 1; }
 }
 
+/* ─── DB_OWNER: Štatistiky platformy ─── */
+.dashboard-admin-stats {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-admin-stats__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 1rem;
+}
+
+.dashboard-admin-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dashboard-admin-stats__card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.875rem;
+  text-align: center;
+}
+
+.dashboard-admin-stats__card--ok {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.dashboard-admin-stats__card--warn {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.dashboard-admin-stats__card-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dashboard-admin-stats__card-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.dashboard-admin-stats__tiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.dashboard-admin-stats__tiers-label {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.dashboard-admin-stats__table-wrap {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.dashboard-admin-stats__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.dashboard-admin-stats__table th,
+.dashboard-admin-stats__table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-admin-stats__table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.dashboard-admin-stats__btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-gold, #c9a227);
+  color: #1a1d27;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.dashboard-admin-stats__btn:hover {
+  filter: brightness(1.1);
+}
+
+.dashboard-admin-stats .users-tier-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.dashboard-admin-stats .users-tier-badge--free { background: rgba(156,163,175,0.15); color: #9ca3af; }
+.dashboard-admin-stats .users-tier-badge--basic { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.dashboard-admin-stats .users-tier-badge--pro { background: rgba(168,85,247,0.15); color: #c084fc; }
+.dashboard-admin-stats .users-tier-badge--enterprise { background: rgba(245,166,35,0.15); color: #f5a623; }
+.dashboard-admin-stats .users-badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 6px; }
+.dashboard-admin-stats .users-badge--ok { background: rgba(34,197,94,0.15); color: #4ade80; }
+.dashboard-admin-stats .users-badge--blocked { background: rgba(239,68,68,0.15); color: #f87171; }
+
 /* ─── KPI cards ─── */
 .dashboard-kpis {
   display: grid;
