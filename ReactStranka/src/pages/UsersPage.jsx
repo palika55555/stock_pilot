@@ -51,6 +51,24 @@ export default function UsersPage() {
     fetchUsers()
   }, [auth])
 
+  const doWebAccess = async (id, allow) => {
+    setActionLoading(id)
+    try {
+      const res = await fetch(`${API_BASE_FOR_CALLS}/admin/users/${id}/web-access`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(auth),
+        body: JSON.stringify({ allow }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Akcia zlyhala')
+      await fetchUsers()
+    } catch (e) {
+      alert(e.message || 'Chyba')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const doBlock = async (id, block) => {
     setActionLoading(id)
     try {
@@ -114,8 +132,8 @@ export default function UsersPage() {
           <button type="button" className="dashboard-back" onClick={() => navigate('/dashboard')} title="Späť na prehľad">← Späť</button>
           <h2 className="dashboard-overview-title">Správa používateľov</h2>
         </div>
-        <p className="customers-empty" style={{ marginBottom: '1rem' }}>
-          Zablokovaný používateľ sa nemôže prihlásiť (web ani aplikácia). Vymazaním účtu sa odstránia aj všetky jeho dáta. „Vymazať dáta“ zmaže zákazníkov, produkty, ponuky atď., účet zostane.
+        <p className=”customers-empty” style={{ marginBottom: '1rem' }}>
+          <strong>Web prístup</strong> — používatelia PC appky sú tu evidovaní, ale na web sa nemôžu prihlásiť kým im admin nepovolí prístup. Zablokovaný používateľ sa nemôže prihlásiť ani na web ani v aplikácii.
         </p>
 
         {loading ? (
@@ -137,6 +155,7 @@ export default function UsersPage() {
                   <th>Rola</th>
                   <th>Email</th>
                   <th>Stav</th>
+                  <th>Web prístup</th>
                   <th>Akcie</th>
                 </tr>
               </thead>
@@ -154,11 +173,26 @@ export default function UsersPage() {
                         <span className="users-badge users-badge--ok">Aktívny</span>
                       )}
                     </td>
+                    <td>
+                      {u.web_access ? (
+                        <span className="users-badge users-badge--ok">Povolený</span>
+                      ) : (
+                        <span className="users-badge users-badge--blocked">Iba PC</span>
+                      )}
+                    </td>
                     <td className="users-actions">
                       {actionLoading === u.id ? (
                         <span className="btn-spinner" style={{ marginRight: '0.5rem' }} aria-hidden="true" />
                       ) : (
                         <>
+                          <button
+                            type="button"
+                            className="users-btn users-btn--web"
+                            onClick={() => doWebAccess(u.id, !u.web_access)}
+                            title={u.web_access ? 'Odobrať web prístup' : 'Povoliť web prístup'}
+                          >
+                            {u.web_access ? 'Odbrať web' : 'Povoliť web'}
+                          </button>
                           <button
                             type="button"
                             className="users-btn users-btn--block"

@@ -28,9 +28,10 @@ async function syncUser(pool, body) {
   const d = department != null ? String(department).trim() : '';
   const av = avatar_url != null ? String(avatar_url).trim() : '';
   try {
+    // web_access sa NIKDY neaktualizuje cez sync z PC appky – admin ho nastavuje manuálne na webe.
     await pool.query(
-      `INSERT INTO users (username, password, full_name, role, email, phone, department, avatar_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO users (username, password, full_name, role, email, phone, department, avatar_url, web_access)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
        ON CONFLICT (username) DO UPDATE SET
          password = EXCLUDED.password,
          full_name = EXCLUDED.full_name,

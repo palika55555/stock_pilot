@@ -227,7 +227,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     const {
       rows: [user],
     } = await pool.query(
-      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked FROM users WHERE username = $1',
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access FROM users WHERE username = $1',
       [username.toString().trim()]
     );
     if (!user || user.password !== password) {
@@ -242,6 +242,13 @@ apiRouter.post('/auth/login', async (req, res) => {
       return res.status(403).json({
         success: false,
         error: 'Účet je zablokovaný. Kontaktujte administrátora.',
+      });
+    }
+    if (!user.web_access) {
+      console.warn('[auth] User without web_access tried to login:', username);
+      return res.status(403).json({
+        success: false,
+        error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
       });
     }
     const tokens = signTokens(
@@ -1120,7 +1127,9 @@ apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, full_name, role, email, phone, department,
-              COALESCE(is_blocked, false) AS is_blocked, join_date
+              COALESCE(is_blocked, false) AS is_blocked,
+              COALESCE(web_access, false) AS web_access,
+              join_date
        FROM users ORDER BY id ASC`
     );
     res.json(rows.map((r) => ({
@@ -1132,6 +1141,7 @@ apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
       phone: r.phone,
       department: r.department,
       is_blocked: !!r.is_blocked,
+      web_access: !!r.web_access,
       join_date: r.join_date,
     })));
   } catch (err) {
@@ -1156,6 +1166,26 @@ apiRouter.patch('/admin/users/:id/block', requireAdmin, async (req, res) => {
     res.json({ success: true, is_blocked: setBlocked });
   } catch (err) {
     console.error('[PATCH /admin/users/:id/block]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.patch('/admin/users/:id/web-access', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const { allow } = req.body || {};
+  const setAccess = allow === true || allow === 'true';
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE users SET web_access = $1 WHERE id = $2',
+      [setAccess, id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Používateľ nenájdený' });
+    console.log('[admin] User', id, setAccess ? 'web_access granted' : 'web_access revoked');
+    res.json({ success: true, web_access: setAccess });
+  } catch (err) {
+    console.error('[PATCH /admin/users/:id/web-access]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });
