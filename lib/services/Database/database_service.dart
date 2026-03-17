@@ -215,7 +215,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 34,
+      version: 35,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -742,6 +742,85 @@ class DatabaseService {
         }
       } catch (_) {}
     }
+
+    // Záchranná sieť: všetky stĺpce pridané cez ALTER TABLE v migrácii musia existovať
+    // aj v DB vytvorených priamo cez _onCreate (fresh install pri vyššej verzii).
+    try {
+      final irInfo = await db.rawQuery('PRAGMA table_info(inbound_receipts)');
+      if (irInfo.isNotEmpty) {
+        final irAlters = <String, String>{
+          'warehouse_id': 'INTEGER',
+          'source_warehouse_id': 'INTEGER',
+          'movement_type_code': "TEXT NOT NULL DEFAULT 'STANDARD'",
+          'je_vysporiadana': 'INTEGER NOT NULL DEFAULT 0',
+          'linked_stock_out_id': 'INTEGER',
+          'cost_distribution_method': 'TEXT',
+          'submitted_at': 'TEXT',
+          'approved_at': 'TEXT',
+          'approver_username': 'TEXT',
+          'approver_note': 'TEXT',
+          'rejected_at': 'TEXT',
+          'rejection_reason': 'TEXT',
+          'reversed_at': 'TEXT',
+          'reversed_by_username': 'TEXT',
+          'reverse_reason': 'TEXT',
+          'stock_applied': 'INTEGER NOT NULL DEFAULT 0',
+          'supplier_id': 'INTEGER',
+          'supplier_ico': 'TEXT',
+          'supplier_dic': 'TEXT',
+          'supplier_address': 'TEXT',
+          'delivery_note_number': 'TEXT',
+          'po_number': 'TEXT',
+        };
+        for (final entry in irAlters.entries) {
+          if (!irInfo.any((c) => c['name'] == entry.key)) {
+            await db.execute('ALTER TABLE inbound_receipts ADD COLUMN ${entry.key} ${entry.value}');
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final soInfo = await db.rawQuery('PRAGMA table_info(stock_outs)');
+      if (soInfo.isNotEmpty) {
+        final soAlters = <String, String>{
+          'linked_receipt_id': 'INTEGER',
+          'customer_id': 'INTEGER',
+          'recipient_ico': 'TEXT',
+          'recipient_dic': 'TEXT',
+          'recipient_address': 'TEXT',
+        };
+        for (final entry in soAlters.entries) {
+          if (!soInfo.any((c) => c['name'] == entry.key)) {
+            await db.execute('ALTER TABLE stock_outs ADD COLUMN ${entry.key} ${entry.value}');
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final iriInfo = await db.rawQuery('PRAGMA table_info(inbound_receipt_items)');
+      if (iriInfo.isNotEmpty) {
+        if (!iriInfo.any((c) => c['name'] == 'batch_number')) {
+          await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN batch_number TEXT');
+        }
+        if (!iriInfo.any((c) => c['name'] == 'expiry_date')) {
+          await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN expiry_date TEXT');
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final soiInfo = await db.rawQuery('PRAGMA table_info(stock_out_items)');
+      if (soiInfo.isNotEmpty) {
+        if (!soiInfo.any((c) => c['name'] == 'batch_number')) {
+          await db.execute('ALTER TABLE stock_out_items ADD COLUMN batch_number TEXT');
+        }
+        if (!soiInfo.any((c) => c['name'] == 'expiry_date')) {
+          await db.execute('ALTER TABLE stock_out_items ADD COLUMN expiry_date TEXT');
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> initializeWithAdmin(User admin) async {
@@ -1429,6 +1508,82 @@ class DatabaseService {
       }
       if (!stockOutInfo.any((c) => c['name'] == 'recipient_address')) {
         await db.execute('ALTER TABLE stock_outs ADD COLUMN recipient_address TEXT');
+      }
+    }
+
+    // Version 35: fix fresh-install DBs that were created at v34 via _onCreate
+    // without running older migrations (v25–v33). Add all columns that may be missing.
+    if (oldVersion < 35) {
+      final irInfo = await db.rawQuery('PRAGMA table_info(inbound_receipts)');
+      final irColumns = <String, String>{
+        'warehouse_id': 'INTEGER',
+        'source_warehouse_id': 'INTEGER',
+        'movement_type_code': 'TEXT',
+        'je_vysporiadana': 'INTEGER NOT NULL DEFAULT 0',
+        'linked_stock_out_id': 'INTEGER',
+        'cost_distribution_method': 'TEXT',
+        'submitted_at': 'TEXT',
+        'approved_at': 'TEXT',
+        'approver_username': 'TEXT',
+        'approver_note': 'TEXT',
+        'rejected_at': 'TEXT',
+        'rejection_reason': 'TEXT',
+        'reversed_at': 'TEXT',
+        'reversed_by_username': 'TEXT',
+        'reverse_reason': 'TEXT',
+        'stock_applied': 'INTEGER NOT NULL DEFAULT 0',
+        'supplier_id': 'INTEGER',
+        'supplier_ico': 'TEXT',
+        'supplier_dic': 'TEXT',
+        'supplier_address': 'TEXT',
+        'delivery_note_number': 'TEXT',
+        'po_number': 'TEXT',
+        'user_id': 'TEXT',
+      };
+      for (final entry in irColumns.entries) {
+        if (!irInfo.any((c) => c['name'] == entry.key)) {
+          await db.execute('ALTER TABLE inbound_receipts ADD COLUMN ${entry.key} ${entry.value}');
+        }
+      }
+
+      final iriInfo = await db.rawQuery('PRAGMA table_info(inbound_receipt_items)');
+      for (final col in ['batch_number', 'expiry_date', 'total_price', 'vat_rate', 'user_id']) {
+        if (!iriInfo.any((c) => c['name'] == col)) {
+          final def = col == 'user_id' ? 'TEXT' : (col == 'total_price' || col == 'vat_rate' ? 'REAL' : 'TEXT');
+          await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN $col $def');
+        }
+      }
+
+      final soInfo = await db.rawQuery('PRAGMA table_info(stock_outs)');
+      final soColumns = <String, String>{
+        'warehouse_id': 'INTEGER',
+        'je_vysporiadana': 'INTEGER NOT NULL DEFAULT 0',
+        'vat_rate': 'INTEGER',
+        'issue_type': "TEXT NOT NULL DEFAULT 'SALE'",
+        'write_off_reason': 'TEXT',
+        'submitted_at': 'TEXT',
+        'approved_at': 'TEXT',
+        'approver_username': 'TEXT',
+        'approver_note': 'TEXT',
+        'rejected_at': 'TEXT',
+        'rejection_reason': 'TEXT',
+        'customer_id': 'INTEGER',
+        'recipient_ico': 'TEXT',
+        'recipient_dic': 'TEXT',
+        'recipient_address': 'TEXT',
+        'user_id': 'TEXT',
+      };
+      for (final entry in soColumns.entries) {
+        if (!soInfo.any((c) => c['name'] == entry.key)) {
+          await db.execute('ALTER TABLE stock_outs ADD COLUMN ${entry.key} ${entry.value}');
+        }
+      }
+
+      final soiInfo = await db.rawQuery('PRAGMA table_info(stock_out_items)');
+      for (final col in ['batch_number', 'expiry_date', 'user_id']) {
+        if (!soiInfo.any((c) => c['name'] == col)) {
+          await db.execute('ALTER TABLE stock_out_items ADD COLUMN $col TEXT');
+        }
       }
     }
 

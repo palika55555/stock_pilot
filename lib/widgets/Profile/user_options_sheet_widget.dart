@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/user.dart';
+import '../../services/user_session.dart';
 import '../../screens/profile/profile_page.dart';
-import '../../screens/login/login_page.dart';
 import '../../services/logout_service.dart';
 import '../../screens/Settings/settings_page.dart';
 import '../Notifications/notifications_sheet_widget.dart';
@@ -81,6 +81,20 @@ class UserOptionsSheet extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 4),
+                              if (UserSession.ownerDisplayName != null &&
+                                  UserSession.ownerDisplayName!.isNotEmpty &&
+                                  currentRole == 'user')
+                                Text(
+                                  'Nadriadený: ${UserSession.ownerDisplayName}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              if (UserSession.ownerDisplayName != null &&
+                                  UserSession.ownerDisplayName!.isNotEmpty &&
+                                  currentRole == 'user')
+                                const SizedBox(height: 4),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,

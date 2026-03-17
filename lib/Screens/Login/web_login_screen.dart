@@ -92,6 +92,9 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         userId: backendUserId,
         username: createdUser.username,
         role: createdUser.role,
+        // Pri čisto web logine nemáme nadriadeného – sub-user sa vytvára cez admina na webe.
+        ownerFullName: backendResult.ownerFullName,
+        ownerUsername: backendResult.ownerUsername,
       );
 
       if (!mounted) return;

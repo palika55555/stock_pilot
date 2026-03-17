@@ -50,11 +50,19 @@ class BackendLoginResult {
   final String? userId;
   final Map<String, dynamic>? userProfile;
 
+  /// Nadriadený (owner) – ak je prihlásený sub-user.
+  final String? ownerId;
+  final String? ownerUsername;
+  final String? ownerFullName;
+
   BackendLoginResult({
     required this.accessToken,
     required this.refreshToken,
     this.userId,
     this.userProfile,
+    this.ownerId,
+    this.ownerUsername,
+    this.ownerFullName,
   });
 }
 
@@ -134,7 +142,8 @@ Future<String?> refreshAccessToken() async {
 }
 
 /// Pošle používateľa (vrátane hesla) do backendu, aby prihlásenie na stockpilot.sk fungovalo rovnako.
-/// Volaj po úspešnom lokálnom prihlásení. Počkaj na dokončenie, aby backend login potom našiel toho istého používateľa.
+/// Ak je aktuálne prihlásený admin a pridáva kolegu (role=user), posielame token – backend nastaví owner_id,
+/// takže kolega sa zobrazí v "Moji kolegovia" na webe.
 Future<void> syncUserToBackend(User user) async {
   try {
     final uri = Uri.parse('$_apiBase/auth/sync-user');
@@ -148,12 +157,13 @@ Future<void> syncUserToBackend(User user) async {
       'department': user.department,
       'avatar_url': user.avatarUrl,
     });
+    final token = getBackendToken();
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': _bearer(token),
+    };
     await http
-        .post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: body,
-        )
+        .post(uri, headers: headers, body: body)
         .timeout(const Duration(seconds: 8));
   } catch (_) {
     // offline alebo chyba – ďalej skúsime backend login (môže ísť ak bol user syncnutý skôr)
@@ -283,12 +293,21 @@ Future<BackendLoginResult?> fetchBackendToken(
     final access = map?['accessToken'] as String?;
     final refresh = map?['refreshToken'] as String?;
     String? userId;
+    String? ownerId;
+    String? ownerUsername;
+    String? ownerFullName;
     final user = map?['user'];
     if (user is Map<String, dynamic>) {
       final rawId = user['id'];
       if (rawId != null) {
         userId = rawId.toString();
       }
+      final rawOwnerId = user['ownerId'];
+      if (rawOwnerId != null) {
+        ownerId = rawOwnerId.toString();
+      }
+      ownerUsername = user['ownerUsername']?.toString();
+      ownerFullName = user['ownerFullName']?.toString();
     }
     print('DEBUG login userId: ${map?['user']?['id']}');
     print('DEBUG login accessToken decoded: ${_decodeJwt(access)}');
@@ -312,6 +331,9 @@ Future<BackendLoginResult?> fetchBackendToken(
         refreshToken: refresh,
         userId: userId,
         userProfile: user is Map<String, dynamic> ? Map<String, dynamic>.from(user) : null,
+        ownerId: ownerId,
+        ownerUsername: ownerUsername,
+        ownerFullName: ownerFullName,
       );
     }
     print('DEBUG backend login: missing access/refresh token in response');

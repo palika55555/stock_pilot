@@ -183,7 +183,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             setState(() => _isLoading = false);
             return;
           }
-          _finishLogin(user, backendUserId: backendResult.userId);
+          _finishLogin(
+            user,
+            backendUserId: backendResult.userId,
+            ownerFullName: backendResult.ownerFullName,
+            ownerUsername: backendResult.ownerUsername,
+          );
           return;
         }
         if (mounted) setState(() => _isLoading = false);
@@ -209,16 +214,28 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       final backendResult = await fetchBackendToken(username, password, rememberMe: _rememberMe);
       if (!mounted) return;
 
-      _finishLogin(user, backendUserId: backendResult?.userId);
+      _finishLogin(
+        user,
+        backendUserId: backendResult?.userId,
+        ownerFullName: backendResult?.ownerFullName,
+        ownerUsername: backendResult?.ownerUsername,
+      );
     }
   }
 
-  void _finishLogin(User user, {String? backendUserId}) {
+  void _finishLogin(
+    User user, {
+    String? backendUserId,
+    String? ownerFullName,
+    String? ownerUsername,
+  }) {
     final userId = backendUserId ?? user.id?.toString() ?? user.username;
     UserSession.setUser(
       userId: userId,
       username: user.username,
       role: user.role,
+      ownerFullName: ownerFullName,
+      ownerUsername: ownerUsername,
     );
     if (mounted) setState(() => _isLoading = false);
     if (!mounted) return;

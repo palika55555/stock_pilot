@@ -1,10 +1,20 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:stock_pilot/models/supplier.dart';
 import 'package:stock_pilot/services/supplier/supplier_service.dart';
 import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/suppliers/add_supplier_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
+
+enum _SupplierSort {
+  nameAsc,
+  nameDesc,
+  icoAsc,
+  cityAsc,
+  activeFirst,
+  inactiveFirst,
+}
 
 class SuppliersPage extends StatefulWidget {
   const SuppliersPage({super.key});
@@ -22,6 +32,7 @@ class _SuppliersPageState extends State<SuppliersPage>
   List<Supplier> _filteredSuppliers = [];
   bool _loading = true;
   int _statusFilter = 0; // 0 = všetci, 1 = aktívni, 2 = neaktívni
+  _SupplierSort _sortOrder = _SupplierSort.nameAsc;
 
   late final AnimationController _listController = AnimationController(
     duration: const Duration(milliseconds: 600),
@@ -63,7 +74,33 @@ class _SuppliersPageState extends State<SuppliersPage>
           )
           .toList();
     }
+    list = _applySort(list);
     _filteredSuppliers = list;
+  }
+
+  List<Supplier> _applySort(List<Supplier> list) {
+    final sorted = List<Supplier>.from(list);
+    switch (_sortOrder) {
+      case _SupplierSort.nameAsc:
+        sorted.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+      case _SupplierSort.nameDesc:
+        sorted.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        break;
+      case _SupplierSort.icoAsc:
+        sorted.sort((a, b) => a.ico.compareTo(b.ico));
+        break;
+      case _SupplierSort.cityAsc:
+        sorted.sort((a, b) => (a.city ?? '').toLowerCase().compareTo((b.city ?? '').toLowerCase()));
+        break;
+      case _SupplierSort.activeFirst:
+        sorted.sort((a, b) => (b.isActive ? 1 : 0).compareTo(a.isActive ? 1 : 0));
+        break;
+      case _SupplierSort.inactiveFirst:
+        sorted.sort((a, b) => (a.isActive ? 1 : 0).compareTo(b.isActive ? 1 : 0));
+        break;
+    }
+    return sorted;
   }
 
   Future<void> _loadSuppliers() async {
@@ -190,7 +227,7 @@ class _SuppliersPageState extends State<SuppliersPage>
                   message: 'Filtre a nastavenia',
                   child: IconButton(
                     icon: Icon(Icons.tune_rounded, color: AppColors.textPrimary),
-                    onPressed: () {},
+                    onPressed: _showFilterAndSortOptions,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -344,6 +381,135 @@ class _SuppliersPageState extends State<SuppliersPage>
     });
   }
 
+  void _setSortOrder(_SupplierSort order) {
+    setState(() {
+      _sortOrder = order;
+      _filterSuppliers();
+    });
+  }
+
+  void _showFilterAndSortOptions() {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.textMuted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Filtre a zoradenie',
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Zobraziť',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetChip(
+                      label: l10n.all,
+                      selected: _statusFilter == 0,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _setStatus(0);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SheetChip(
+                      label: l10n.allActive,
+                      selected: _statusFilter == 1,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _setStatus(1);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SheetChip(
+                      label: l10n.allInactive,
+                      selected: _statusFilter == 2,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _setStatus(2);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Zoradiť podľa',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ..._SupplierSort.values.map((order) => _SortTile(
+                    sort: order,
+                    selected: _sortOrder == order,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _setSortOrder(order);
+                    },
+                  )),
+              if (_searchController.text.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                const Divider(color: AppColors.borderSubtle),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _searchController.clear();
+                    setState(() => _filterSuppliers());
+                  },
+                  icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 20),
+                  label: const Text(
+                    'Vymazať vyhľadávanie',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(AppLocalizations l10n) {
     final isSearchOrFilter = _searchController.text.isNotEmpty || _statusFilter != 0;
     return Center(
@@ -469,7 +635,7 @@ class _SupplierCard extends StatelessWidget {
           end: Offset.zero,
         ).animate(animation),
         child: Tooltip(
-          message: l10n.edit,
+          message: 'Skopírovať IČO',
           preferBelow: false,
           child: Container(
             margin: const EdgeInsets.only(bottom: 16),
@@ -478,7 +644,17 @@ class _SupplierCard extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: onEdit,
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: s.ico));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('IČO ${s.ico} skopírované'),
+                      backgroundColor: AppColors.bgElevated,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
                 splashColor: AppColors.accentGold.withOpacity(0.15),
                 highlightColor: AppColors.accentGold.withOpacity(0.08),
                 child: Padding(
@@ -726,6 +902,110 @@ class _FilterChip extends StatelessWidget {
             fontSize: 13,
             fontWeight: FontWeight.bold,
             color: selected ? AppColors.bgPrimary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SheetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accentGold : AppColors.bgInput,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.accentGold : AppColors.borderDefault,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? AppColors.bgPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SortTile extends StatelessWidget {
+  final _SupplierSort sort;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SortTile({
+    required this.sort,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static String _label(_SupplierSort s) {
+    switch (s) {
+      case _SupplierSort.nameAsc:
+        return 'Názov (A → Z)';
+      case _SupplierSort.nameDesc:
+        return 'Názov (Z → A)';
+      case _SupplierSort.icoAsc:
+        return 'IČO';
+      case _SupplierSort.cityAsc:
+        return 'Mesto';
+      case _SupplierSort.activeFirst:
+        return 'Aktívni prví';
+      case _SupplierSort.inactiveFirst:
+        return 'Neaktívni prví';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                size: 22,
+                color: selected ? AppColors.accentGold : AppColors.textMuted,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                _label(sort),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ),

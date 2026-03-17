@@ -226,6 +226,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     });
   }
   try {
+    let ownerInfo = null;
     const {
       rows: [user],
     } = await pool.query(
@@ -269,7 +270,7 @@ apiRouter.post('/auth/login', async (req, res) => {
       // Sub-user: skontroluj web_access a tier_valid_until jeho admina (owner)
       if (user.owner_id) {
         const { rows: [owner] } = await pool.query(
-          'SELECT web_access, tier_valid_until FROM users WHERE id = $1',
+          'SELECT id, username, full_name, web_access, tier_valid_until FROM users WHERE id = $1',
           [user.owner_id]
         );
         if (!owner || !owner.web_access) {
@@ -289,6 +290,12 @@ apiRouter.post('/auth/login', async (req, res) => {
             });
           }
         }
+        // Informácie o nadriadenom – použijeme v odpovedi /auth/login pre zobrazenie v apke.
+        ownerInfo = {
+          id: owner.id,
+          username: owner.username,
+          fullName: owner.full_name || owner.username,
+        };
       }
     }
     const tokens = signTokens(
@@ -307,6 +314,9 @@ apiRouter.post('/auth/login', async (req, res) => {
         fullName: user.full_name || user.username,
         role: user.role || 'user',
         email: user.email || '',
+        ownerId: ownerInfo ? ownerInfo.id : null,
+        ownerUsername: ownerInfo ? ownerInfo.username : null,
+        ownerFullName: ownerInfo ? ownerInfo.fullName : null,
       },
     });
   } catch (err) {
@@ -357,16 +367,26 @@ apiRouter.post('/auth/refresh', async (req, res) => {
 });
 
 // --- Sync používateľa z Flutter (SQLite) do PostgreSQL – služba v DBsync/sync ---
+// Ak Flutter pošle Authorization (admin token) a synced user má role=user, nastaví sa owner_id → zobrazí sa v "Moji kolegovia".
 apiRouter.post('/auth/sync-user', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncUser(pool, req.body);
+  let ownerId = null;
+  const authHeader = req.headers['authorization'];
+  if (authHeader && typeof authHeader === 'string' && authHeader.trim().startsWith('Bearer ')) {
+    const token = authHeader.trim().slice(7).trim();
+    const decoded = verifyAccessToken(token);
+    if (decoded && decoded.userId && (decoded.role === 'admin' || decoded.role === 'db_owner')) {
+      ownerId = decoded.userId;
+    }
+  }
+  const result = await syncUser(pool, req.body, ownerId);
   if (!result.ok) {
     const status = result.error === 'username je povinný' ? 400 : 500;
     return res.status(status).json({ success: false, error: result.error || 'Chyba servera' });
   }
-  console.log('[auth] Sync user OK:', req.body?.username);
+  console.log('[auth] Sync user OK:', req.body?.username, ownerId ? `(owner_id=${ownerId})` : '');
   res.status(200).json({ success: true, message: 'Používateľ zosynchronizovaný' });
 });
 
