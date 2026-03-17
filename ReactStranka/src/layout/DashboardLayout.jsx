@@ -15,8 +15,9 @@ const NAV_ITEMS_USER = [
   { path: '/dashboard/production/new', label: 'Príjemky', icon: '📥' },
 ]
 
+// Admin (a db_owner) vidí všetky moduly + extra sekciu Používatelia
 const NAV_ITEMS_ADMIN = [
-  { path: '/dashboard', label: 'Prehľad', icon: '◉' },
+  ...NAV_ITEMS_USER,
   { path: '/dashboard/users', label: 'Používatelia', icon: '👤' },
 ]
 
