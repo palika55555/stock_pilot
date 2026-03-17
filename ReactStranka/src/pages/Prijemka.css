@@ -1,279 +1,293 @@
 /* ═══════════════════════════════════════════════════════════════
-   Prijemka.css — Receipt document  |  Light theme, print-ready
-   Fonts: DM Serif Display (headings), DM Mono (numbers), Outfit (body)
+   Prijemka.css — Receipt document
+   Fonts: DM Serif Display · DM Mono · Outfit
+   Theme: Light, print-ready
    ═══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:ital,wght@0,400;0,500&family=Outfit:wght@300;400;500;600&display=swap');
 
 /* ── Design tokens ───────────────────────────────────────────── */
-.prij-root {
-  --prij-font-body:    'Outfit', sans-serif;
-  --prij-font-serif:   'DM Serif Display', serif;
-  --prij-font-mono:    'DM Mono', monospace;
 
-  --prij-bg:           #F7F7F5;
-  --prij-doc-bg:       #FFFFFF;
-  --prij-border:       #E4E4DC;
-  --prij-border-thick: #CACAC0;
+:root {
+  --prij-font-body:   'Outfit', system-ui, sans-serif;
+  --prij-font-serif:  'DM Serif Display', Georgia, serif;
+  --prij-font-mono:   'DM Mono', 'Cascadia Code', monospace;
 
-  --prij-text:         #1A1A18;
-  --prij-text-mid:     #4A4A42;
-  --prij-text-muted:   #9A9A8E;
-  --prij-text-label:   #6B6B60;
+  /* colours */
+  --prij-page-bg:     #F5F5F3;
+  --prij-card-bg:     #FFFFFF;
+  --prij-border:      #E5E7EB;          /* gray-200 */
+  --prij-border-mid:  #D1D5DB;          /* gray-300 */
+  --prij-row-stripe:  #FAFAF8;
 
-  --prij-accent:       #1A6B3C;
-  --prij-accent-light: #EAF5EE;
-  --prij-accent-mid:   #2D9C5A;
+  --prij-text-900:    #111827;          /* main headings */
+  --prij-text-700:    #374151;          /* body */
+  --prij-text-500:    #6B7280;          /* secondary */
+  --prij-text-400:    #9CA3AF;          /* labels / muted */
 
-  --prij-gold:         #A07C30;
-  --prij-gold-light:   #FBF4E4;
+  /* pill colours */
+  --prij-green:       #16A34A;
+  --prij-green-bg:    #DCFCE7;
+  --prij-blue:        #1D4ED8;
+  --prij-blue-bg:     #DBEAFE;
+  --prij-amber:       #92400E;
+  --prij-amber-bg:    #FEF3C7;
+  --prij-red:         #B91C1C;
+  --prij-red-bg:      #FEE2E2;
+  --prij-gray:        #4B5563;
+  --prij-gray-bg:     #F3F4F6;
 
-  --prij-red:          #B91C1C;
-  --prij-red-light:    #FEF2F2;
+  /* radius */
+  --r-card:   12px;
+  --r-inner:   8px;
+  --r-pill:   99px;
 
-  --prij-blue:         #1D4ED8;
-  --prij-blue-light:   #EFF6FF;
-
-  --prij-slate:        #475569;
-  --prij-slate-light:  #F1F5F9;
-
-  --prij-row-even:     #FAFAF8;
-  --prij-row-odd:      #FFFFFF;
-
-  --prij-radius-sm:    4px;
-  --prij-radius:       8px;
-  --prij-radius-lg:    12px;
-
-  --prij-shadow-doc:   0 2px 24px 0 rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
-
-  font-family: var(--prij-font-body);
-  background: var(--prij-bg);
-  min-height: 100vh;
-  color: var(--prij-text);
+  /* spacing */
+  --px:       32px;    /* horizontal section padding */
 }
 
-/* ── Root wrapper ────────────────────────────────────────────── */
-.prij-root {
-  padding: 24px 16px 64px;
+/* ── Page shell ──────────────────────────────────────────────── */
+
+.prij-page {
+  font-family: var(--prij-font-body);
+  background: var(--prij-page-bg);
+  min-height: 100vh;
+  padding: 24px 16px 72px;
+  color: var(--prij-text-700);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
 /* ── Toolbar (screen only) ───────────────────────────────────── */
+
 .prij-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 940px;
+  max-width: 900px;
   margin: 0 auto 20px;
   gap: 12px;
 }
 
-.prij-toolbar-right {
-  display: flex;
-  gap: 10px;
-}
-
-/* ── Buttons ─────────────────────────────────────────────────── */
 .prij-btn {
   font-family: var(--prij-font-body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   border: none;
-  border-radius: var(--prij-radius-sm);
-  padding: 8px 16px;
+  border-radius: 6px;
+  padding: 8px 18px;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  line-height: 1;
+  transition: opacity .15s;
+  line-height: 1.2;
 }
-
-.prij-btn-ghost {
+.prij-btn--ghost {
   background: transparent;
-  color: var(--prij-text-mid);
+  color: var(--prij-text-500);
   border: 1px solid var(--prij-border);
 }
-.prij-btn-ghost:hover { background: var(--prij-border); }
-
-.prij-btn-secondary {
-  background: var(--prij-text);
+.prij-btn--ghost:hover { background: var(--prij-border); }
+.prij-btn--dark {
+  background: var(--prij-text-900);
   color: #fff;
 }
-.prij-btn-secondary:hover { opacity: 0.85; }
+.prij-btn--dark:hover { opacity: .85; }
 
 /* ── Document card ───────────────────────────────────────────── */
+
 .prij-doc {
-  max-width: 940px;
+  max-width: 900px;
   margin: 0 auto;
-  background: var(--prij-doc-bg);
-  border-radius: var(--prij-radius-lg);
-  box-shadow: var(--prij-shadow-doc);
-  padding: 48px 56px;
-  position: relative;
+  background: var(--prij-card-bg);
+  border-radius: var(--r-card);
+  box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
   overflow: hidden;
 }
 
-/* subtle watermark stripe on left edge */
-.prij-doc::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 5px; height: 100%;
-  background: var(--prij-accent);
-  border-radius: var(--prij-radius-lg) 0 0 var(--prij-radius-lg);
+/* shared section padding */
+.prij-doc > * {
+  padding-left: var(--px);
+  padding-right: var(--px);
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
+/* ── 1. HEADER ───────────────────────────────────────────────── */
+
 .prij-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  gap: 24px;
+  gap: 20px;
+  padding-top: 36px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--prij-border);
 }
 
-.prij-doc-type {
-  font-family: var(--prij-font-body);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--prij-accent);
-  margin-bottom: 6px;
-}
-
-.prij-doc-number {
-  font-family: var(--prij-font-serif);
-  font-size: 36px;
-  color: var(--prij-text);
-  line-height: 1;
-  margin-bottom: 10px;
-}
-
-.prij-movement-badge {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--prij-slate);
-  background: var(--prij-slate-light);
-  border: 1px solid #CBD5E1;
-  border-radius: 100px;
-  padding: 3px 10px;
-}
-
-.prij-header-right {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.prij-company-name {
-  font-family: var(--prij-font-serif);
-  font-size: 20px;
-  color: var(--prij-text);
-}
-
-.prij-company-sub {
-  font-size: 12px;
-  color: var(--prij-text-muted);
-  margin-top: 2px;
-}
-
-/* ── Status badge ────────────────────────────────────────────── */
-.prij-status-badge {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  border-radius: 100px;
-  padding: 5px 14px;
-}
-
-.prij-status-draft     { background: var(--prij-slate-light); color: var(--prij-slate); }
-.prij-status-pending   { background: var(--prij-gold-light);  color: var(--prij-gold);  }
-.prij-status-approved  { background: var(--prij-accent-light); color: var(--prij-accent); }
-.prij-status-rejected  { background: var(--prij-red-light);   color: var(--prij-red);   }
-.prij-status-cancelled { background: var(--prij-red-light);   color: var(--prij-red);   }
-
-/* ── Divider ─────────────────────────────────────────────────── */
-.prij-divider {
-  border: none;
-  border-top: 1px solid var(--prij-border);
-  margin: 28px 0;
-}
-.prij-divider-thick {
-  border-top-width: 2px;
-  border-top-color: var(--prij-border-thick);
-}
-
-/* ── Meta row ────────────────────────────────────────────────── */
-.prij-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px 40px;
-}
-
-.prij-meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 120px;
-}
-
-.prij-meta-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--prij-text-muted);
-}
-
-.prij-meta-value {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--prij-text);
-}
-
-/* ── Parties ─────────────────────────────────────────────────── */
-.prij-parties {
-  display: flex;
-  gap: 16px;
-  align-items: stretch;
-}
-
-.prij-party-card {
-  flex: 1;
-  background: var(--prij-row-even);
-  border: 1px solid var(--prij-border);
-  border-radius: var(--prij-radius);
-  padding: 20px 24px;
-}
-
-.prij-party-right {
-  border-left: 3px solid var(--prij-accent-light);
-}
-
-.prij-parties-arrow {
+/* Logo placeholder — 56×56 dashed box */
+.prij-logo-box {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border: 1.5px dashed var(--prij-border-mid);
+  border-radius: var(--r-inner);
   display: flex;
   align-items: center;
-  font-size: 22px;
-  color: var(--prij-accent-mid);
-  padding: 0 4px;
+  justify-content: center;
+  color: var(--prij-text-400);
+  font-size: 11px;
+}
+
+/* Title block */
+.prij-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.prij-title {
+  font-family: var(--prij-font-serif);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--prij-text-900);
+  margin: 0 0 4px;
+  line-height: 1.15;
+}
+
+.prij-subtitle {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--prij-text-400);
+  margin: 0;
+}
+
+/* Meta block */
+.prij-header-meta {
+  text-align: right;
   flex-shrink: 0;
 }
 
-.prij-party-role {
+.prij-doc-number {
+  font-family: var(--prij-font-mono);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--prij-text-900);
+  letter-spacing: .02em;
+}
+
+.prij-header-date {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--prij-text-400);
+  margin-top: 4px;
+}
+
+/* ── 2. STATUS BAR ───────────────────────────────────────────── */
+
+.prij-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #F9FAFB;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--prij-border);
+}
+
+.prij-status-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prij-status-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--prij-border);
+  margin: 0 20px;
+  flex-shrink: 0;
+}
+
+.prij-status-chips {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.prij-chip {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--prij-text-500);
+  background: var(--prij-card-bg);
+  border: 1px solid var(--prij-border);
+  border-radius: var(--r-pill);
+  padding: 3px 12px;
+}
+
+.prij-chip strong {
+  font-weight: 500;
+  color: var(--prij-text-700);
+}
+
+/* Pills */
+.prij-pill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  border-radius: var(--r-pill);
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+
+.prij-pill--sm {
   font-size: 11px;
+  padding: 2px 8px;
+}
+
+.prij-pill--green  { background: var(--prij-green-bg);  color: var(--prij-green); }
+.prij-pill--blue   { background: var(--prij-blue-bg);   color: var(--prij-blue);  }
+.prij-pill--amber  { background: var(--prij-amber-bg);  color: var(--prij-amber); }
+.prij-pill--red    { background: var(--prij-red-bg);    color: var(--prij-red);   }
+.prij-pill--gray   { background: var(--prij-gray-bg);   color: var(--prij-gray);  }
+
+/* ── 3. PARTIES ──────────────────────────────────────────────── */
+
+.prij-parties {
+  display: flex;
+  gap: 0;
+  padding-top: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--prij-border);
+}
+
+.prij-party {
+  flex: 1;
+  min-width: 0;
+}
+
+.prij-party--right {
+  padding-left: 28px;
+}
+
+.prij-party-divider {
+  width: 1px;
+  background: var(--prij-border);
+  flex-shrink: 0;
+  margin: 0 0 0 0;
+  align-self: stretch;
+}
+
+/* Section label — uppercase 10px */
+.prij-section-label {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--prij-accent);
-  margin-bottom: 6px;
+  color: var(--prij-text-400);
+  margin-bottom: 8px;
 }
 
 .prij-party-name {
   font-family: var(--prij-font-serif);
-  font-size: 18px;
-  color: var(--prij-text);
+  font-size: 17px;
+  color: var(--prij-text-900);
   margin-bottom: 8px;
 }
 
@@ -286,160 +300,122 @@
 
 .prij-party-id {
   font-size: 13px;
-  color: var(--prij-text-mid);
-}
-
-.prij-party-id strong {
-  font-family: var(--prij-font-mono);
-  font-weight: 500;
+  color: var(--prij-text-500);
+  font-weight: 400;
 }
 
 .prij-party-address {
   font-size: 13px;
-  color: var(--prij-text-muted);
+  font-weight: 300;
+  color: var(--prij-text-400);
+  line-height: 1.55;
   margin-top: 4px;
-  line-height: 1.5;
 }
 
-/* ── Section title ───────────────────────────────────────────── */
-.prij-section-title {
-  font-family: var(--prij-font-body);
-  font-size: 11px;
+.prij-party-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--prij-text-500);
+  margin-top: 6px;
+}
+
+.prij-label-tiny {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .09em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--prij-text-muted);
-  margin: 0 0 14px;
+  color: var(--prij-text-400);
 }
 
-/* ── Items table ─────────────────────────────────────────────── */
+/* ── 4. ITEMS TABLE ──────────────────────────────────────────── */
+
 .prij-table-section {
+  padding-top: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--prij-border);
+}
+
+.prij-section-header {
+  margin-bottom: 14px;
+}
+
+.prij-section-title {
+  font-family: var(--prij-font-serif);
+  font-size: 15px;
+  color: var(--prij-text-900);
+  font-weight: 400;
+}
+
+.prij-table-wrap {
   overflow-x: auto;
 }
 
 .prij-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
 }
 
+/* Header row */
 .prij-th {
-  font-family: var(--prij-font-body);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .06em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--prij-text-label);
-  background: var(--prij-row-even);
-  border-top: 1px solid var(--prij-border);
-  border-bottom: 2px solid var(--prij-border-thick);
-  padding: 10px 12px;
-  white-space: nowrap;
+  color: var(--prij-text-400);
+  padding: 9px 10px;
   text-align: left;
+  border-bottom: 2px solid var(--prij-border);
+  white-space: nowrap;
+  background: transparent;
 }
 
-.prij-th-num    { width: 36px; text-align: center; }
-.prij-th-center { text-align: center; }
-.prij-th-right  { text-align: right; }
+.prij-th--qty, .prij-th--price, .prij-th--total { text-align: right; }
+.prij-th--unit, .prij-th--vat { text-align: center; }
 
+/* Body cells */
 .prij-td {
-  padding: 11px 12px;
+  padding: 11px 10px;
   border-bottom: 1px solid var(--prij-border);
   vertical-align: middle;
-  color: var(--prij-text);
+  color: var(--prij-text-700);
 }
 
-.prij-tr-even { background: var(--prij-row-even); }
-.prij-tr-odd  { background: var(--prij-row-odd); }
-
-.prij-td-num    { text-align: center; color: var(--prij-text-muted); font-size: 12px; }
-.prij-td-center { text-align: center; }
-.prij-td-right  { text-align: right; }
-
-.prij-td-name {
-  max-width: 220px;
+.prij-tr:hover .prij-td {
+  background: var(--prij-row-stripe);
 }
 
-.prij-item-name {
-  display: block;
-  font-weight: 500;
-}
+.prij-td--qty, .prij-td--price, .prij-td--total { text-align: right; }
+.prij-td--unit, .prij-td--vat { text-align: center; }
 
-.prij-item-sku {
-  display: block;
-  font-family: var(--prij-font-mono);
-  font-size: 11px;
-  color: var(--prij-text-muted);
-  margin-top: 2px;
-}
-
-.prij-td-empty {
+.prij-td--empty {
   text-align: center;
-  color: var(--prij-text-muted);
-  padding: 32px;
+  color: var(--prij-text-400);
   font-style: italic;
+  padding: 32px;
 }
 
-/* ── Inline badges ───────────────────────────────────────────── */
-.prij-badge {
-  display: inline-block;
-  font-family: var(--prij-font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  border-radius: var(--prij-radius-sm);
-  padding: 2px 7px;
-  white-space: nowrap;
+.prij-plu {
+  font-size: 12px;
+  color: var(--prij-text-400);
 }
 
-.prij-badge-batch {
-  background: var(--prij-blue-light);
-  color: var(--prij-blue);
-  border: 1px solid #BFDBFE;
-}
+/* ── 5. BOTTOM ROW ───────────────────────────────────────────── */
 
-.prij-badge-exp {
-  background: var(--prij-gold-light);
-  color: var(--prij-gold);
-  border: 1px solid #FDE68A;
-}
-
-.prij-vat-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  background: var(--prij-accent-light);
-  color: var(--prij-accent);
-  border-radius: var(--prij-radius-sm);
-  padding: 2px 7px;
-}
-
-.prij-muted    { color: var(--prij-text-muted); }
-.prij-bold     { font-weight: 600; }
-.prij-mono     { font-family: var(--prij-font-mono); }
-.prij-vat-col  { color: var(--prij-text-mid); }
-
-/* ── Totals + VAT breakdown ──────────────────────────────────── */
-.prij-totals-section {
+.prij-bottom-row {
   display: flex;
-  align-items: flex-start;
   gap: 40px;
-  justify-content: space-between;
+  align-items: flex-start;
+  padding-top: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--prij-border);
 }
 
-/* VAT breakdown table */
-.prij-vat-breakdown {
+/* VAT recap */
+.prij-vat-recap {
   flex: 1;
-  max-width: 480px;
-}
-
-.prij-breakdown-title {
-  font-family: var(--prij-font-body);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--prij-text-muted);
-  margin: 0 0 10px;
+  max-width: 440px;
 }
 
 .prij-vat-table {
@@ -449,197 +425,161 @@
 }
 
 .prij-vth {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .06em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--prij-text-label);
-  padding: 7px 10px;
-  border-bottom: 2px solid var(--prij-border-thick);
+  color: var(--prij-text-400);
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--prij-border-mid);
   text-align: left;
 }
-
-.prij-vth-right { text-align: right; }
+.prij-vth--right { text-align: right; }
 
 .prij-vtd {
-  padding: 8px 10px;
+  padding: 8px 8px;
   border-bottom: 1px solid var(--prij-border);
+  font-size: 13px;
   vertical-align: middle;
+  color: var(--prij-text-700);
 }
-
-.prij-vtd-right { text-align: right; }
-
-.prij-vat-total-row .prij-vtd {
-  background: var(--prij-row-even);
-  border-top: 2px solid var(--prij-border-thick);
-  border-bottom: none;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
+.prij-vtd--right { text-align: right; }
 
 /* Grand total box */
-.prij-grand-total {
-  background: var(--prij-text);
-  color: #fff;
-  border-radius: var(--prij-radius);
-  padding: 24px 32px;
+.prij-grand-box {
+  background: #F3F4F6;
+  border-radius: var(--r-inner);
+  padding: 24px 28px;
   text-align: right;
-  min-width: 220px;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  align-self: flex-start;
 }
 
 .prij-grand-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--prij-text-400);
 }
 
-.prij-grand-value {
+.prij-grand-amount {
   font-family: var(--prij-font-serif);
-  font-size: 32px;
-  line-height: 1;
-  color: #fff;
+  font-size: 28px;
+  color: var(--prij-text-900);
+  line-height: 1.1;
 }
 
-.prij-grand-sub {
+.prij-grand-note {
   font-size: 11px;
-  opacity: 0.5;
+  font-weight: 300;
+  color: var(--prij-text-400);
 }
 
-/* ── Note ────────────────────────────────────────────────────── */
-.prij-note-section {
-  background: #FFFDF0;
-  border: 1px solid #FDE68A;
-  border-radius: var(--prij-radius-sm);
-  padding: 12px 16px;
-  font-size: 13px;
-  line-height: 1.6;
+/* ── 6. FOOTER — signatures ──────────────────────────────────── */
+
+.prij-footer {
   display: flex;
-  gap: 8px;
+  gap: 0;
+  padding-top: 28px;
+  padding-bottom: 36px;
 }
 
-.prij-note-label {
-  font-weight: 600;
-  color: var(--prij-gold);
-  white-space: nowrap;
-}
-
-.prij-note-text { color: var(--prij-text-mid); }
-
-/* ── Signature footer ────────────────────────────────────────── */
-.prij-sig-footer {
-  display: flex;
-  gap: 32px;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-
-.prij-sig-block {
+.prij-sig-col {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  gap: 7px;
+  padding: 0 20px;
+  text-align: center;
+}
+
+.prij-footer-divider {
+  width: 1px;
+  background: var(--prij-border);
+  align-self: stretch;
+  flex-shrink: 0;
 }
 
 .prij-sig-line {
   width: 100%;
   height: 1px;
-  background: var(--prij-border-thick);
+  background: var(--prij-border-mid);
   margin-bottom: 4px;
 }
 
-.prij-sig-label {
-  font-size: 11px;
+.prij-sig-role {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--prij-text-muted);
-  text-align: center;
+  color: var(--prij-text-400);
 }
 
 .prij-sig-name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--prij-text);
-  text-align: center;
+  color: var(--prij-text-700);
 }
 
 .prij-sig-date {
   font-family: var(--prij-font-mono);
-  font-size: 11px;
-  color: var(--prij-text-muted);
-  text-align: center;
+  font-size: 12px;
+  color: var(--prij-text-400);
+  font-weight: 400;
 }
 
-/* Stamp block */
-.prij-stamp-block {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.prij-placeholder {
+  color: var(--prij-text-400);
+  font-style: italic;
+  font-weight: 300;
 }
 
-.prij-stamp-inner {
-  width: 96px;
-  height: 96px;
-  border: 2px dashed var(--prij-border-thick);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Stamp column */
+.prij-sig-col--stamp {
+  padding-top: 0;
 }
 
-.prij-stamp-text {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--prij-text-muted);
+.prij-stamp-box {
+  width: 88px;
+  height: 88px;
+  border: 1.5px dashed var(--prij-border-mid);
+  border-radius: var(--r-inner);
 }
 
-/* ── Document footer strip ───────────────────────────────────── */
-.prij-doc-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid var(--prij-border);
-  font-size: 11px;
-  color: var(--prij-text-muted);
-}
+/* ── Shared utils ─────────────────────────────────────────────── */
 
-.prij-doc-footer strong { color: var(--prij-text); }
+.prij-mono  { font-family: var(--prij-font-mono); font-weight: 400; }
+.prij-bold  { font-weight: 600; }
+.prij-muted { color: var(--prij-text-400); }
 
-/* ── Skeleton ────────────────────────────────────────────────── */
-.prij-skeleton {
+/* ── Skeleton ─────────────────────────────────────────────────── */
+
+.prij-skel {
+  display: block;
+  border-radius: 4px;
   background: linear-gradient(90deg, #EBEBEB 25%, #F5F5F5 50%, #EBEBEB 75%);
   background-size: 400% 100%;
-  animation: prij-shimmer 1.4s ease infinite;
-  border-radius: var(--prij-radius-sm);
-  display: block;
+  animation: skelShimmer 1.4s ease infinite;
 }
 
-@keyframes prij-shimmer {
+@keyframes skelShimmer {
   0%   { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
 
-/* ── Error ───────────────────────────────────────────────────── */
+/* ── Error ────────────────────────────────────────────────────── */
+
 .prij-error-wrap {
   min-height: 60vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
 }
 
 .prij-error-box {
@@ -648,29 +588,21 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  color: var(--prij-text-mid);
+  color: var(--prij-text-500);
 }
 
-.prij-error-icon {
-  font-size: 36px;
-}
+.prij-error-icon { font-size: 32px; }
 
 /* ══════════════════════════════════════════════════════════════
-   PRINT STYLES
+   PRINT
    ══════════════════════════════════════════════════════════════ */
+
 @media print {
-  @page {
-    size: A4;
-    margin: 14mm 16mm;
-  }
+  @page { size: A4; margin: 12mm 14mm; }
 
   .no-print { display: none !important; }
 
-  body {
-    background: #fff !important;
-  }
-
-  .prij-root {
+  body, .prij-page {
     background: #fff !important;
     padding: 0 !important;
   }
@@ -678,69 +610,61 @@
   .prij-doc {
     box-shadow: none !important;
     border-radius: 0 !important;
-    padding: 0 !important;
     max-width: 100% !important;
-    overflow: visible !important;
   }
 
-  .prij-doc::before {
-    display: none !important;
-  }
-
-  .prij-grand-total {
+  /* Force colours through */
+  .prij-pill,
+  .prij-chip,
+  .prij-grand-box,
+  .prij-status-bar {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  .prij-status-badge,
-  .prij-vat-badge,
-  .prij-badge,
-  .prij-movement-badge {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
+  /* Smaller font on print */
   .prij-table { font-size: 11px; }
-  .prij-th    { font-size: 10px; }
+  .prij-th    { font-size: 9px; }
 
-  .prij-sig-footer { page-break-inside: avoid; }
-  .prij-doc-footer { page-break-inside: avoid; }
-
-  .prij-grand-total { page-break-inside: avoid; }
+  /* Keep footer together */
+  .prij-footer       { page-break-inside: avoid; }
+  .prij-bottom-row   { page-break-inside: avoid; }
 }
 
 /* ══════════════════════════════════════════════════════════════
-   RESPONSIVE — narrow screens
+   RESPONSIVE
    ══════════════════════════════════════════════════════════════ */
-@media (max-width: 720px) {
-  .prij-doc { padding: 28px 20px; }
 
-  .prij-doc-number { font-size: 26px; }
+@media (max-width: 680px) {
+  :root { --px: 18px; }
+
+  .prij-title     { font-size: 22px; }
+  .prij-doc-number { font-size: 15px; }
 
   .prij-parties {
     flex-direction: column;
   }
-
-  .prij-parties-arrow {
-    transform: rotate(90deg);
-    justify-content: center;
+  .prij-party--right {
+    padding-left: 0;
+    padding-top: 20px;
+  }
+  .prij-party-divider {
+    width: 100%; height: 1px;
+    margin: 0;
   }
 
-  .prij-totals-section {
+  .prij-bottom-row {
     flex-direction: column;
     gap: 24px;
   }
-
-  .prij-grand-total {
+  .prij-grand-box {
     width: 100%;
     align-items: center;
-    text-align: center;
   }
 
-  .prij-sig-footer {
-    flex-wrap: wrap;
+  .prij-footer {
+    flex-direction: column;
     gap: 24px;
   }
-
-  .prij-sig-block { min-width: 120px; }
+  .prij-footer-divider { width: 100%; height: 1px; }
 }

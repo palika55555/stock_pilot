@@ -15,6 +15,7 @@ import QuoteFormPage from './pages/QuoteFormPage'
 import WarehousesPage from './pages/WarehousesPage'
 import SuppliersPage from './pages/SuppliersPage'
 import UsersPage from './pages/UsersPage'
+import Prijemka from './pages/Prijemka'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
 import { getAuth } from './utils/auth'
@@ -50,6 +51,8 @@ function App() {
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="suppliers" element={<SuppliersPage />} />
           <Route path="users" element={<UsersPage />} />
+          <Route path="prijemky/:id" element={<Prijemka />} />
+          <Route path="prijemky/preview" element={<Prijemka />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
