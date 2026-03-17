@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/Database/database_service.dart';
 import '../../models/user.dart';
 import '../login/login_page.dart';
+import '../login/web_login_screen.dart';
 import '../../widgets/common/standard_text_field.dart';
 import '../../widgets/common/purple_button.dart';
 
@@ -158,7 +159,23 @@ class _FirstStartupScreenState extends State<FirstStartupScreen> {
                         "Nastavte si údaje administrátora a úložisko",
                         style: TextStyle(color: Colors.grey),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const WebLoginScreen(clearFirstRun: true),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.cloud_rounded, size: 20, color: Colors.white70),
+                        label: const Text(
+                          'Už mám účet na webe – prihlásiť sa',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
 
                       Row(
                         children: [

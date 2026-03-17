@@ -42,6 +42,10 @@ class _ReceiptItemRow {
   final TextEditingController vatPercentController = TextEditingController();
   /// Pri manuálnom rozpočítaní: zadaná alokovaná suma na položku (s DPH).
   final TextEditingController manualAllocatedCostController = TextEditingController();
+  /// Číslo šarže / lot číslo.
+  final TextEditingController batchController = TextEditingController();
+  /// Dátum expirácie (zobrazovaný formát DD.MM.YYYY, ukladaný ako YYYY-MM-DD).
+  final TextEditingController expiryController = TextEditingController();
   String get unit => product?.unit ?? 'ks';
 }
 
@@ -314,6 +318,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         if (item.allocatedCost > 0) {
           row.manualAllocatedCostController.text = item.allocatedCost.toStringAsFixed(2);
         }
+        if (item.batchNumber != null && item.batchNumber!.isNotEmpty) {
+          row.batchController.text = item.batchNumber!;
+        }
+        if (item.expiryDate != null && item.expiryDate!.isNotEmpty) {
+          row.expiryController.text = _isoToDisplay(item.expiryDate!);
+        }
         row.unitPriceWithoutVatController.addListener(() => _updateRowWithVat(row));
         row.vatPercentController.addListener(() => _updateRowWithVat(row));
         _updateRowWithVat(row);
@@ -373,6 +383,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       _rows[index].unitPriceWithVatController.dispose();
       _rows[index].vatPercentController.dispose();
       _rows[index].manualAllocatedCostController.dispose();
+      _rows[index].batchController.dispose();
+      _rows[index].expiryController.dispose();
       _rows.removeAt(index);
     });
   }
@@ -490,6 +502,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           ? _roundPrice(allocations[allocationIndex++])
           : 0.0;
 
+      final batchText = row.batchController.text.trim();
+      final expiryText = row.expiryController.text.trim();
       items.add(
         InboundReceiptItem(
           receiptId: 0,
@@ -501,6 +515,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           unitPrice: _roundPrice(unitPriceToStore),
           vatPercent: vat,
           allocatedCost: allocatedCost,
+          batchNumber: batchText.isNotEmpty ? batchText : null,
+          expiryDate: expiryText.isNotEmpty ? _displayToIso(expiryText) : null,
         ),
       );
     }
@@ -962,12 +978,65 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       row.unitPriceWithoutVatController.dispose();
       row.unitPriceWithVatController.dispose();
       row.vatPercentController.dispose();
+      row.batchController.dispose();
+      row.expiryController.dispose();
     }
     super.dispose();
   }
 
   static const _compactPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
   static const _compactPaddingTiny = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+
+  /// Konvertuje ISO dátum "YYYY-MM-DD" na zobrazovaný formát "DD.MM.YYYY".
+  static String _isoToDisplay(String iso) {
+    final parts = iso.split('-');
+    if (parts.length == 3) return '${parts[2]}.${parts[1]}.${parts[0]}';
+    return iso;
+  }
+
+  /// Konvertuje zobrazovaný formát "DD.MM.YYYY" na ISO "YYYY-MM-DD".
+  static String? _displayToIso(String display) {
+    final parts = display.split('.');
+    if (parts.length == 3 && parts[2].length == 4) {
+      return '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+    }
+    return null;
+  }
+
+  /// Otvorí date picker a nastaví hodnotu do expiryController.
+  Future<void> _pickExpiryDate(TextEditingController controller) async {
+    DateTime initial = DateTime.now().add(const Duration(days: 365));
+    final current = controller.text.trim();
+    if (current.isNotEmpty) {
+      final iso = _displayToIso(current);
+      if (iso != null) {
+        final parsed = DateTime.tryParse(iso);
+        if (parsed != null) initial = parsed;
+      }
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      final display = '${picked.day.toString().padLeft(2, '0')}.${picked.month.toString().padLeft(2, '0')}.${picked.year}';
+      setState(() => controller.text = display);
+    }
+  }
+
+  /// Vráti farbu / ikonu pre expiry date: červená ak expirované, oranžová ak do 30 dní, inak null.
+  Color? _expiryWarningColor(String displayDate) {
+    final iso = _displayToIso(displayDate);
+    if (iso == null) return null;
+    final date = DateTime.tryParse(iso);
+    if (date == null) return null;
+    final now = DateTime.now();
+    if (date.isBefore(now)) return AppColors.danger;
+    if (date.difference(now).inDays <= 30) return Colors.orange;
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1526,24 +1595,28 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               ? const {
                   0: FlexColumnWidth(2),
                   1: FlexColumnWidth(0.7),
-                  2: FlexColumnWidth(0.6),
-                  3: FlexColumnWidth(0.9),
-                  4: FlexColumnWidth(0.5),
+                  2: FlexColumnWidth(0.8),
+                  3: FlexColumnWidth(0.8),
+                  4: FlexColumnWidth(0.6),
                   5: FlexColumnWidth(0.9),
-                  6: FlexColumnWidth(0.8),
-                  7: FlexColumnWidth(0.7),
-                  8: FlexColumnWidth(0.9),
-                  9: FixedColumnWidth(52),
+                  6: FlexColumnWidth(0.5),
+                  7: FlexColumnWidth(0.9),
+                  8: FlexColumnWidth(0.8),
+                  9: FlexColumnWidth(0.7),
+                  10: FlexColumnWidth(0.9),
+                  11: FixedColumnWidth(52),
                 }
               : const {
                   0: FlexColumnWidth(2),
                   1: FlexColumnWidth(0.7),
-                  2: FlexColumnWidth(0.6),
-                  3: FlexColumnWidth(0.9),
-                  4: FlexColumnWidth(0.5),
+                  2: FlexColumnWidth(0.8),
+                  3: FlexColumnWidth(0.8),
+                  4: FlexColumnWidth(0.6),
                   5: FlexColumnWidth(0.9),
-                  6: FlexColumnWidth(0.8),
-                  7: FixedColumnWidth(52),
+                  6: FlexColumnWidth(0.5),
+                  7: FlexColumnWidth(0.9),
+                  8: FlexColumnWidth(0.8),
+                  9: FixedColumnWidth(52),
                 },
           children: [
             TableRow(
@@ -1551,6 +1624,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               children: [
                 _tableHeader('Produkt / Tovar'),
                 _tableHeader('Skladom'),
+                _tableHeader('Šarža'),
+                _tableHeader('Expirácia'),
                 _tableHeader('Mn.'),
                 _tableHeader('Cena bez DPH'),
                 _tableHeader('DPH %'),
@@ -1956,6 +2031,66 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               },
             ),
           ),
+        ),
+        // Šarža
+        Padding(
+          padding: _compactPaddingTiny,
+          child: TextFormField(
+            controller: row.batchController,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Č. šarže',
+              hintStyle: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+          ),
+        ),
+        // Expirácia
+        Padding(
+          padding: _compactPaddingTiny,
+          child: Builder(builder: (ctx) {
+            final expiry = row.expiryController.text.trim();
+            final warnColor = expiry.isNotEmpty ? _expiryWarningColor(expiry) : null;
+            return Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: row.expiryController,
+                    readOnly: true,
+                    onTap: () => _pickExpiryDate(row.expiryController),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: warnColor ?? AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'DD.MM.RRRR',
+                      hintStyle: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: warnColor ?? AppColors.borderDefault),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: warnColor ?? AppColors.borderDefault),
+                      ),
+                    ),
+                  ),
+                ),
+                if (warnColor != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Icon(Icons.warning_amber_rounded, size: 14, color: warnColor),
+                  ),
+              ],
+            );
+          }),
         ),
         Padding(
           padding: _compactPaddingTiny,

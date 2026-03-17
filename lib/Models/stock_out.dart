@@ -170,6 +170,10 @@ class StockOutItem {
   final int qty;
   final String unit;
   final double unitPrice;
+  /// Číslo šarže / lot číslo (voliteľné).
+  final String? batchNumber;
+  /// Dátum expirácie vo formáte ISO 8601 "YYYY-MM-DD" (voliteľné).
+  final String? expiryDate;
 
   StockOutItem({
     this.id,
@@ -180,6 +184,8 @@ class StockOutItem {
     required this.qty,
     required this.unit,
     required this.unitPrice,
+    this.batchNumber,
+    this.expiryDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -192,6 +198,8 @@ class StockOutItem {
       'qty': qty,
       'unit': unit,
       'unit_price': _roundPrice(unitPrice),
+      'batch_number': batchNumber,
+      'expiry_date': expiryDate,
     };
   }
 
@@ -209,6 +217,8 @@ class StockOutItem {
       qty: map['qty'] as int,
       unit: map['unit'] as String,
       unitPrice: (map['unit_price'] as num).toDouble(),
+      batchNumber: map['batch_number'] as String?,
+      expiryDate: map['expiry_date'] as String?,
     );
   }
 }

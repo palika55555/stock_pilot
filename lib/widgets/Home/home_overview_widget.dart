@@ -20,8 +20,10 @@ class HomeOverview extends StatefulWidget {
   final User? user;
   final int notificationUnreadCount;
   final VoidCallback? onNotificationTap;
-  /// Voliteľné: stiahnuť zákazníkov a produkty z backendu pred obnovením štatistík.
+  /// Voliteľné: stiahnuť dáta z webu (zákazníci, produkty).
   final Future<void> Function()? onSyncFromBackend;
+  /// Voliteľné: nahrať lokálne dáta na web (produkty, zákazníci).
+  final Future<void> Function()? onSyncToBackend;
 
   const HomeOverview({
     super.key,
@@ -30,6 +32,7 @@ class HomeOverview extends StatefulWidget {
     this.notificationUnreadCount = 0,
     this.onNotificationTap,
     this.onSyncFromBackend,
+    this.onSyncToBackend,
   });
 
   @override
@@ -259,8 +262,12 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
               ),
               const SizedBox(width: 10),
               _SyncButton(
-                onTap: () async {
+                onSyncFromWeb: () async {
                   await widget.onSyncFromBackend?.call();
+                  _loadStats();
+                },
+                onSyncToWeb: () async {
+                  await widget.onSyncToBackend?.call();
                   _loadStats();
                 },
               ),
@@ -1273,8 +1280,10 @@ class _HeaderActionButton extends StatelessWidget {
 }
 
 class _SyncButton extends StatefulWidget {
-  final Future<void> Function() onTap;
-  const _SyncButton({required this.onTap});
+  final Future<void> Function()? onSyncFromWeb;
+  final Future<void> Function()? onSyncToWeb;
+
+  const _SyncButton({this.onSyncFromWeb, this.onSyncToWeb});
 
   @override
   State<_SyncButton> createState() => _SyncButtonState();
@@ -1298,12 +1307,12 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
     super.dispose();
   }
 
-  void _trigger() async {
+  Future<void> _run(Future<void> Function()? action) async {
+    if (action == null) return;
     setState(() => _syncing = true);
     _spin.repeat();
-    await Future.delayed(const Duration(milliseconds: 300));
-    await widget.onTap();
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 150));
+    await action();
     if (mounted) {
       _spin.stop();
       setState(() => _syncing = false);
@@ -1312,8 +1321,44 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _syncing ? null : _trigger,
+    final hasFrom = widget.onSyncFromWeb != null;
+    final hasTo = widget.onSyncToWeb != null;
+    final showMenu = (hasFrom || hasTo) && !_syncing;
+
+    return PopupMenuButton<String>(
+      enabled: showMenu,
+      onOpened: () {},
+      onSelected: (value) async {
+        if (value == 'from_web') await _run(widget.onSyncFromWeb);
+        if (value == 'to_web') await _run(widget.onSyncToWeb);
+      },
+      offset: const Offset(0, 44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppColors.bgCard,
+      itemBuilder: (context) => [
+        if (hasFrom)
+          const PopupMenuItem<String>(
+            value: 'from_web',
+            child: Row(
+              children: [
+                Icon(Icons.cloud_download_rounded, size: 20, color: AppColors.accentGold),
+                SizedBox(width: 12),
+                Text('Stiahnuť z webu', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+        if (hasTo)
+          const PopupMenuItem<String>(
+            value: 'to_web',
+            child: Row(
+              children: [
+                Icon(Icons.cloud_upload_rounded, size: 20, color: AppColors.accentGold),
+                SizedBox(width: 12),
+                Text('Nahrať na web', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+      ],
       child: Container(
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1338,6 +1383,8 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
                 color: AppColors.accentGold,
               ),
             ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.accentGold),
           ],
         ),
       ),

@@ -64,13 +64,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _showSyncNeededSnackBar();
     });
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncProductsWithBackend();
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        _pullCustomersFromBackend(silent: true);
-      });
-    });
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> result) {
@@ -78,7 +71,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         result.any((r) => r != ConnectivityResult.none && r != ConnectivityResult.bluetooth);
     if (isOnline && _wasOffline) {
       _wasOffline = false;
-      _pullCustomersFromBackend(silent: true);
+      // Zostaneme offline-first: pri návrate online len označíme stav,
+      // skutočnú obnovu z webu spúšťa používateľ manuálne.
     }
     if (!isOnline) _wasOffline = true;
   }
@@ -97,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       SyncCheckService.instance.start();
-      _syncProductsWithBackend();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       SyncCheckService.instance.stop();
     }
@@ -183,6 +176,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           duration: Duration(seconds: 2),
         ),
       );
+    }
+  }
+
+  /// Nahratie lokálnych dát na web (produkty, zákazníci).
+  Future<void> _pushToBackend({bool silent = false}) async {
+    if (!silent) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final token = getBackendToken();
+    if (token == null) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nahratie na web vyžaduje prihlásenie')),
+        );
+      }
+      return;
+    }
+    try {
+      final products = await _db.getProducts();
+      syncProductsToBackend(products);
+      final customers = await _db.getCustomers();
+      await syncCustomersToBackend(customers);
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Dáta nahraté na web'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Chyba pri nahrávaní na web'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -293,6 +324,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _refreshNotificationCount();
               },
               onSyncFromBackend: _pullCustomersFromBackend,
+              onSyncToBackend: _pushToBackend,
             ),
           ),
         ],
@@ -323,6 +355,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _refreshNotificationCount();
         },
         onSyncFromBackend: _pullCustomersFromBackend,
+        onSyncToBackend: _pushToBackend,
       ),
       bottomNavigationBar: AppBottomNavBar(
         activeIndex: 0,

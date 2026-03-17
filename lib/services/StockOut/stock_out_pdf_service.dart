@@ -11,6 +11,14 @@ class StockOutPdfService {
   static String _formatPrice(double v) =>
       v.toStringAsFixed(2).replaceAll('.', ',');
 
+  /// Konvertuje ISO dátum "YYYY-MM-DD" na "DD.MM.YYYY" pre PDF.
+  static String _formatExpiry(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final parts = iso.split('-');
+    if (parts.length == 3) return '${parts[2]}.${parts[1]}.${parts[0]}';
+    return iso;
+  }
+
   /// Vráti PDF ako bajty.
   /// [issuedBy] = meno prihláseného používateľa (vystavil); ak null, použije sa stockOut.username.
   /// [documentTitle] = nadpis: 'Výdajka' alebo 'Dodací list' (rovnaké dáta).
@@ -32,6 +40,9 @@ class StockOutPdfService {
       total += item.unitPrice * item.qty;
     }
     total = (total * 100).round() / 100;
+
+    final hasBatch = items.any((i) => i.batchNumber != null && i.batchNumber!.isNotEmpty);
+    final hasExpiry = items.any((i) => i.expiryDate != null && i.expiryDate!.isNotEmpty);
 
     doc.addPage(
       pw.MultiPage(
@@ -132,77 +143,7 @@ class StockOutPdfService {
             ],
           ),
           pw.SizedBox(height: 20),
-          hidePrices
-              ? pw.Table(
-                  border: pw.TableBorder.all(width: 0.5),
-                  columnWidths: const {
-                    0: pw.FlexColumnWidth(3),
-                    1: pw.FlexColumnWidth(0.6),
-                    2: pw.FlexColumnWidth(0.5),
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                      children: [
-                        StockOutPdfService._cell('Položka / PLU', bold: true),
-                        StockOutPdfService._cell('Mn.', bold: true),
-                        StockOutPdfService._cell('MJ', bold: true),
-                      ],
-                    ),
-                    ...items.map((item) {
-                      final name = item.productName ?? item.productUniqueId;
-                      final plu = item.plu != null && item.plu!.isNotEmpty
-                          ? ' (${item.plu})'
-                          : '';
-                      return pw.TableRow(
-                        children: [
-                          StockOutPdfService._cell('$name$plu'),
-                          StockOutPdfService._cell('${item.qty}'),
-                          StockOutPdfService._cell(item.unit),
-                        ],
-                      );
-                    }),
-                  ],
-                )
-              : pw.Table(
-                  border: pw.TableBorder.all(width: 0.5),
-                  columnWidths: const {
-                    0: pw.FlexColumnWidth(3),
-                    1: pw.FlexColumnWidth(0.6),
-                    2: pw.FlexColumnWidth(0.5),
-                    3: pw.FlexColumnWidth(1),
-                    4: pw.FlexColumnWidth(1),
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                      children: [
-                        StockOutPdfService._cell('Položka / PLU', bold: true),
-                        StockOutPdfService._cell('Mn.', bold: true),
-                        StockOutPdfService._cell('MJ', bold: true),
-                        StockOutPdfService._cell('Cena za MJ', bold: true),
-                        StockOutPdfService._cell('Celkom', bold: true),
-                      ],
-                    ),
-                    ...items.map((item) {
-                      final lineTotal =
-                          (item.unitPrice * item.qty * 100).round() / 100;
-                      final name = item.productName ?? item.productUniqueId;
-                      final plu = item.plu != null && item.plu!.isNotEmpty
-                          ? ' (${item.plu})'
-                          : '';
-                      return pw.TableRow(
-                        children: [
-                          StockOutPdfService._cell('$name$plu'),
-                          StockOutPdfService._cell('${item.qty}'),
-                          StockOutPdfService._cell(item.unit),
-                          StockOutPdfService._cell(_formatPrice(item.unitPrice)),
-                          StockOutPdfService._cell(_formatPrice(lineTotal)),
-                        ],
-                      );
-                    }),
-                  ],
-                ),
+          _buildItemsTable(items, hidePrices: hidePrices, hasBatch: hasBatch, hasExpiry: hasExpiry),
           if (!hidePrices) ...[
             pw.SizedBox(height: 16),
             pw.Row(
@@ -299,6 +240,98 @@ class StockOutPdfService {
         return 'Schválená';
       case StockOutStatus.stornovana:
         return 'Stornovaná';
+    }
+  }
+
+  static pw.Widget _buildItemsTable(
+    List<StockOutItem> items, {
+    required bool hidePrices,
+    required bool hasBatch,
+    required bool hasExpiry,
+  }) {
+    if (hidePrices) {
+      int ci = 0;
+      final colW = <int, pw.TableColumnWidth>{
+        ci++: const pw.FlexColumnWidth(3),
+        if (hasBatch) ci++: const pw.FlexColumnWidth(0.9),
+        if (hasExpiry) ci++: const pw.FlexColumnWidth(0.9),
+        ci++: const pw.FlexColumnWidth(0.6),
+        ci: const pw.FlexColumnWidth(0.5),
+      };
+      return pw.Table(
+        border: pw.TableBorder.all(width: 0.5),
+        columnWidths: colW,
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            children: [
+              _cell('Položka / PLU', bold: true),
+              if (hasBatch) _cell('Šarža', bold: true),
+              if (hasExpiry) _cell('Expirácia', bold: true),
+              _cell('Mn.', bold: true),
+              _cell('MJ', bold: true),
+            ],
+          ),
+          ...items.map((item) {
+            final name = item.productName ?? item.productUniqueId;
+            final plu = item.plu != null && item.plu!.isNotEmpty ? ' (${item.plu})' : '';
+            return pw.TableRow(
+              children: [
+                _cell('$name$plu'),
+                if (hasBatch) _cell(item.batchNumber ?? ''),
+                if (hasExpiry) _cell(_formatExpiry(item.expiryDate)),
+                _cell('${item.qty}'),
+                _cell(item.unit),
+              ],
+            );
+          }),
+        ],
+      );
+    } else {
+      int ci = 0;
+      final colW = <int, pw.TableColumnWidth>{
+        ci++: const pw.FlexColumnWidth(3),
+        if (hasBatch) ci++: const pw.FlexColumnWidth(0.9),
+        if (hasExpiry) ci++: const pw.FlexColumnWidth(0.9),
+        ci++: const pw.FlexColumnWidth(0.6),
+        ci++: const pw.FlexColumnWidth(0.5),
+        ci++: const pw.FlexColumnWidth(1),
+        ci: const pw.FlexColumnWidth(1),
+      };
+      return pw.Table(
+        border: pw.TableBorder.all(width: 0.5),
+        columnWidths: colW,
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            children: [
+              _cell('Položka / PLU', bold: true),
+              if (hasBatch) _cell('Šarža', bold: true),
+              if (hasExpiry) _cell('Expirácia', bold: true),
+              _cell('Mn.', bold: true),
+              _cell('MJ', bold: true),
+              _cell('Cena za MJ', bold: true),
+              _cell('Celkom', bold: true),
+            ],
+          ),
+          ...items.map((item) {
+            final lineTotal = (item.unitPrice * item.qty * 100).round() / 100;
+            final name = item.productName ?? item.productUniqueId;
+            final plu = item.plu != null && item.plu!.isNotEmpty ? ' (${item.plu})' : '';
+            return pw.TableRow(
+              children: [
+                _cell('$name$plu'),
+                if (hasBatch) _cell(item.batchNumber ?? ''),
+                if (hasExpiry) _cell(_formatExpiry(item.expiryDate)),
+                _cell('${item.qty}'),
+                _cell(item.unit),
+                _cell(_formatPrice(item.unitPrice)),
+                _cell(_formatPrice(lineTotal)),
+              ],
+            );
+          }),
+        ],
+      );
     }
   }
 

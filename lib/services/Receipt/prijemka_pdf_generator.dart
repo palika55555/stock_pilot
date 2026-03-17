@@ -47,6 +47,14 @@ class PrijemkaPdfGenerator {
   static String _formatPrice(double v) =>
       v.toStringAsFixed(2).replaceAll('.', ',');
 
+  /// Konvertuje ISO dátum "YYYY-MM-DD" na "DD.MM.YYYY" pre zobrazenie v PDF.
+  static String _formatExpiryForPdf(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final parts = iso.split('-');
+    if (parts.length == 3) return '${parts[2]}.${parts[1]}.${parts[0]}';
+    return iso;
+  }
+
   static PdfColor? _colorFromHex(String? hex) {
     if (hex == null || hex.isEmpty) return null;
     try {
@@ -249,14 +257,20 @@ class PrijemkaPdfGenerator {
       return (unitPrice / (1 + vatRate / 100) * 100).round() / 100;
     }
 
+    final hasBatch = items.any((i) => i.batchNumber != null && i.batchNumber!.isNotEmpty);
+    final hasExpiry = items.any((i) => i.expiryDate != null && i.expiryDate!.isNotEmpty);
+
+    int colIdx = 0;
     final colWidths = <int, pw.FlexColumnWidth>{
-      0: const pw.FlexColumnWidth(2.5),
-      1: const pw.FlexColumnWidth(0.8),
-      2: const pw.FlexColumnWidth(0.8),
-      3: const pw.FlexColumnWidth(0.6),
-      4: const pw.FlexColumnWidth(1),
-      5: const pw.FlexColumnWidth(0.6),
-      6: const pw.FlexColumnWidth(1),
+      colIdx++: const pw.FlexColumnWidth(2.5), // Názov
+      colIdx++: const pw.FlexColumnWidth(0.8), // PLU
+      if (hasBatch) colIdx++: const pw.FlexColumnWidth(0.9), // Šarža
+      if (hasExpiry) colIdx++: const pw.FlexColumnWidth(0.9), // Expirácia
+      colIdx++: const pw.FlexColumnWidth(0.8), // Mn
+      colIdx++: const pw.FlexColumnWidth(0.6), // MJ
+      colIdx++: const pw.FlexColumnWidth(1),   // Cena bez DPH
+      colIdx++: const pw.FlexColumnWidth(0.6), // Sadzba DPH
+      colIdx: const pw.FlexColumnWidth(1),     // Celkom s DPH
     };
 
     final headerRow = pw.TableRow(
@@ -264,6 +278,8 @@ class PrijemkaPdfGenerator {
       children: [
         _cell('Názov', bold: true, fontSize: c.bodyFontSize),
         _cell('PLU', bold: true, fontSize: c.bodyFontSize),
+        if (hasBatch) _cell('Šarža', bold: true, fontSize: c.bodyFontSize),
+        if (hasExpiry) _cell('Expirácia', bold: true, fontSize: c.bodyFontSize),
         _cell('Mn', bold: true, fontSize: c.bodyFontSize),
         _cell('MJ', bold: true, fontSize: c.bodyFontSize),
         _cell('Cena bez DPH/MJ', bold: true, fontSize: c.bodyFontSize, align: pw.TextAlign.right),
@@ -282,6 +298,8 @@ class PrijemkaPdfGenerator {
           children: [
             _cell(item.productName ?? item.productUniqueId, fontSize: c.bodyFontSize),
             _cell(item.plu ?? '', fontSize: c.bodyFontSize),
+            if (hasBatch) _cell(item.batchNumber ?? '', fontSize: c.bodyFontSize),
+            if (hasExpiry) _cell(_formatExpiryForPdf(item.expiryDate), fontSize: c.bodyFontSize),
             _cell('${item.qty}', fontSize: c.bodyFontSize, align: pw.TextAlign.right),
             _cell(item.unit, fontSize: c.bodyFontSize),
             _cell('${_formatPrice(unitNoVat)} €', fontSize: c.bodyFontSize, align: pw.TextAlign.right),

@@ -3,6 +3,7 @@ import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
 import '../../screens/Home/Home_screen.dart';
+import '../Login/web_login_screen.dart';
 import '../../widgets/Common/standard_text_field.dart';
 import '../../widgets/Common/purple_button.dart';
 
@@ -208,6 +209,22 @@ class _CreateFirstUserScreenState extends State<CreateFirstUserScreen> {
                         isLoading: _isLoading,
                         onPressed: _createUserAndEnter,
                         backgroundColor: Colors.indigo,
+                      ),
+                      const SizedBox(height: 20),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WebLoginScreen(routeObserver: widget.routeObserver),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.cloud_rounded, size: 20, color: Colors.white70),
+                        label: const Text(
+                          'Mám účet na webe – prihlásiť sa',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
                       ),
                     ],
                   ),

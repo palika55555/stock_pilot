@@ -119,11 +119,11 @@ class MobileUserInfoWidget extends StatelessWidget {
         PopupMenuItem(
           child: Row(
             children: [
-              Icon(Icons.sync_rounded, size: 16, color: Colors.blue[600]),
+              Icon(Icons.badge, size: 16, color: Colors.blue[600]),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Prepnúť rolu (${userRole == 'admin' ? 'User' : 'Admin'})',
+                  'Rola: ${userRole == 'admin' ? 'Admin' : 'Používateľ'}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -132,12 +132,6 @@ class MobileUserInfoWidget extends StatelessWidget {
               ),
             ],
           ),
-          onTap: () {
-            if (onRoleSwitch != null) {
-              final newRole = userRole == 'admin' ? 'user' : 'admin';
-              onRoleSwitch!(newRole);
-            }
-          },
         ),
         PopupMenuItem(
           child: Row(

@@ -205,7 +205,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 32,
+      version: 33,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -1307,6 +1307,25 @@ class DatabaseService {
       final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
       if (!custInfo.any((c) => c['name'] == 'vat_payer')) {
         await db.execute('ALTER TABLE customers ADD COLUMN vat_payer INTEGER NOT NULL DEFAULT 1');
+      }
+    }
+
+    if (oldVersion < 33) {
+      // Šarža (batch/lot) a dátum expirácie na položkách príjemky a výdajky
+      final receiptItemsInfo = await db.rawQuery('PRAGMA table_info(inbound_receipt_items)');
+      if (!receiptItemsInfo.any((c) => c['name'] == 'batch_number')) {
+        await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN batch_number TEXT');
+      }
+      if (!receiptItemsInfo.any((c) => c['name'] == 'expiry_date')) {
+        await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN expiry_date TEXT');
+      }
+
+      final stockOutItemsInfo = await db.rawQuery('PRAGMA table_info(stock_out_items)');
+      if (!stockOutItemsInfo.any((c) => c['name'] == 'batch_number')) {
+        await db.execute('ALTER TABLE stock_out_items ADD COLUMN batch_number TEXT');
+      }
+      if (!stockOutItemsInfo.any((c) => c['name'] == 'expiry_date')) {
+        await db.execute('ALTER TABLE stock_out_items ADD COLUMN expiry_date TEXT');
       }
     }
 
@@ -3338,6 +3357,31 @@ class DatabaseService {
     if (_currentUserId == null) return [];
     final maps = await db.query('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
     return maps.map((m) => StockOutItem.fromMap(m)).toList();
+  }
+
+  /// FEFO: vráti dostupné šarže pre produkt zo schválených príjemiek v danom sklade,
+  /// zoradené podľa dátumu expirácie vzostupne (null/prázdne expirácie sú na konci).
+  Future<List<Map<String, dynamic>>> getAvailableBatchesForProduct(
+    String productUniqueId,
+    int warehouseId,
+  ) async {
+    Database db = await database;
+    if (_currentUserId == null) return [];
+    final result = await db.rawQuery('''
+      SELECT iri.batch_number, iri.expiry_date
+      FROM inbound_receipt_items iri
+      JOIN inbound_receipts ir ON iri.receipt_id = ir.id
+      WHERE iri.product_unique_id = ?
+        AND ir.warehouse_id = ?
+        AND ir.status = 'schvalena'
+        AND ir.user_id = ?
+        AND iri.batch_number IS NOT NULL
+        AND iri.batch_number != ''
+      GROUP BY iri.batch_number, iri.expiry_date
+      ORDER BY CASE WHEN iri.expiry_date IS NULL OR iri.expiry_date = '' THEN 1 ELSE 0 END,
+               iri.expiry_date ASC
+    ''', [productUniqueId, warehouseId, _currentUserId]);
+    return result.toList();
   }
 
   Future<String> getNextStockOutNumber() async {

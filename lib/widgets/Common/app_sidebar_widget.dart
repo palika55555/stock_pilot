@@ -668,7 +668,7 @@ class _SidebarRoleSwitch extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Pracovať ako',
+          'Rola',
           style: GoogleFonts.dmSans(
             fontSize: 10,
             fontWeight: FontWeight.w600,
@@ -680,17 +680,9 @@ class _SidebarRoleSwitch extends StatelessWidget {
           children: [
             Expanded(
               child: _SidebarRoleChip(
-                label: 'Používateľ',
-                isSelected: !isAdmin,
-                onTap: () => onSwitchRole('user'),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _SidebarRoleChip(
-                label: 'Admin',
-                isSelected: isAdmin,
-                onTap: () => onSwitchRole('admin'),
+                label: isAdmin ? 'Admin' : 'Používateľ',
+                isSelected: true,
+                onTap: () {},
               ),
             ),
           ],

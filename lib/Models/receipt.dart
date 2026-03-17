@@ -331,6 +331,10 @@ class InboundReceiptItem {
   final int? vatPercent;
   /// Pri príjemke s obstarávacími nákladmi: alokovaná časť obstarávacích nákladov na túto položku (v EUR s DPH).
   final double allocatedCost;
+  /// Číslo šarže / lot číslo (voliteľné).
+  final String? batchNumber;
+  /// Dátum expirácie vo formáte ISO 8601 "YYYY-MM-DD" (voliteľné).
+  final String? expiryDate;
 
   InboundReceiptItem({
     this.id,
@@ -343,6 +347,8 @@ class InboundReceiptItem {
     required this.unitPrice,
     this.vatPercent,
     this.allocatedCost = 0,
+    this.batchNumber,
+    this.expiryDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -357,6 +363,8 @@ class InboundReceiptItem {
       'unit_price': _roundPrice(unitPrice),
       'vat_percent': vatPercent,
       'allocated_cost': _roundPrice(allocatedCost),
+      'batch_number': batchNumber,
+      'expiry_date': expiryDate,
     };
   }
 
@@ -376,6 +384,8 @@ class InboundReceiptItem {
       unitPrice: (map['unit_price'] as num).toDouble(),
       vatPercent: map['vat_percent'] as int?,
       allocatedCost: (map['allocated_cost'] as num?)?.toDouble() ?? 0,
+      batchNumber: map['batch_number'] as String?,
+      expiryDate: map['expiry_date'] as String?,
     );
   }
 }
