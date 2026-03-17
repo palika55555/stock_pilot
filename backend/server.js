@@ -227,7 +227,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     const {
       rows: [user],
     } = await pool.query(
-      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access FROM users WHERE username = $1',
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access, owner_id FROM users WHERE username = $1',
       [username.toString().trim()]
     );
     if (!user || user.password !== password) {
@@ -244,12 +244,29 @@ apiRouter.post('/auth/login', async (req, res) => {
         error: 'Účet je zablokovaný. Kontaktujte administrátora.',
       });
     }
-    if (!user.web_access) {
-      console.warn('[auth] User without web_access tried to login:', username);
-      return res.status(403).json({
-        success: false,
-        error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
-      });
+    // db_owner má vždy prístup
+    if (user.role !== 'db_owner') {
+      if (!user.web_access) {
+        console.warn('[auth] User without web_access tried to login:', username);
+        return res.status(403).json({
+          success: false,
+          error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
+        });
+      }
+      // Sub-user: skontroluj aj web_access jeho admina (owner)
+      if (user.owner_id) {
+        const { rows: [owner] } = await pool.query(
+          'SELECT web_access FROM users WHERE id = $1',
+          [user.owner_id]
+        );
+        if (!owner || !owner.web_access) {
+          console.warn('[auth] Sub-user login blocked – owner has no web_access:', username);
+          return res.status(403).json({
+            success: false,
+            error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
+          });
+        }
+      }
     }
     const tokens = signTokens(
       { userId: user.id, email: user.email || '', role: user.role || 'user' },
@@ -1112,38 +1129,71 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   }
 });
 
-// --- Admin: správa používateľov (iba role admin) ---
+// --- Admin: správa používateľov ---
+const TIER_LIMITS = { free: 0, basic: 2, pro: 5, enterprise: -1 };
+
 const requireAdmin = (req, res, next) => {
-  if (req.userRole !== 'admin') {
+  if (req.userRole !== 'admin' && req.userRole !== 'db_owner') {
     return res.status(403).json({ error: 'Len administrátor.' });
   }
   next();
 };
 
-apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
-  if (!pool || !poolReady) {
-    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+const requireDbOwner = (req, res, next) => {
+  if (req.userRole !== 'db_owner') {
+    return res.status(403).json({ error: 'Len DB_OWNER.' });
   }
+  next();
+};
+
+apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   try {
-    const { rows } = await pool.query(
-      `SELECT id, username, full_name, role, email, phone, department,
-              COALESCE(is_blocked, false) AS is_blocked,
-              COALESCE(web_access, false) AS web_access,
-              join_date
-       FROM users ORDER BY id ASC`
-    );
-    res.json(rows.map((r) => ({
-      id: r.id,
-      username: r.username,
-      full_name: r.full_name,
-      role: r.role,
-      email: r.email,
-      phone: r.phone,
-      department: r.department,
-      is_blocked: !!r.is_blocked,
-      web_access: !!r.web_access,
-      join_date: r.join_date,
-    })));
+    if (req.userRole === 'db_owner') {
+      // DB_OWNER vidí všetkých adminov + ich počet sub-userov
+      const { rows } = await pool.query(
+        `SELECT u.id, u.username, u.full_name, u.email,
+                COALESCE(u.is_blocked, false) AS is_blocked,
+                COALESCE(u.web_access, false) AS web_access,
+                COALESCE(u.tier, 'free') AS tier,
+                u.join_date,
+                COUNT(s.id) AS sub_user_count
+         FROM users u
+         LEFT JOIN users s ON s.owner_id = u.id
+         WHERE u.role = 'admin'
+         GROUP BY u.id ORDER BY u.id ASC`
+      );
+      return res.json(rows.map((r) => ({
+        id: r.id, username: r.username, full_name: r.full_name, email: r.email,
+        is_blocked: !!r.is_blocked, web_access: !!r.web_access,
+        tier: r.tier, sub_user_count: parseInt(r.sub_user_count, 10),
+        join_date: r.join_date,
+      })));
+    } else {
+      // Admin vidí iba svojich sub-userov
+      const { rows } = await pool.query(
+        `SELECT id, username, full_name, email,
+                COALESCE(is_blocked, false) AS is_blocked,
+                COALESCE(web_access, false) AS web_access,
+                join_date
+         FROM users WHERE owner_id = $1 ORDER BY id ASC`,
+        [req.userId]
+      );
+      // Vráť aj info o tieri admina
+      const { rows: [me] } = await pool.query(
+        'SELECT COALESCE(tier, $1) AS tier, COALESCE(web_access, false) AS web_access FROM users WHERE id = $2',
+        ['free', req.userId]
+      );
+      return res.json({
+        tier: me?.tier || 'free',
+        web_access: !!me?.web_access,
+        tier_limit: TIER_LIMITS[me?.tier || 'free'],
+        sub_users: rows.map((r) => ({
+          id: r.id, username: r.username, full_name: r.full_name, email: r.email,
+          is_blocked: !!r.is_blocked, web_access: !!r.web_access, join_date: r.join_date,
+        })),
+      });
+    }
   } catch (err) {
     console.error('[GET /admin/users]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
@@ -1177,11 +1227,21 @@ apiRouter.patch('/admin/users/:id/web-access', requireAdmin, async (req, res) =>
   const { allow } = req.body || {};
   const setAccess = allow === true || allow === 'true';
   try {
-    const { rowCount } = await pool.query(
-      'UPDATE users SET web_access = $1 WHERE id = $2',
-      [setAccess, id]
-    );
-    if (rowCount === 0) return res.status(404).json({ error: 'Používateľ nenájdený' });
+    if (req.userRole === 'db_owner') {
+      // DB_OWNER môže meniť web_access iba adminom
+      const { rowCount } = await pool.query(
+        "UPDATE users SET web_access = $1 WHERE id = $2 AND role = 'admin'",
+        [setAccess, id]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Admin nenájdený' });
+    } else {
+      // Admin môže meniť web_access iba svojim sub-userom
+      const { rowCount } = await pool.query(
+        'UPDATE users SET web_access = $1 WHERE id = $2 AND owner_id = $3',
+        [setAccess, id, req.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Sub-user nenájdený' });
+    }
     console.log('[admin] User', id, setAccess ? 'web_access granted' : 'web_access revoked');
     res.json({ success: true, web_access: setAccess });
   } catch (err) {
@@ -1190,15 +1250,83 @@ apiRouter.patch('/admin/users/:id/web-access', requireAdmin, async (req, res) =>
   }
 });
 
+// DB_OWNER: nastavenie tiera pre admina
+apiRouter.patch('/admin/users/:id/tier', requireDbOwner, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const { tier } = req.body || {};
+  if (!TIER_LIMITS.hasOwnProperty(tier)) {
+    return res.status(400).json({ error: 'Neplatný tier. Platné hodnoty: free, basic, pro, enterprise' });
+  }
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE users SET tier = $1 WHERE id = $2 AND role = 'admin'",
+      [tier, id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Admin nenájdený' });
+    console.log('[db_owner] Tier set to', tier, 'for user', id);
+    res.json({ success: true, tier });
+  } catch (err) {
+    console.error('[PATCH /admin/users/:id/tier]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// Admin: pridanie sub-usera (s kontrolou tiera)
+apiRouter.post('/admin/subusers', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  if (req.userRole !== 'admin') return res.status(403).json({ error: 'Len admin môže pridávať sub-userov.' });
+  const { username, password, full_name, email } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'username a password sú povinné' });
+  try {
+    // Skontroluj tier admina
+    const { rows: [me] } = await pool.query(
+      'SELECT COALESCE(tier, $1) AS tier FROM users WHERE id = $2',
+      ['free', req.userId]
+    );
+    const limit = TIER_LIMITS[me?.tier || 'free'];
+    if (limit === 0) {
+      return res.status(403).json({ error: 'Váš plán (free) neumožňuje pridávať sub-userov. Kontaktujte administrátora pre upgrade.' });
+    }
+    if (limit > 0) {
+      const { rows: [cnt] } = await pool.query(
+        'SELECT COUNT(*) AS c FROM users WHERE owner_id = $1', [req.userId]
+      );
+      if (parseInt(cnt.c, 10) >= limit) {
+        return res.status(403).json({ error: `Dosiahli ste limit ${limit} sub-userov pre váš plán (${me.tier}). Kontaktujte administrátora pre upgrade.` });
+      }
+    }
+    // Vytvor sub-usera
+    const { rows: [newUser] } = await pool.query(
+      `INSERT INTO users (username, password, full_name, email, role, owner_id, web_access, tier)
+       VALUES ($1, $2, $3, $4, 'user', $5, false, 'free')
+       RETURNING id, username, full_name, email`,
+      [username.trim(), password, (full_name || username).trim(), (email || '').trim(), req.userId]
+    );
+    console.log('[admin] Sub-user created:', newUser.username, 'by admin', req.userId);
+    res.status(201).json({ success: true, user: newUser });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Používateľské meno už existuje.' });
+    console.error('[POST /admin/subusers]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 apiRouter.delete('/admin/users/:id', requireAdmin, async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
-  if (id === req.userId) {
-    return res.status(400).json({ error: 'Nemôžete vymazať vlastný účet.' });
-  }
+  if (id === req.userId) return res.status(400).json({ error: 'Nemôžete vymazať vlastný účet.' });
   try {
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    let rowCount;
+    if (req.userRole === 'db_owner') {
+      // DB_OWNER môže mazať adminov (nie db_ownerov)
+      ({ rowCount } = await pool.query("DELETE FROM users WHERE id = $1 AND role = 'admin'", [id]));
+    } else {
+      // Admin môže mazať iba svojich sub-userov
+      ({ rowCount } = await pool.query('DELETE FROM users WHERE id = $1 AND owner_id = $2', [id, req.userId]));
+    }
     if (rowCount === 0) return res.status(404).json({ error: 'Používateľ nenájdený' });
     console.log('[admin] User deleted:', id);
     res.json({ success: true });

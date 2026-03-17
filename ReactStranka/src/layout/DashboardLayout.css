@@ -2,6 +2,56 @@
    Stock Pilot – Design system & layout
    ═══════════════════════════════════════ */
 
+/* ─── Admin téma ─── */
+.dashboard-layout--admin {
+  --accent-gold: #818CF8;
+  --accent-gold-hover: #A5B4FC;
+  --bg-primary: #0A0B14;
+  --bg-card: #11131F;
+  --bg-elevated: #1A1D30;
+  --border: #252840;
+  --border-hover: #353868;
+}
+
+.dashboard-layout--admin .dashboard-sidebar {
+  background: linear-gradient(180deg, #0D0F1E 0%, #11131F 100%);
+  border-right: 1px solid #252840;
+}
+
+.dashboard-layout--admin .dashboard-topbar {
+  background: rgba(10, 11, 20, 0.95);
+  border-bottom: 1px solid #252840;
+}
+
+.dashboard-sidebar__admin-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(129, 140, 248, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #818CF8;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dashboard-sidebar__admin-badge-icon {
+  font-size: 0.85rem;
+}
+
+.dashboard-layout--sidebar-collapsed .dashboard-sidebar__admin-badge-text {
+  display: none;
+}
+
+.dashboard-layout--sidebar-collapsed .dashboard-sidebar__admin-badge {
+  justify-content: center;
+  padding: 0.5rem;
+}
+
 .dashboard-layout {
   --bg-primary: #0F1117;
   --bg-card: #1A1D27;

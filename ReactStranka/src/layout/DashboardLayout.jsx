@@ -96,9 +96,11 @@ export default function DashboardLayout() {
   const syncAgoMin = syncTs ? (Date.now() - syncTs) / 60000 : 999
   const syncState = syncStatus.loading ? 'syncing' : syncAgoMin < 5 ? 'ok' : syncAgoMin < 30 ? 'warn' : 'error'
 
+  const isAdmin = auth.user?.role === 'admin' || auth.user?.role === 'db_owner'
+
   return (
     <div
-      className={`dashboard-layout ${sidebarCollapsed ? 'dashboard-layout--sidebar-collapsed' : ''} ${sidebarOpenMobile ? 'dashboard-layout--sidebar-open' : ''}`}
+      className={`dashboard-layout ${isAdmin ? 'dashboard-layout--admin' : ''} ${sidebarCollapsed ? 'dashboard-layout--sidebar-collapsed' : ''} ${sidebarOpenMobile ? 'dashboard-layout--sidebar-open' : ''}`}
     >
       <div className="dashboard-layout__body">
         <div className="dashboard-sidebar-wrap">
@@ -109,8 +111,14 @@ export default function DashboardLayout() {
                 <h1 className="dashboard-sidebar__logo-title">PILOT</h1>
               </a>
             </div>
+            {isAdmin && (
+              <div className="dashboard-sidebar__admin-badge">
+                <span className="dashboard-sidebar__admin-badge-icon">⚙</span>
+                <span className="dashboard-sidebar__admin-badge-text">Admin panel</span>
+              </div>
+            )}
             <nav className="dashboard-sidebar__nav">
-              {(auth.user?.role === 'admin' ? NAV_ITEMS_ADMIN : NAV_ITEMS_USER).map((item) => {
+              {(isAdmin ? NAV_ITEMS_ADMIN : NAV_ITEMS_USER).map((item) => {
                 const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
                 return (
                   <button
