@@ -86,6 +86,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   final TextEditingController _vatRateController = TextEditingController(
     text: '20',
   );
+  final TextEditingController _deliveryNoteController = TextEditingController();
+  final TextEditingController _poNumberController = TextEditingController();
 
   bool _pricesIncludeVat = true;
   bool _vatAppliesToAll = false;
@@ -254,6 +256,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         _invoiceController.text = receipt.invoiceNumber ?? '';
         _receiptNumberController.text = receipt.receiptNumber;
         _notesController.text = receipt.notes ?? '';
+        _deliveryNoteController.text = receipt.deliveryNoteNumber ?? '';
+        _poNumberController.text = receipt.poNumber ?? '';
         _pricesIncludeVat = receipt.pricesIncludeVat;
         _vatAppliesToAll = receipt.vatAppliesToAll;
         _vatRateController.text =
@@ -568,6 +572,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       final notesText = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
+      final (supplierId, supplierIco, supplierDic, supplierAddress) = _isTransfer ? (null, null, null, null) : _supplierSnapshot();
+      final deliveryNoteNumber = _textOrNull(_deliveryNoteController);
+      final poNumber = _textOrNull(_poNumberController);
       var receiptNumber = _receiptNumberController.text.trim();
       if (receiptNumber.isEmpty) {
         receiptNumber = await _db.getNextReceiptNumber();
@@ -611,6 +618,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
           costDistributionMethod: _isWithCosts ? _costDistributionMethod : _editReceipt!.costDistributionMethod,
+          supplierId: supplierId,
+          supplierIco: supplierIco,
+          supplierDic: supplierDic,
+          supplierAddress: supplierAddress,
+          deliveryNoteNumber: deliveryNoteNumber,
+          poNumber: poNumber,
         );
         await _receiptService.updateReceipt(receipt: receipt, items: items, acquisitionCosts: draftEditCosts);
         if (mounted) {
@@ -656,6 +669,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
           costDistributionMethod: _isWithCosts ? _costDistributionMethod : null,
+          supplierId: supplierId,
+          supplierIco: supplierIco,
+          supplierDic: supplierDic,
+          supplierAddress: supplierAddress,
+          deliveryNoteNumber: deliveryNoteNumber,
+          poNumber: poNumber,
         );
         await _receiptService.createReceipt(
           receipt: receipt,
@@ -779,6 +798,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       final notesText = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
+      final (supplierId, supplierIco, supplierDic, supplierAddress) = _isTransfer ? (null, null, null, null) : _supplierSnapshot();
+      final deliveryNoteNumber = _textOrNull(_deliveryNoteController);
+      final poNumber = _textOrNull(_poNumberController);
       final receiptNumber = _receiptNumberController.text.trim();
       final warehouseId = _selectedWarehouse?.id;
       final sourceWarehouseId = _isTransfer ? _selectedSourceWarehouse?.id : null;
@@ -821,6 +843,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
           costDistributionMethod: _isWithCosts ? _costDistributionMethod : _editReceipt!.costDistributionMethod,
+          supplierId: supplierId,
+          supplierIco: supplierIco,
+          supplierDic: supplierDic,
+          supplierAddress: supplierAddress,
+          deliveryNoteNumber: deliveryNoteNumber,
+          poNumber: poNumber,
         );
         await _receiptService.updateReceipt(receipt: receipt, items: items, acquisitionCosts: editAcquisitionCosts);
         if (mounted) {
@@ -872,6 +900,12 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           movementTypeCode: movementTypeCode,
           isSettled: _isSettled,
           costDistributionMethod: costDistributionMethod,
+          supplierId: supplierId,
+          supplierIco: supplierIco,
+          supplierDic: supplierDic,
+          supplierAddress: supplierAddress,
+          deliveryNoteNumber: deliveryNoteNumber,
+          poNumber: poNumber,
         );
         final receiptId = await _receiptService.createReceipt(
           receipt: receipt,
@@ -973,6 +1007,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     _receiptNumberController.dispose();
     _notesController.dispose();
     _vatRateController.dispose();
+    _deliveryNoteController.dispose();
+    _poNumberController.dispose();
     for (final row in _rows) {
       row.qtyController.dispose();
       row.unitPriceWithoutVatController.dispose();
@@ -986,6 +1022,25 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
 
   static const _compactPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
   static const _compactPaddingTiny = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+
+  /// Zostaví kombinovanú adresu dodávateľa z jednotlivých polí.
+  static String? _buildSupplierAddress(Supplier s) {
+    final parts = [s.address, s.city, s.postalCode].where((p) => p != null && p.isNotEmpty).join(', ');
+    return parts.isEmpty ? null : parts;
+  }
+
+  /// Helper: vytvorí snapshot identifikáciu dodávateľa zo súčasne vybraného _selectedSupplier.
+  (int?, String?, String?, String?) _supplierSnapshot() {
+    final s = _selectedSupplier;
+    if (s == null) return (null, null, null, null);
+    return (s.id, s.ico.isNotEmpty ? s.ico : null, s.dic, _buildSupplierAddress(s));
+  }
+
+  /// Helper: bezpečne získa textovú hodnotu z controllera (null ak prázdne).
+  static String? _textOrNull(TextEditingController c) {
+    final t = c.text.trim();
+    return t.isEmpty ? null : t;
+  }
 
   /// Konvertuje ISO dátum "YYYY-MM-DD" na zobrazovaný formát "DD.MM.YYYY".
   static String _isoToDisplay(String iso) {
@@ -1306,6 +1361,66 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                                 ),
                               ],
                             ),
+                          // Supplier info chip (IČO / DIČ)
+                          if (_selectedSupplier != null) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.bgInput,
+                                border: Border.all(color: AppColors.borderDefault),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.business_outlined, size: 14, color: AppColors.textSecondary),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      [
+                                        if (_selectedSupplier!.ico.isNotEmpty) 'IČO: ${_selectedSupplier!.ico}',
+                                        if (_selectedSupplier!.dic != null && _selectedSupplier!.dic!.isNotEmpty) 'DIČ: ${_selectedSupplier!.dic}',
+                                        if (_selectedSupplier!.address != null && _selectedSupplier!.address!.isNotEmpty) _selectedSupplier!.address!,
+                                      ].join('  •  '),
+                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _deliveryNoteController,
+                                  style: const TextStyle(fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Č. dodacieho listu',
+                                    isDense: true,
+                                    contentPadding: _compactPadding,
+                                    border: OutlineInputBorder(),
+                                    prefixIcon: Icon(Icons.receipt_long_outlined, size: 18),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _poNumberController,
+                                  style: const TextStyle(fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Č. objednávky (PO)',
+                                    isDense: true,
+                                    contentPadding: _compactPadding,
+                                    border: OutlineInputBorder(),
+                                    prefixIcon: Icon(Icons.shopping_cart_outlined, size: 18),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _notesController,

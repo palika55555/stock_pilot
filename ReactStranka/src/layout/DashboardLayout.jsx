@@ -9,6 +9,8 @@ const NAV_ITEMS_USER = [
   { path: '/dashboard', label: 'Prehľad', icon: '◉' },
   { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
   { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
+  { path: '/dashboard/warehouses', label: 'Sklady', icon: '🏪' },
+  { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '🚚' },
   { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '📄' },
   { path: '/dashboard/production', label: 'Výroba', icon: '🏭' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },

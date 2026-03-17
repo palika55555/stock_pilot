@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import '../models/user.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
+import '../models/warehouse.dart';
+import '../models/supplier.dart';
 import 'Database/database_service.dart';
 import 'auth_storage_service.dart';
 
@@ -208,6 +210,48 @@ void syncProductsToBackend(List<Product> products) {
       )
       .timeout(const Duration(seconds: 15))
       .ignore();
+}
+
+/// Pošle zoznam skladov do backendu – web zobrazí sklady.
+Future<void> syncWarehousesToBackend(List<Warehouse> warehouses) async {
+  if (warehouses.isEmpty) return;
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
+  final uri = Uri.parse('$_apiBase/sync/warehouses');
+  final body = jsonEncode({
+    'warehouses': warehouses.map((w) => w.toMap()).toList(),
+  });
+  final res = await http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
+        body: body,
+      )
+      .timeout(const Duration(seconds: 10));
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('sync warehouses failed: ${res.statusCode}');
+  }
+}
+
+/// Pošle zoznam dodávateľov do backendu – web zobrazí dodávateľov.
+Future<void> syncSuppliersToBackend(List<Supplier> suppliers) async {
+  if (suppliers.isEmpty) return;
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
+  final uri = Uri.parse('$_apiBase/sync/suppliers');
+  final body = jsonEncode({
+    'suppliers': suppliers.map((s) => s.toMap()).toList(),
+  });
+  final res = await http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
+        body: body,
+      )
+      .timeout(const Duration(seconds: 10));
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('sync suppliers failed: ${res.statusCode}');
+  }
 }
 
 /// Prihlásenie na backend – JWT. Uloží access + refresh + userId do secure storage a nastaví in-memory token.

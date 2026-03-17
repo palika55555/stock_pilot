@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
+import '../../models/customer.dart';
 import '../../models/product.dart';
 import '../../models/stock_out.dart';
 import '../../models/warehouse.dart';
@@ -38,6 +39,8 @@ class _StockOutModalState extends State<StockOutModal> {
   final TextEditingController _recipientController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _writeOffReasonController = TextEditingController();
+  final TextEditingController _recipientIcoController = TextEditingController();
+  final TextEditingController _recipientDicController = TextEditingController();
 
   bool _manualDocumentNumber = false;
   bool _zeroVat = false; // Výdaj za 0 % DPH
@@ -45,6 +48,8 @@ class _StockOutModalState extends State<StockOutModal> {
   final List<_StockOutItemRow> _rows = [];
   List<Product> _products = [];
   List<Warehouse> _warehouses = [];
+  List<Customer> _customers = [];
+  Customer? _selectedCustomer;
   int? _selectedWarehouseId;
   bool _productsLoaded = false;
   bool _isSaving = false;
@@ -77,12 +82,14 @@ class _StockOutModalState extends State<StockOutModal> {
     final stockOut = await _db.getStockOutById(id);
     final items = await _db.getStockOutItems(id);
     final warehouses = await _warehouseService.getAllWarehouses();
+    final customers = await _db.getCustomers();
     final products = stockOut?.warehouseId != null
         ? await _db.getProductsByWarehouseId(stockOut!.warehouseId!)
         : await _db.getProducts();
     if (!mounted) return;
     setState(() {
       _warehouses = warehouses;
+      _customers = customers;
       _products = products;
       _editStockOut = stockOut;
       _selectedWarehouseId = stockOut?.warehouseId;
@@ -94,6 +101,11 @@ class _StockOutModalState extends State<StockOutModal> {
         _zeroVat = stockOut.isZeroVat;
         _issueType = stockOut.issueType;
         _writeOffReasonController.text = stockOut.writeOffReason ?? '';
+        _recipientIcoController.text = stockOut.recipientIco ?? '';
+        _recipientDicController.text = stockOut.recipientDic ?? '';
+        if (stockOut.customerId != null) {
+          _selectedCustomer = customers.where((c) => c.id == stockOut.customerId).firstOrNull;
+        }
       }
       _rows.clear();
       for (final item in items) {
@@ -123,12 +135,14 @@ class _StockOutModalState extends State<StockOutModal> {
 
   Future<void> _loadProducts() async {
     final warehouses = await _warehouseService.getAllWarehouses();
+    final customers = await _db.getCustomers();
     final products = _selectedWarehouseId != null
         ? await _db.getProductsByWarehouseId(_selectedWarehouseId!)
         : await _db.getProducts();
     if (mounted) {
       setState(() {
         _warehouses = warehouses;
+        _customers = customers;
         _products = products;
         _productsLoaded = true;
       });
@@ -359,6 +373,9 @@ class _StockOutModalState extends State<StockOutModal> {
       final notes = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
+      final recipientIco = _recipientIcoController.text.trim().isEmpty ? null : _recipientIcoController.text.trim();
+      final recipientDic = _recipientDicController.text.trim().isEmpty ? null : _recipientDicController.text.trim();
+      final recipientAddress = _selectedCustomer != null ? _buildCustomerAddress(_selectedCustomer!) : null;
 
       if (_isEditMode && _editStockOut != null) {
         final so = _editStockOut!.copyWith(
@@ -372,6 +389,10 @@ class _StockOutModalState extends State<StockOutModal> {
           writeOffReason: _issueType == StockOutIssueType.writeOff
               ? _writeOffReasonController.text.trim()
               : null,
+          customerId: _selectedCustomer?.id,
+          recipientIco: recipientIco,
+          recipientDic: recipientDic,
+          recipientAddress: recipientAddress,
         );
         await _stockOutService.updateStockOut(stockOut: so, items: items);
       } else {
@@ -386,6 +407,10 @@ class _StockOutModalState extends State<StockOutModal> {
           writeOffReason: _issueType == StockOutIssueType.writeOff
               ? _writeOffReasonController.text.trim()
               : null,
+          customerId: _selectedCustomer?.id,
+          recipientIco: recipientIco,
+          recipientDic: recipientDic,
+          recipientAddress: recipientAddress,
         );
         await _stockOutService.createStockOut(
           stockOut: so,
@@ -439,6 +464,9 @@ class _StockOutModalState extends State<StockOutModal> {
       final notes = _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim();
+      final recipientIco = _recipientIcoController.text.trim().isEmpty ? null : _recipientIcoController.text.trim();
+      final recipientDic = _recipientDicController.text.trim().isEmpty ? null : _recipientDicController.text.trim();
+      final recipientAddress = _selectedCustomer != null ? _buildCustomerAddress(_selectedCustomer!) : null;
 
       if (_isEditMode && _editStockOut != null) {
         final status = _editStockOut!.isDraft
@@ -455,6 +483,10 @@ class _StockOutModalState extends State<StockOutModal> {
           writeOffReason: _issueType == StockOutIssueType.writeOff
               ? _writeOffReasonController.text.trim()
               : null,
+          customerId: _selectedCustomer?.id,
+          recipientIco: recipientIco,
+          recipientDic: recipientDic,
+          recipientAddress: recipientAddress,
         );
         await _stockOutService.updateStockOut(stockOut: so, items: items);
         if (mounted) {
@@ -492,6 +524,10 @@ class _StockOutModalState extends State<StockOutModal> {
           writeOffReason: _issueType == StockOutIssueType.writeOff
               ? _writeOffReasonController.text.trim()
               : null,
+          customerId: _selectedCustomer?.id,
+          recipientIco: recipientIco,
+          recipientDic: recipientDic,
+          recipientAddress: recipientAddress,
         );
         await _stockOutService.createStockOut(stockOut: so, items: items);
         if (mounted) {
@@ -530,6 +566,8 @@ class _StockOutModalState extends State<StockOutModal> {
     _recipientController.dispose();
     _notesController.dispose();
     _writeOffReasonController.dispose();
+    _recipientIcoController.dispose();
+    _recipientDicController.dispose();
     for (final row in _rows) {
       row.qtyController.dispose();
       row.priceController.dispose();
@@ -621,11 +659,84 @@ class _StockOutModalState extends State<StockOutModal> {
                 onChanged: _isReadOnly ? null : (id) => _onWarehouseChanged(id),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<Customer?>(
+                value: _selectedCustomer,
+                decoration: _styledInputDecoration('Zákazník (voliteľné)',
+                    prefixIcon: const Icon(Icons.business_outlined, size: 22, color: AppColors.textMuted)),
+                dropdownColor: AppColors.bgInput,
+                borderRadius: BorderRadius.circular(_radius),
+                items: [
+                  const DropdownMenuItem<Customer?>(value: null, child: Text('— Bez zákazníka (manuálne) —')),
+                  ..._customers.map((c) => DropdownMenuItem<Customer?>(value: c, child: Text(c.name))),
+                ],
+                onChanged: _isReadOnly
+                    ? null
+                    : (c) {
+                        setState(() {
+                          _selectedCustomer = c;
+                          if (c != null) {
+                            _recipientController.text = c.name;
+                            _recipientIcoController.text = c.ico;
+                            _recipientDicController.text = c.dic ?? '';
+                          }
+                        });
+                      },
+              ),
+              const SizedBox(height: 12),
+              if (_selectedCustomer != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgInput,
+                    borderRadius: BorderRadius.circular(_radius),
+                    border: Border.all(color: AppColors.borderDefault),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.textMuted),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          [
+                            if (_selectedCustomer!.ico.isNotEmpty) 'IČO: ${_selectedCustomer!.ico}',
+                            if (_selectedCustomer!.dic != null && _selectedCustomer!.dic!.isNotEmpty) 'DIČ: ${_selectedCustomer!.dic}',
+                            if (_selectedCustomer!.address != null) _selectedCustomer!.address!,
+                          ].join('  •  '),
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: _recipientController,
                 readOnly: _isReadOnly,
                 decoration: _styledInputDecoration('Odberateľ / účel',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 22, color: AppColors.textMuted)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _recipientIcoController,
+                      readOnly: _isReadOnly,
+                      decoration: _styledInputDecoration('IČO príjemcu',
+                          prefixIcon: const Icon(Icons.badge_outlined, size: 22, color: AppColors.textMuted)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _recipientDicController,
+                      readOnly: _isReadOnly,
+                      decoration: _styledInputDecoration('DIČ príjemcu',
+                          prefixIcon: const Icon(Icons.receipt_long_outlined, size: 22, color: AppColors.textMuted)),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<StockOutIssueType>(
@@ -792,6 +903,16 @@ class _StockOutModalState extends State<StockOutModal> {
         Text('${value.toStringAsFixed(2)} €', style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.bold : FontWeight.w600, color: valueColor ?? AppColors.textPrimary)),
       ],
     );
+  }
+
+  static String? _buildCustomerAddress(Customer c) {
+    final parts = [
+      if (c.address != null && c.address!.isNotEmpty) c.address!,
+      if (c.city != null && c.city!.isNotEmpty || c.postalCode != null && c.postalCode!.isNotEmpty)
+        '${c.city ?? ''} ${c.postalCode ?? ''}'.trim(),
+    ];
+    if (parts.isEmpty) return null;
+    return parts.join(', ');
   }
 
   Widget _buildItemsTable() {

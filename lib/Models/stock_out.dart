@@ -62,6 +62,14 @@ class StockOut {
   final String? writeOffReason;
   /// Pri prevodke: id príjemky (príjem do cieľového skladu).
   final int? linkedReceiptId;
+  /// ID zákazníka z číselníka (pre spätnú väzbu).
+  final int? customerId;
+  /// Snapshot IČO príjemcu v čase vytvorenia dokladu.
+  final String? recipientIco;
+  /// Snapshot DIČ príjemcu.
+  final String? recipientDic;
+  /// Snapshot adresy príjemcu (kombinovaná: "Ulica č., Mesto PSČ").
+  final String? recipientAddress;
 
   StockOut({
     this.id,
@@ -77,6 +85,10 @@ class StockOut {
     this.issueType = StockOutIssueType.sale,
     this.writeOffReason,
     this.linkedReceiptId,
+    this.customerId,
+    this.recipientIco,
+    this.recipientDic,
+    this.recipientAddress,
   });
 
   bool get isZeroVat => vatRate == 0;
@@ -106,6 +118,10 @@ class StockOut {
       'issue_type': issueType.value,
       'write_off_reason': writeOffReason,
       'linked_receipt_id': linkedReceiptId,
+      'customer_id': customerId,
+      'recipient_ico': recipientIco,
+      'recipient_dic': recipientDic,
+      'recipient_address': recipientAddress,
     };
   }
 
@@ -124,6 +140,10 @@ class StockOut {
       issueType: StockOutIssueType.fromString(map['issue_type'] as String?),
       writeOffReason: map['write_off_reason'] as String?,
       linkedReceiptId: map['linked_receipt_id'] as int?,
+      customerId: map['customer_id'] as int?,
+      recipientIco: map['recipient_ico'] as String?,
+      recipientDic: map['recipient_dic'] as String?,
+      recipientAddress: map['recipient_address'] as String?,
     );
   }
 
@@ -141,6 +161,10 @@ class StockOut {
     StockOutIssueType? issueType,
     String? writeOffReason,
     int? linkedReceiptId,
+    int? customerId,
+    String? recipientIco,
+    String? recipientDic,
+    String? recipientAddress,
   }) {
     return StockOut(
       id: id ?? this.id,
@@ -156,6 +180,10 @@ class StockOut {
       issueType: issueType ?? this.issueType,
       writeOffReason: writeOffReason ?? this.writeOffReason,
       linkedReceiptId: linkedReceiptId ?? this.linkedReceiptId,
+      customerId: customerId ?? this.customerId,
+      recipientIco: recipientIco ?? this.recipientIco,
+      recipientDic: recipientDic ?? this.recipientDic,
+      recipientAddress: recipientAddress ?? this.recipientAddress,
     );
   }
 }

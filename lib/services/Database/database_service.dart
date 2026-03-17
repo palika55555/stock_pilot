@@ -186,9 +186,14 @@ class DatabaseService {
     return join(base, 'account_$safe');
   }
 
-  /// Vráti plnú cestu k súboru databázy.
+  /// Vráti plnú cestu k súboru databázy. Ak _customPath nie je nastavená, skúsi prečítať db_path z SharedPreferences.
   Future<String?> getDatabasePath() async {
-    String basePath = _customPath ?? await getDatabasesPath();
+    String? basePath = _customPath;
+    if (basePath == null) {
+      final prefs = await SharedPreferences.getInstance();
+      basePath = prefs.getString('db_path');
+    }
+    basePath ??= await getDatabasesPath();
     return join(basePath, 'stock_pilot.db');
   }
 
@@ -200,12 +205,17 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    String basePath = _customPath ?? await getDatabasesPath();
-    String path = join(basePath, 'stock_pilot.db');
+    String? basePath = _customPath;
+    if (basePath == null) {
+      final prefs = await SharedPreferences.getInstance();
+      basePath = prefs.getString('db_path');
+    }
+    basePath ??= await getDatabasesPath();
+    final path = join(basePath, 'stock_pilot.db');
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 33,
+      version: 34,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -676,6 +686,62 @@ class DatabaseService {
         FOREIGN KEY (destination_warehouse_id) REFERENCES warehouses(id)
       )
     ''');
+
+    // Tabuľky notifikácií (môžu chýbať pri novej DB z _onCreate – tam sa volá len onCreate, nie onUpgrade)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        receipt_id INTEGER,
+        receipt_number TEXT,
+        extra_data TEXT,
+        created_at TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        target_username TEXT,
+        user_id TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        notification_type TEXT NOT NULL,
+        push_enabled INTEGER NOT NULL DEFAULT 1,
+        email_enabled INTEGER NOT NULL DEFAULT 0,
+        user_id TEXT,
+        UNIQUE(username, notification_type)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS notification_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        quiet_hours_start TEXT,
+        quiet_hours_end TEXT,
+        pending_reminder_hours INTEGER NOT NULL DEFAULT 24,
+        price_change_threshold_percent REAL NOT NULL DEFAULT 20.0,
+        user_id TEXT
+      )
+    ''');
+
+    // user_id na všetkých dátových tabuľkách (aj nové DB z prihlásenia cez web majú mať aktuálnu schému)
+    const dataTables = [
+      'customers', 'products', 'inbound_receipts', 'quotes', 'quote_items',
+      'production_batches', 'production_batch_recipe', 'pallets', 'stock_outs',
+      'stock_out_items', 'stock_movements', 'warehouse_transfers', 'transports',
+      'production_orders', 'recipes', 'recipe_ingredients', 'receptura_polozky',
+      'suppliers', 'app_notifications', 'notification_settings', 'notification_preferences',
+    ];
+    for (final table in dataTables) {
+      try {
+        final info = await db.rawQuery('PRAGMA table_info($table)');
+        if (info.isNotEmpty && !info.any((c) => c['name'] == 'user_id')) {
+          await db.execute('ALTER TABLE $table ADD COLUMN user_id TEXT');
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> initializeWithAdmin(User admin) async {
@@ -1326,6 +1392,43 @@ class DatabaseService {
       }
       if (!stockOutItemsInfo.any((c) => c['name'] == 'expiry_date')) {
         await db.execute('ALTER TABLE stock_out_items ADD COLUMN expiry_date TEXT');
+      }
+    }
+
+    if (oldVersion < 34) {
+      // Plná identifikácia dodávateľa/príjemcu + dodací list + PO číslo
+      final receiptInfo = await db.rawQuery('PRAGMA table_info(inbound_receipts)');
+      if (!receiptInfo.any((c) => c['name'] == 'supplier_id')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN supplier_id INTEGER');
+      }
+      if (!receiptInfo.any((c) => c['name'] == 'supplier_ico')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN supplier_ico TEXT');
+      }
+      if (!receiptInfo.any((c) => c['name'] == 'supplier_dic')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN supplier_dic TEXT');
+      }
+      if (!receiptInfo.any((c) => c['name'] == 'supplier_address')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN supplier_address TEXT');
+      }
+      if (!receiptInfo.any((c) => c['name'] == 'delivery_note_number')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN delivery_note_number TEXT');
+      }
+      if (!receiptInfo.any((c) => c['name'] == 'po_number')) {
+        await db.execute('ALTER TABLE inbound_receipts ADD COLUMN po_number TEXT');
+      }
+
+      final stockOutInfo = await db.rawQuery('PRAGMA table_info(stock_outs)');
+      if (!stockOutInfo.any((c) => c['name'] == 'customer_id')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN customer_id INTEGER');
+      }
+      if (!stockOutInfo.any((c) => c['name'] == 'recipient_ico')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN recipient_ico TEXT');
+      }
+      if (!stockOutInfo.any((c) => c['name'] == 'recipient_dic')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN recipient_dic TEXT');
+      }
+      if (!stockOutInfo.any((c) => c['name'] == 'recipient_address')) {
+        await db.execute('ALTER TABLE stock_outs ADD COLUMN recipient_address TEXT');
       }
     }
 

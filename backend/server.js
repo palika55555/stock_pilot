@@ -9,6 +9,8 @@ const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
 const { syncCustomers } = require('./DBsync/sync/customerSync');
 const { syncProducts } = require('./DBsync/sync/productSync');
+const { syncWarehouses } = require('./DBsync/sync/warehouseSync');
+const { syncSuppliers } = require('./DBsync/sync/supplierSync');
 const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -448,6 +450,32 @@ apiRouter.post('/sync/customers', async (req, res) => {
   lastSyncAt = Date.now();
   console.log('[sync] Customers OK:', result.count);
   res.status(200).json({ success: true, count: result.count });
+});
+
+// --- Sync skladov z Flutter do PostgreSQL – per user ---
+apiRouter.post('/sync/warehouses', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncWarehouses(pool, req.body, req.userId);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count ?? 0 });
+});
+
+// --- Sync dodávateľov z Flutter do PostgreSQL – per user ---
+apiRouter.post('/sync/suppliers', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncSuppliers(pool, req.body, req.userId);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count ?? 0 });
 });
 
 // --- Sync šarží a paliet z Flutter do PostgreSQL – per user ---
@@ -1146,6 +1174,61 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
     res.json(stats);
   } catch (err) {
     console.error('[GET /api/dashboard/stats]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Sklady (warehouses) – per user ---
+apiRouter.get('/warehouses', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, code, warehouse_type, address, city, postal_code, is_active
+       FROM warehouses WHERE user_id = $1 ORDER BY name`,
+      [req.userId]
+    );
+    res.json(rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      code: r.code || '',
+      warehouse_type: r.warehouse_type || 'Predaj',
+      address: r.address,
+      city: r.city,
+      postal_code: r.postal_code,
+      is_active: (r.is_active ?? 1) !== 0,
+    })));
+  } catch (err) {
+    if (err.message?.includes('relation "warehouses" does not exist')) return res.json([]);
+    console.error('[GET /api/warehouses]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Dodávatelia (suppliers) – per user ---
+apiRouter.get('/suppliers', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
+       FROM suppliers WHERE user_id = $1 ORDER BY name`,
+      [req.userId]
+    );
+    res.json(rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      ico: r.ico || '',
+      email: r.email,
+      address: r.address,
+      city: r.city,
+      postal_code: r.postal_code,
+      dic: r.dic,
+      ic_dph: r.ic_dph,
+      default_vat_rate: r.default_vat_rate ?? 20,
+      is_active: (r.is_active ?? 1) !== 0,
+    })));
+  } catch (err) {
+    if (err.message?.includes('relation "suppliers" does not exist')) return res.json([]);
+    console.error('[GET /api/suppliers]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });

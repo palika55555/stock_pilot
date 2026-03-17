@@ -211,6 +211,26 @@ class PrijemkaPdfGenerator {
                       'Dodávateľ: ${receipt.supplierName}',
                       style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
                     ),
+                  if (receipt.supplierIco != null && receipt.supplierIco!.isNotEmpty)
+                    pw.Text(
+                      'IČO: ${receipt.supplierIco}${(receipt.supplierDic != null && receipt.supplierDic!.isNotEmpty) ? '  •  DIČ: ${receipt.supplierDic}' : ''}',
+                      style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+                    ),
+                  if (receipt.supplierAddress != null && receipt.supplierAddress!.isNotEmpty)
+                    pw.Text(
+                      'Adresa: ${receipt.supplierAddress}',
+                      style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+                    ),
+                  if (receipt.deliveryNoteNumber != null && receipt.deliveryNoteNumber!.isNotEmpty)
+                    pw.Text(
+                      'Č. dodacieho listu: ${receipt.deliveryNoteNumber}',
+                      style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+                    ),
+                  if (receipt.poNumber != null && receipt.poNumber!.isNotEmpty)
+                    pw.Text(
+                      'Č. objednávky (PO): ${receipt.poNumber}',
+                      style: pw.TextStyle(fontSize: c.bodyFontSize.toDouble()),
+                    ),
                   pw.SizedBox(height: 2),
                   pw.Text(
                     receipt.isSettled ? 'Vysporiadaná' : 'Nevysporiadaná',

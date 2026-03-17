@@ -94,6 +94,18 @@ class InboundReceipt {
   final String? reverseReason;
   /// Či už bolo množstvo pričítané na sklad (aby sa neaplikovalo dvakrát).
   final bool stockApplied;
+  /// ID dodávateľa z číselníka (pre spätnú väzbu).
+  final int? supplierId;
+  /// Snapshot IČO dodávateľa v čase vytvorenia dokladu.
+  final String? supplierIco;
+  /// Snapshot DIČ dodávateľa.
+  final String? supplierDic;
+  /// Snapshot adresy dodávateľa (kombinovaná: "Ulica č., Mesto PSČ").
+  final String? supplierAddress;
+  /// Číslo dodacieho listu dodávateľa.
+  final String? deliveryNoteNumber;
+  /// Číslo objednávky (PO number).
+  final String? poNumber;
 
   InboundReceipt({
     this.id,
@@ -123,6 +135,12 @@ class InboundReceipt {
     this.reversedByUsername,
     this.reverseReason,
     this.stockApplied = false,
+    this.supplierId,
+    this.supplierIco,
+    this.supplierDic,
+    this.supplierAddress,
+    this.deliveryNoteNumber,
+    this.poNumber,
   });
 
   bool get isEditable =>
@@ -164,6 +182,12 @@ class InboundReceipt {
       'reversed_by_username': reversedByUsername,
       'reverse_reason': reverseReason,
       'stock_applied': stockApplied ? 1 : 0,
+      'supplier_id': supplierId,
+      'supplier_ico': supplierIco,
+      'supplier_dic': supplierDic,
+      'supplier_address': supplierAddress,
+      'delivery_note_number': deliveryNoteNumber,
+      'po_number': poNumber,
     };
   }
 
@@ -196,6 +220,12 @@ class InboundReceipt {
       reversedByUsername: map['reversed_by_username'] as String?,
       reverseReason: map['reverse_reason'] as String?,
       stockApplied: (map['stock_applied'] as int?) == 1,
+      supplierId: map['supplier_id'] as int?,
+      supplierIco: map['supplier_ico'] as String?,
+      supplierDic: map['supplier_dic'] as String?,
+      supplierAddress: map['supplier_address'] as String?,
+      deliveryNoteNumber: map['delivery_note_number'] as String?,
+      poNumber: map['po_number'] as String?,
     );
   }
 
@@ -227,6 +257,12 @@ class InboundReceipt {
     String? reversedByUsername,
     String? reverseReason,
     bool? stockApplied,
+    int? supplierId,
+    String? supplierIco,
+    String? supplierDic,
+    String? supplierAddress,
+    String? deliveryNoteNumber,
+    String? poNumber,
   }) {
     return InboundReceipt(
       id: id ?? this.id,
@@ -256,6 +292,12 @@ class InboundReceipt {
       reversedByUsername: reversedByUsername ?? this.reversedByUsername,
       reverseReason: reverseReason ?? this.reverseReason,
       stockApplied: stockApplied ?? this.stockApplied,
+      supplierId: supplierId ?? this.supplierId,
+      supplierIco: supplierIco ?? this.supplierIco,
+      supplierDic: supplierDic ?? this.supplierDic,
+      supplierAddress: supplierAddress ?? this.supplierAddress,
+      deliveryNoteNumber: deliveryNoteNumber ?? this.deliveryNoteNumber,
+      poNumber: poNumber ?? this.poNumber,
     );
   }
 }

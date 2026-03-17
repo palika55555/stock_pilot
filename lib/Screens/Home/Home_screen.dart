@@ -196,6 +196,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       syncProductsToBackend(products);
       final customers = await _db.getCustomers();
       await syncCustomersToBackend(customers);
+      final warehouses = await _db.getWarehouses();
+      await syncWarehousesToBackend(warehouses);
+      final suppliers = await _db.getSuppliers();
+      await syncSuppliersToBackend(suppliers);
       if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

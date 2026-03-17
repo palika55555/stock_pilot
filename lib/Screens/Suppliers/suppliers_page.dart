@@ -124,7 +124,7 @@ class _SuppliersPageState extends State<SuppliersPage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
+            child: Text(l10n.delete, style: const TextStyle(color: AppColors.danger)),
           ),
         ],
       ),
@@ -136,7 +136,8 @@ class _SuppliersPageState extends State<SuppliersPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.supplierDeleted),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.bgElevated,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -158,18 +159,39 @@ class _SuppliersPageState extends State<SuppliersPage>
               backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
-              title: Text(
-                l10n.suppliers,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 26,
-                ),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.suppliers,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 26,
+                    ),
+                  ),
+                  if (!_loading && _filteredSuppliers.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '${_filteredSuppliers.length} ${_filteredSuppliers.length == 1 ? 'dodávateľ' : _filteredSuppliers.length < 5 ? 'dodávatelia' : 'dodávateľov'}',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               actions: [
-                IconButton(
-                  icon: Icon(Icons.tune, color: AppColors.textPrimary),
-                  onPressed: () {},
+                Tooltip(
+                  message: 'Filtre a nastavenia',
+                  child: IconButton(
+                    icon: Icon(Icons.tune_rounded, color: AppColors.textPrimary),
+                    onPressed: () {},
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -177,25 +199,23 @@ class _SuppliersPageState extends State<SuppliersPage>
           ),
         ),
       ),
-      body: Container(
-        color: const Color(0xFFF8FAFC),
-        child: Column(
-          children: [
-            _buildHeader(l10n),
-            if (_loading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(color: Color(0xFF6366F1)),
-                ),
-              )
-            else
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _loadSuppliers,
-                  color: const Color(0xFF6366F1),
-                  child: _filteredSuppliers.isEmpty
-                      ? const Center(child: Text('Žiadni dodávatelia neboli nájdení'))
-                      : ListView.builder(
+      body: Column(
+        children: [
+          _buildHeader(l10n),
+          if (_loading)
+            const Expanded(
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.accentGold),
+              ),
+            )
+          else
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadSuppliers,
+                color: AppColors.accentGold,
+                child: _filteredSuppliers.isEmpty
+                    ? _buildEmptyState(l10n)
+                    : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
                           physics: const BouncingScrollPhysics(),
                           itemCount: _filteredSuppliers.length,
@@ -212,22 +232,24 @@ class _SuppliersPageState extends State<SuppliersPage>
                         ),
                 ),
               ),
-          ],
-        ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addSupplier,
-        backgroundColor: Colors.black,
-        elevation: 10,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        label: Text(
-          l10n.add,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+      floatingActionButton: Tooltip(
+        message: l10n.addSupplier,
+        child: FloatingActionButton.extended(
+          onPressed: _addSupplier,
+          backgroundColor: AppColors.accentGold,
+          elevation: 10,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          label: Text(
+            l10n.add,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.bgPrimary,
+            ),
           ),
+          icon: const Icon(Icons.add, color: AppColors.bgPrimary),
         ),
-        icon: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -235,12 +257,15 @@ class _SuppliersPageState extends State<SuppliersPage>
   Widget _buildHeader(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, kToolbarHeight + 10, 20, 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
-        boxShadow: [
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+        border: const Border(
+          bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
+        ),
+        boxShadow: const [
           BoxShadow(
-            color: Color(0x0A000000),
+            color: Colors.black26,
             blurRadius: 20,
             offset: Offset(0, 10),
           ),
@@ -250,45 +275,60 @@ class _SuppliersPageState extends State<SuppliersPage>
         children: [
           TextField(
             controller: _searchController,
+            style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: l10n.searchHintSuppliers,
+              hintStyle: const TextStyle(color: AppColors.textMuted),
               prefixIcon: const Icon(
                 Icons.search_rounded,
-                color: Color(0xFF6366F1),
+                color: AppColors.accentGold,
               ),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
                       onPressed: () => _searchController.clear(),
                     )
                   : null,
               filled: true,
-              fillColor: const Color(0xFFF1F5F9),
+              fillColor: AppColors.bgInput,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              _FilterChip(
-                label: l10n.all,
-                selected: _statusFilter == 0,
-                onTap: () => _setStatus(0),
+              Tooltip(
+                message: 'Zobraziť všetkých dodávateľov',
+                child: _FilterChip(
+                  label: l10n.all,
+                  selected: _statusFilter == 0,
+                  onTap: () => _setStatus(0),
+                ),
               ),
               const SizedBox(width: 8),
-              _FilterChip(
-                label: l10n.allActive,
-                selected: _statusFilter == 1,
-                onTap: () => _setStatus(1),
+              Tooltip(
+                message: 'Len aktívnych dodávateľov',
+                child: _FilterChip(
+                  label: l10n.allActive,
+                  selected: _statusFilter == 1,
+                  onTap: () => _setStatus(1),
+                ),
               ),
               const SizedBox(width: 8),
-              _FilterChip(
-                label: l10n.allInactive,
-                selected: _statusFilter == 2,
-                onTap: () => _setStatus(2),
+              Tooltip(
+                message: 'Len neaktívnych dodávateľov',
+                child: _FilterChip(
+                  label: l10n.allInactive,
+                  selected: _statusFilter == 2,
+                  onTap: () => _setStatus(2),
+                ),
               ),
             ],
           ),
@@ -302,6 +342,94 @@ class _SuppliersPageState extends State<SuppliersPage>
       _statusFilter = status;
       _filterSuppliers();
     });
+  }
+
+  Widget _buildEmptyState(AppLocalizations l10n) {
+    final isSearchOrFilter = _searchController.text.isNotEmpty || _statusFilter != 0;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.bgCard,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderSubtle, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentGold.withOpacity(0.15),
+                    blurRadius: 24,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Icon(
+                isSearchOrFilter ? Icons.search_off_rounded : Icons.local_shipping_rounded,
+                size: 56,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              isSearchOrFilter ? 'Žiadne výsledky' : l10n.noSuppliers,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isSearchOrFilter
+                  ? 'Skúste zmeniť hľadaný výraz alebo filter'
+                  : 'Pridajte prvého dodávateľa a začnite evidovať',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            if (!isSearchOrFilter) ...[
+              const SizedBox(height: 24),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _addSupplier,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGold.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.accentGold, width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, color: AppColors.accentGold, size: 22),
+                        const SizedBox(width: 10),
+                        Text(
+                          l10n.addSupplier,
+                          style: const TextStyle(
+                            color: AppColors.accentGold,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -323,6 +451,7 @@ class _SupplierCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = supplier;
+    final l10n = AppLocalizations.of(context)!;
     final animation = CurvedAnimation(
       parent: controller,
       curve: Interval(
@@ -339,83 +468,127 @@ class _SupplierCard extends StatelessWidget {
           begin: const Offset(0.2, 0),
           end: Offset.zero,
         ).animate(animation),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: AppColors.cardDecoration,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onEdit,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  _buildIconBox(),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+        child: Tooltip(
+          message: l10n.edit,
+          preferBelow: false,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: AppColors.cardDecoration,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: onEdit,
+                splashColor: AppColors.accentGold.withOpacity(0.15),
+                highlightColor: AppColors.accentGold.withOpacity(0.08),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      _buildIconBox(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              children: [
+                                Tooltip(
+                                  message: 'IČO – identifikačné číslo organizácie',
+                                  child: Text(
+                                    s.ico,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.accentGold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Tooltip(
+                                  message: s.isActive ? l10n.active : l10n.inactive,
+                                  child: _buildStatusDot(s.isActive),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
                             Text(
-                              s.ico,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.accentGold,
-                                fontSize: 12,
+                              s.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildStatusDot(s.isActive),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (s.city != null && s.city!.isNotEmpty) ...[
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    size: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  Text(
+                                    s.city!,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                                if (s.email != null && s.email!.isNotEmpty) ...[
+                                  if (s.city != null && s.city!.isNotEmpty)
+                                    Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
+                                  Icon(
+                                    Icons.email_outlined,
+                                    size: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Tooltip(
+                                    message: s.email!,
+                                    child: Text(
+                                      s.email!,
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ],
+                                if (s.defaultVatRate > 0) ...[
+                                  if ((s.city != null && s.city!.isNotEmpty) ||
+                                      (s.email != null && s.email!.isNotEmpty))
+                                    Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
+                                  Text(
+                                    'DPH: ${s.defaultVatRate}%',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
-                        Text(
-                          s.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: AppColors.textPrimary,
-                          ),
+                      ),
+                      Tooltip(
+                        message: 'Možnosti',
+                        child: GestureDetector(
+                          onTap: () {},
+                          child: _buildActionMenu(context),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            if (s.city != null && s.city!.isNotEmpty) ...[
-                              Icon(
-                                Icons.location_on_rounded,
-                                size: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                s.city!,
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                            if (s.defaultVatRate > 0) ...[
-                              if (s.city != null && s.city!.isNotEmpty)
-                                Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
-                              Text(
-                                'DPH: ${s.defaultVatRate}%',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  GestureDetector(
-                    onTap: () {}, // Zastaví propagáciu kliknutia
-                    child: _buildActionMenu(context),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -467,22 +640,24 @@ class _SupplierCard extends StatelessWidget {
   }
 
   Widget _buildActionMenu(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: PopupMenuButton<String>(
         icon: Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: AppColors.bgCard,
         onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
         itemBuilder: (context) => [
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'edit',
-            child: _MenuEntry(Icons.edit_rounded, 'Upraviť'),
+            child: _MenuEntry(Icons.edit_rounded, l10n.edit),
           ),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'delete',
             child: _MenuEntry(
               Icons.delete_outline_rounded,
-              'Zmazať',
+              l10n.delete,
               isDestructive: true,
             ),
           ),
@@ -505,13 +680,13 @@ class _MenuEntry extends StatelessWidget {
         Icon(
           icon,
           size: 20,
-          color: isDestructive ? Colors.red : const Color(0xFF6366F1),
+          color: isDestructive ? AppColors.danger : AppColors.accentGold,
         ),
         const SizedBox(width: 12),
         Text(
           label,
           style: TextStyle(
-            color: isDestructive ? Colors.red : const Color(0xFF1E293B),
+            color: isDestructive ? AppColors.danger : AppColors.textPrimary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -539,10 +714,10 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1E293B) : Colors.white,
+          color: selected ? AppColors.accentGold : AppColors.bgInput,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+            color: selected ? AppColors.accentGold : AppColors.borderDefault,
           ),
         ),
         child: Text(
@@ -550,7 +725,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: selected ? Colors.white : const Color(0xFF64748B),
+            color: selected ? AppColors.bgPrimary : AppColors.textSecondary,
           ),
         ),
       ),

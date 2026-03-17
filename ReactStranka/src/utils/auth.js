@@ -35,6 +35,10 @@ export function getAuthHeaders(auth = null) {
   }
 }
 
+/**
+ * Odhlási používateľa – odstráni len auth (token, user).
+ * Notifikácie (stockpilot_notifications_${userId}) sa NEMAZÚ, aby po opätovnom prihlásení ostali zachované.
+ */
 export function clearAuth() {
   localStorage.removeItem(STORAGE_KEY)
 }

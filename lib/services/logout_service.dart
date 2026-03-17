@@ -6,10 +6,10 @@ import 'sync_check_service.dart';
 import 'sync_service.dart';
 import '../screens/Login/login_page.dart';
 
-/// Centralizované odhlásenie: vymaže tokeny, lokálne uložené prihlásenie, zastaví sync, presmeruje na login.
+/// Centralizované odhlásenie: vymaže tokeny a session, zastaví sync, presmeruje na login.
+/// Lokálna DB a jej dáta sa NEMAŽÚ – sú základom; pri ďalšom prihlásení sú k dispozícii.
 class LogoutService {
   static Future<void> logout(BuildContext context) async {
-    await DatabaseService().clearCurrentUserData();
     await clearTokensAndToken();
     await DatabaseService().clearSavedLogin();
     UserSession.clear();

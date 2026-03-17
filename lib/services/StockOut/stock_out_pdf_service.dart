@@ -97,6 +97,16 @@ class StockOutPdfService {
                   stockOut.recipientName!.trim(),
                   style: const pw.TextStyle(fontSize: 10),
                 ),
+                if (stockOut.recipientIco != null && stockOut.recipientIco!.isNotEmpty)
+                  pw.Text(
+                    'IČO: ${stockOut.recipientIco}${(stockOut.recipientDic != null && stockOut.recipientDic!.isNotEmpty) ? '  •  DIČ: ${stockOut.recipientDic}' : ''}',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                if (stockOut.recipientAddress != null && stockOut.recipientAddress!.isNotEmpty)
+                  pw.Text(
+                    'Adresa: ${stockOut.recipientAddress}',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
               ],
               if (stockOut.notes != null &&
                   stockOut.notes!.trim().isNotEmpty) ...[
