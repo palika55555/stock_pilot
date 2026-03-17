@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/user_session.dart';
 import '../../theme/app_theme.dart';
 import '../../models/user.dart';
 import '../../screens/warehouse/warehouse_supplies.dart';
@@ -312,6 +313,160 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
     );
   }
 
+  void _showUserInfoSheet(BuildContext context) {
+    final user = widget.user;
+    final role = widget.userRole;
+    final name = user?.fullName ?? 'Používateľ';
+    final initials = user != null
+        ? user.fullName.split(' ').take(2).map((w) => w.isNotEmpty ? w[0] : '').join().toUpperCase()
+        : '??';
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textMuted,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.accentGoldSubtle,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.accentGold.withOpacity(0.4), width: 2),
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: GoogleFonts.outfit(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accentGold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                name,
+                style: GoogleFonts.dmSans(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (user?.username != null && user!.username.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  user.username,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: role == 'admin' ? AppColors.dangerSubtle : AppColors.infoSubtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: role == 'admin' ? AppColors.danger : AppColors.info,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  role == 'admin' ? 'Administrátor' : 'Používateľ',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: role == 'admin' ? AppColors.danger : AppColors.info,
+                  ),
+                ),
+              ),
+              if (role == 'user') ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgInput,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.supervisor_account_rounded, color: AppColors.accentGold, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Nadriadený',
+                              style: GoogleFonts.dmSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              UserSession.ownerDisplayName != null &&
+                                      UserSession.ownerDisplayName!.isNotEmpty
+                                  ? UserSession.ownerDisplayName!
+                                  : 'Odhláste sa a prihláste sa znova cez internet, aby sa zobrazil nadriadený.',
+                              style: GoogleFonts.dmSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: UserSession.ownerDisplayName != null &&
+                                        UserSession.ownerDisplayName!.isNotEmpty
+                                    ? AppColors.textPrimary
+                                    : AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (user != null && (user.email.isNotEmpty || user.phone.isNotEmpty || user.department.isNotEmpty)) ...[
+                const SizedBox(height: 16),
+                const Divider(color: AppColors.borderSubtle),
+                if (user.email.isNotEmpty)
+                  _UserInfoRow(icon: Icons.email_outlined, label: 'E-mail', value: user.email),
+                if (user.phone.isNotEmpty)
+                  _UserInfoRow(icon: Icons.phone_outlined, label: 'Telefón', value: user.phone),
+                if (user.department.isNotEmpty)
+                  _UserInfoRow(icon: Icons.business_center_outlined, label: 'Oddelenie', value: user.department),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserSection(double labelOpacity) {
     final user = widget.user;
     final initials = user != null
@@ -324,65 +479,81 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.accentGoldSubtle,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.accentGold.withOpacity(0.3), width: 1.5),
-                ),
-                child: Center(
-                  child: Text(
-                    initials,
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.accentGold,
+          GestureDetector(
+            onTap: () => _showUserInfoSheet(context),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentGoldSubtle,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.accentGold.withOpacity(0.3), width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      initials,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accentGold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: labelOpacity < 0.01
-                    ? const SizedBox.shrink()
-                    : Opacity(
-                        opacity: labelOpacity,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                name,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                Expanded(
+                  child: labelOpacity < 0.01
+                      ? const SizedBox.shrink()
+                      : Opacity(
+                          opacity: labelOpacity,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  name,
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                              Text(
-                                role.toUpperCase(),
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary,
-                                  letterSpacing: 0.8,
+                                Text(
+                                  role.toUpperCase(),
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                    letterSpacing: 0.8,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                            ],
+                                if (UserSession.ownerDisplayName != null &&
+                                    UserSession.ownerDisplayName!.isNotEmpty &&
+                                    role == 'user')
+                                  Text(
+                                    'Nadriadený: ${UserSession.ownerDisplayName}',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
           Opacity(
             opacity: labelOpacity,
@@ -646,6 +817,55 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UserInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _UserInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

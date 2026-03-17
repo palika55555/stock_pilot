@@ -22,6 +22,7 @@ import '../../services/Supplier/supplier_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
 import '../../widgets/receipts/goods_receipt_list_widget.dart';
 import '../../widgets/receipts/goods_receipt_modal_widget.dart';
+import '../../widgets/Common/grid_background.dart';
 
 /// Obrazovka Príjem tovaru – scaffold, AppBar, načítanie dát a FAB.
 class GoodsReceiptScreen extends StatefulWidget {
@@ -639,7 +640,7 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: AppColors.bgPrimary,
+      backgroundColor: const Color(0xFF080C0F),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
@@ -712,7 +713,10 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
           ),
         ),
       ),
-      body: Padding(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: ReceiptBackground()),
+          Padding(
         padding: const EdgeInsets.only(top: kToolbarHeight + 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -738,6 +742,8 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
             ),
           ],
         ),
+      ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openNewReceiptModal,

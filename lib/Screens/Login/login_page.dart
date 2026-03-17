@@ -237,6 +237,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       ownerFullName: ownerFullName,
       ownerUsername: ownerUsername,
     );
+    final ownerDisplay = ownerFullName?.isNotEmpty == true ? ownerFullName : ownerUsername;
+    if (ownerDisplay != null && ownerDisplay.isNotEmpty) {
+      SharedPreferences.getInstance().then((prefs) =>
+          prefs.setString('current_user_owner_name', ownerDisplay));
+    } else {
+      SharedPreferences.getInstance().then((prefs) =>
+          prefs.remove('current_user_owner_name'));
+    }
     if (mounted) setState(() => _isLoading = false);
     if (!mounted) return;
     Navigator.pushReplacement(

@@ -25,10 +25,16 @@ class UserSession {
     print('DEBUG UserSession.setUser: userId=$userId owner=$_ownerFullName');
   }
 
+  /// Nastaví meno nadriadeného (napr. po obnovení z SharedPreferences).
+  static void setOwnerDisplayName(String? name) {
+    _ownerFullName = name?.isNotEmpty == true ? name : null;
+    _ownerUsername = null;
+  }
+
   static String? get userId => _userId;
   static String? get username => _username;
   static String? get role => _role;
-   /// Nadriadený (iba ak sme sub-user). Preferuje celé meno, fallback username.
+  /// Nadriadený (iba ak sme sub-user). Preferuje celé meno, fallback username.
   static String? get ownerDisplayName =>
       _ownerFullName?.isNotEmpty == true ? _ownerFullName : _ownerUsername;
   static bool get isLoggedIn => _userId != null && _userId!.isNotEmpty;

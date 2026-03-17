@@ -1,6 +1,6 @@
 import 'dart:async';
 import '../../models/product.dart';
-import '../database/database_service.dart';
+import '../Database/database_service.dart';
 
 class ProductService {
   final DatabaseService _db = DatabaseService();

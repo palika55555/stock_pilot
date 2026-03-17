@@ -128,6 +128,22 @@ apiRouter.use((req, res, next) => {
   authenticateToken(req, res, next);
 });
 
+// Pre sub-userov: req.dataUserId = owner_id (admin), aby API vracalo dáta nadriadeného. Inak req.dataUserId = req.userId.
+apiRouter.use(async (req, res, next) => {
+  if (!req.userId || !pool || !poolReady) {
+    req.dataUserId = req.userId;
+    return next();
+  }
+  try {
+    const { rows } = await pool.query('SELECT owner_id FROM users WHERE id = $1', [req.userId]);
+    const ownerId = rows[0]?.owner_id;
+    req.dataUserId = ownerId != null ? ownerId : req.userId;
+  } catch (_) {
+    req.dataUserId = req.userId;
+  }
+  next();
+});
+
 // Header pre klienta: X-Data-Isolation-Warning: true ak treba manuálnu migráciu
 apiRouter.use((req, res, next) => {
   res.setHeader('X-Data-Isolation-Warning', dataIsolationMigrated ? 'false' : 'true');
@@ -249,7 +265,9 @@ apiRouter.post('/auth/login', async (req, res) => {
     }
     // db_owner má vždy prístup
     if (user.role !== 'db_owner') {
-      if (!user.web_access) {
+      // Sub-user (kolega) nemusí mať web_access – potrebuje token na sync v apke (dáta nadriadeného).
+      // Admin a standalone user potrebujú web_access na prihlásenie na web.
+      if (!user.owner_id && !user.web_access) {
         console.warn('[auth] User without web_access tried to login:', username);
         return res.status(403).json({
           success: false,
@@ -397,9 +415,10 @@ apiRouter.get('/stocks', async (req, res) => {
     return res.status(503).json({ error: 'Database not configured or unavailable' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, symbol, price, created_at FROM stocks WHERE user_id = $1 ORDER BY created_at DESC',
-      [req.userId]
+      [dataUserId]
     );
     console.log('[GET /api/stocks] returned', rows.length, 'rows');
     res.json(rows);
@@ -426,11 +445,12 @@ apiRouter.post('/stocks', async (req, res) => {
     return res.status(400).json({ error: 'price must be a number' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const {
       rows: [row],
     } = await pool.query(
       'INSERT INTO stocks (user_id, symbol, price) VALUES ($1, $2, $3) RETURNING id, symbol, price, created_at',
-      [req.userId, symbol.toString().trim(), priceNum]
+      [dataUserId, symbol.toString().trim(), priceNum]
     );
     console.log('[POST /api/stocks] created id=', row?.id, 'symbol=', row?.symbol);
     res.status(201).json(row);
@@ -447,7 +467,7 @@ apiRouter.post('/sync/products', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncProducts(pool, req.body, req.userId);
+  const result = await syncProducts(pool, req.body, req.dataUserId ?? req.userId);
   if (!result.ok) {
     console.error('[sync] Products failed:', result.error);
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
@@ -462,7 +482,7 @@ apiRouter.post('/sync/customers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncCustomers(pool, req.body, req.userId);
+  const result = await syncCustomers(pool, req.body, req.dataUserId ?? req.userId);
   if (!result.ok) {
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
@@ -477,7 +497,7 @@ apiRouter.post('/sync/warehouses', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncWarehouses(pool, req.body, req.userId);
+  const result = await syncWarehouses(pool, req.body, req.dataUserId ?? req.userId);
   if (!result.ok) {
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
@@ -490,7 +510,7 @@ apiRouter.post('/sync/suppliers', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const result = await syncSuppliers(pool, req.body, req.userId);
+  const result = await syncSuppliers(pool, req.body, req.dataUserId ?? req.userId);
   if (!result.ok) {
     return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
   }
@@ -503,7 +523,7 @@ apiRouter.post('/sync/batches', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const userId = req.userId;
+  const userId = req.dataUserId ?? req.userId;
   const batches = Array.isArray(req.body?.batches) ? req.body.batches : [];
   const pallets = Array.isArray(req.body?.pallets) ? req.body.pallets : [];
   const client = await pool.connect();
@@ -592,10 +612,11 @@ apiRouter.get('/customers', async (req, res) => {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
        FROM customers WHERE user_id = $1 ORDER BY name ASC`,
-      [req.userId]
+      [dataUserId]
     );
     res.json(rows);
   } catch (err) {
@@ -613,10 +634,11 @@ apiRouter.get('/customers/:id', async (req, res) => {
     return res.status(400).json({ error: 'Neplatné id' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
        FROM customers WHERE user_id = $1 AND id = $2`,
-      [req.userId, id]
+      [dataUserId, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Zákazník nebol nájdený' });
@@ -659,16 +681,17 @@ apiRouter.put('/customers/:id', async (req, res) => {
         ic_dph != null ? String(ic_dph).trim() || null : null,
         default_vat_rate != null ? parseInt(default_vat_rate, 10) : 20,
         is_active !== undefined && is_active !== null ? (is_active ? 1 : 0) : 1,
-        req.userId,
+        req.dataUserId ?? req.userId,
         id,
       ]
     );
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Zákazník nebol nájdený' });
     }
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active FROM customers WHERE user_id = $1 AND id = $2',
-      [req.userId, id]
+      [dataUserId, id]
     );
     lastCustomersUpdatedAt = Date.now();
     res.json(rows[0]);
@@ -696,13 +719,14 @@ apiRouter.get('/products/by-barcode', async (req, res) => {
     return res.status(400).json({ error: 'Parameter code je povinný' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
        FROM products
        WHERE user_id = $1 AND ((ean IS NOT NULL AND ean = $2) OR plu = $2)
        GROUP BY unique_id, name, plu, ean, unit
        LIMIT 1`,
-      [req.userId, code]
+      [dataUserId, code]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený', code });
@@ -720,9 +744,10 @@ apiRouter.get('/products', async (req, res) => {
   }
   const search = (req.query.search ?? '').toString().trim().toLowerCase();
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     let query = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
       FROM products WHERE user_id = $1 GROUP BY unique_id, name, plu, ean, unit`;
-    const params = [req.userId];
+    const params = [dataUserId];
     if (search) {
       params.push(`%${search}%`);
       query = `SELECT * FROM (${query}) AS agg
@@ -746,11 +771,12 @@ apiRouter.get('/products/:uniqueId', async (req, res) => {
     return res.status(400).json({ error: 'uniqueId je povinný' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
        FROM products WHERE user_id = $1 AND unique_id = $2
        GROUP BY unique_id, name, plu, ean, unit`,
-      [req.userId, uniqueId]
+      [dataUserId, uniqueId]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený' });
@@ -773,16 +799,17 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
   const { ean } = req.body || {};
   const eanVal = ean != null ? String(ean).trim() || null : null;
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rowCount } = await pool.query(
       'UPDATE products SET ean = $1 WHERE user_id = $2 AND unique_id = $3',
-      [eanVal, req.userId, uniqueId]
+      [eanVal, dataUserId, uniqueId]
     );
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený' });
     }
     const { rows } = await pool.query(
       'SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE user_id = $1 AND unique_id = $2 GROUP BY unique_id, name, plu, ean, unit',
-      [req.userId, uniqueId]
+      [dataUserId, uniqueId]
     );
     res.json(rows[0] || { unique_id: uniqueId, ean: eanVal });
   } catch (err) {
@@ -797,10 +824,11 @@ apiRouter.get('/batches/sync', async (req, res) => {
   const from = (req.query.from || '2020-01-01').toString().trim();
   const to = (req.query.to || '2099-12-31').toString().trim();
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const batchRows = await pool.query(
       `SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total
        FROM production_batches WHERE user_id = $1 AND production_date >= $2 AND production_date <= $3 ORDER BY production_date DESC, created_at DESC`,
-      [req.userId, from, to]
+      [dataUserId, from, to]
     );
     const batches = [];
     for (const b of batchRows.rows) {
@@ -846,8 +874,9 @@ apiRouter.get('/batches', async (req, res) => {
   const to = (req.query.to || '').toString().trim();
   const limit = Math.min(parseInt(req.query.limit, 10) || 0, 200);
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1';
-    const params = [req.userId];
+    const params = [dataUserId];
     if (date) {
       query += ' AND production_date = $2';
       params.push(date);
@@ -885,11 +914,12 @@ apiRouter.post('/batches', async (req, res) => {
   }
   const qty = parseInt(quantity_produced, 10) || 0;
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `INSERT INTO production_batches (user_id, production_date, product_type, quantity_produced, notes, cost_total, revenue_total)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total`,
       [
-        req.userId,
+        dataUserId,
         dateVal,
         typeVal,
         qty,
@@ -932,9 +962,10 @@ apiRouter.get('/batches/by-local/:localId', async (req, res) => {
   const localId = parseInt(req.params.localId, 10);
   if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND local_id = $2',
-      [req.userId, localId]
+      [dataUserId, localId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const r = rows[0];
@@ -959,9 +990,10 @@ apiRouter.get('/batches/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND id = $2',
-      [req.userId, id]
+      [dataUserId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const r = rows[0];
@@ -986,9 +1018,10 @@ apiRouter.get('/batches/:id/recipe', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT r.id, r.batch_id, r.material_name, r.quantity, r.unit FROM production_batch_recipe r INNER JOIN production_batches b ON b.id = r.batch_id WHERE b.user_id = $1 AND r.batch_id = $2 ORDER BY r.id ASC',
-      [req.userId, id]
+      [dataUserId, id]
     );
     res.json(rows.map((r) => ({ id: r.id, batch_id: r.batch_id, material_name: r.material_name, quantity: Number(r.quantity), unit: r.unit || 'kg' })));
   } catch (err) {
@@ -1002,9 +1035,10 @@ apiRouter.get('/batches/:id/pallets', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND batch_id = $2 ORDER BY id ASC',
-      [req.userId, id]
+      [dataUserId, id]
     );
     res.json(
       rows.map((r) => ({
@@ -1034,9 +1068,10 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
     return res.status(400).json({ error: 'pieces_per_pallet a count musia byť kladné čísla' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const batchRes = await pool.query(
       'SELECT id, product_type, quantity_produced FROM production_batches WHERE user_id = $1 AND id = $2',
-      [req.userId, batchId]
+      [dataUserId, batchId]
     );
     if (batchRes.rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const batch = batchRes.rows[0];
@@ -1048,7 +1083,7 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
     for (let i = 0; i < count; i++) {
       const { rows } = await pool.query(
         `INSERT INTO pallets (user_id, batch_id, product_type, quantity, status) VALUES ($1, $2, $3, $4, 'Na sklade') RETURNING id, batch_id, product_type, quantity, status, created_at`,
-        [req.userId, batchId, batch.product_type, qty]
+        [dataUserId, batchId, batch.product_type, qty]
       );
       if (rows[0]) created.push(rows[0]);
     }
@@ -1074,9 +1109,10 @@ apiRouter.get('/pallets/by-local/:localId', async (req, res) => {
   const localId = parseInt(req.params.localId, 10);
   if (Number.isNaN(localId)) return res.status(400).json({ error: 'Neplatné localId' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND local_id = $2',
-      [req.userId, localId]
+      [dataUserId, localId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     const r = rows[0];
@@ -1100,9 +1136,10 @@ apiRouter.get('/pallets/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND id = $2',
-      [req.userId, id]
+      [dataUserId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     const r = rows[0];
@@ -1129,16 +1166,17 @@ apiRouter.put('/pallets/:id/assign', async (req, res) => {
     return res.status(400).json({ error: 'customer_id je povinný' });
   }
   try {
-    const palletRes = await pool.query('SELECT id, status FROM pallets WHERE user_id = $1 AND id = $2', [req.userId, palletId]);
+    const dataUserId = req.dataUserId ?? req.userId;
+    const palletRes = await pool.query('SELECT id, status FROM pallets WHERE user_id = $1 AND id = $2', [dataUserId, palletId]);
     if (palletRes.rows.length === 0) return res.status(404).json({ error: 'Paleta nebola nájdená' });
     if (palletRes.rows[0].status === 'U zákazníka') {
       return res.status(400).json({ error: 'Paleta je už priradená zákazníkovi' });
     }
-    const custRes = await pool.query('SELECT id, pallet_balance FROM customers WHERE user_id = $1 AND id = $2', [req.userId, customerId]);
+    const custRes = await pool.query('SELECT id, pallet_balance FROM customers WHERE user_id = $1 AND id = $2', [dataUserId, customerId]);
     if (custRes.rows.length === 0) return res.status(404).json({ error: 'Zákazník nebol nájdený' });
-    await pool.query("UPDATE pallets SET customer_id = $1, status = 'U zákazníka' WHERE user_id = $2 AND id = $3", [customerId, req.userId, palletId]);
+    await pool.query("UPDATE pallets SET customer_id = $1, status = 'U zákazníka' WHERE user_id = $2 AND id = $3", [customerId, dataUserId, palletId]);
     const newBalance = (Number(custRes.rows[0].pallet_balance) || 0) + 1;
-    await pool.query('UPDATE customers SET pallet_balance = $1 WHERE user_id = $2 AND id = $3', [newBalance, req.userId, customerId]);
+    await pool.query('UPDATE customers SET pallet_balance = $1 WHERE user_id = $2 AND id = $3', [newBalance, dataUserId, customerId]);
     res.json({ success: true, message: 'Paleta priradená zákazníkovi' });
   } catch (err) {
     console.error('[PUT /api/pallets/:id/assign]', err.message);
@@ -1152,15 +1190,16 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     let customers = 0;
     let products = 0;
     let lowStockCount = 0;
     try {
-      const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers WHERE user_id = $1', [req.userId]);
+      const r = await pool.query('SELECT COUNT(*)::int AS count FROM customers WHERE user_id = $1', [dataUserId]);
       customers = r.rows[0]?.count ?? 0;
     } catch (_) {}
     try {
-      const r = await pool.query('SELECT COUNT(DISTINCT unique_id)::int AS count FROM products WHERE user_id = $1', [req.userId]);
+      const r = await pool.query('SELECT COUNT(DISTINCT unique_id)::int AS count FROM products WHERE user_id = $1', [dataUserId]);
       products = r.rows[0]?.count ?? 0;
     } catch (_) {}
     try {
@@ -1168,7 +1207,7 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
         `SELECT COUNT(*)::int AS count FROM (
           SELECT unique_id FROM products WHERE user_id = $1 GROUP BY unique_id HAVING SUM(qty) < 5
         ) AS low`,
-        [req.userId]
+        [dataUserId]
       );
       lowStockCount = r.rows[0]?.count ?? 0;
     } catch (_) {}
@@ -1202,10 +1241,11 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
 apiRouter.get('/warehouses', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT id, name, code, warehouse_type, address, city, postal_code, is_active
        FROM warehouses WHERE user_id = $1 ORDER BY name`,
-      [req.userId]
+      [dataUserId]
     );
     res.json(rows.map((r) => ({
       id: r.id,
@@ -1228,10 +1268,11 @@ apiRouter.get('/warehouses', async (req, res) => {
 apiRouter.get('/suppliers', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `SELECT id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active
        FROM suppliers WHERE user_id = $1 ORDER BY name`,
-      [req.userId]
+      [dataUserId]
     );
     res.json(rows.map((r) => ({
       id: r.id,
@@ -1607,8 +1648,9 @@ apiRouter.get('/quotes', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   const { status, search } = req.query;
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     let where = 'WHERE q.user_id = $1';
-    const params = [req.userId];
+    const params = [dataUserId];
     if (status) { params.push(status); where += ` AND q.status = $${params.length}`; }
     if (search) { params.push(`%${search}%`); where += ` AND (q.quote_number ILIKE $${params.length} OR q.customer_name ILIKE $${params.length})`; }
     const { rows } = await pool.query(
@@ -1630,8 +1672,9 @@ apiRouter.get('/quotes/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows: qRows } = await pool.query(
-      'SELECT * FROM quotes WHERE id = $1 AND user_id = $2', [id, req.userId]
+      'SELECT * FROM quotes WHERE id = $1 AND user_id = $2', [id, dataUserId]
     );
     if (qRows.length === 0) return res.status(404).json({ error: 'Ponuka nenájdená' });
     const { rows: items } = await pool.query(
@@ -1654,6 +1697,7 @@ apiRouter.post('/quotes', async (req, res) => {
   if (!quote_number) return res.status(400).json({ error: 'quote_number je povinný' });
   const client = await pool.connect();
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     await client.query('BEGIN');
     const { rows } = await client.query(
       `INSERT INTO quotes (user_id, local_id, quote_number, customer_id, customer_name, customer_ico,
@@ -1669,7 +1713,7 @@ apiRouter.post('/quotes', async (req, res) => {
          prices_include_vat=EXCLUDED.prices_include_vat, total_amount=EXCLUDED.total_amount,
          updated_at=NOW()
        RETURNING *`,
-      [req.userId, local_id || null, quote_number, customer_id || null, customer_name || null,
+      [dataUserId, local_id || null, quote_number, customer_id || null, customer_name || null,
        customer_ico || null, customer_address || null, issue_date || null, valid_until || null,
        status, notes || null, delivery_cost, other_fees, prices_include_vat, total_amount]
     );
@@ -1682,7 +1726,7 @@ apiRouter.post('/quotes', async (req, res) => {
           `INSERT INTO quote_items (quote_id, user_id, product_unique_id, item_type, name, unit,
             qty, unit_price, vat_percent, discount_percent, surcharge_percent, description, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [quote.id, req.userId, it.product_unique_id || null, it.item_type || 'Tovar',
+          [quote.id, dataUserId, it.product_unique_id || null, it.item_type || 'Tovar',
            it.name, it.unit || 'ks', it.qty || 1, it.unit_price || 0,
            it.vat_percent ?? 20, it.discount_percent ?? 0, it.surcharge_percent ?? 0,
            it.description || null, i]
@@ -1712,6 +1756,7 @@ apiRouter.put('/quotes/:id', async (req, res) => {
   } = req.body || {};
   const client = await pool.connect();
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     await client.query('BEGIN');
     const { rows } = await client.query(
       `UPDATE quotes SET
@@ -1726,7 +1771,7 @@ apiRouter.put('/quotes/:id', async (req, res) => {
          total_amount = COALESCE($15, total_amount),
          updated_at = NOW()
        WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [id, req.userId, quote_number, customer_id || null, customer_name || null,
+      [id, dataUserId, quote_number, customer_id || null, customer_name || null,
        customer_ico || null, customer_address || null, issue_date || null,
        valid_until || null, status, notes || null, delivery_cost, other_fees,
        prices_include_vat, total_amount]
@@ -1740,7 +1785,7 @@ apiRouter.put('/quotes/:id', async (req, res) => {
           `INSERT INTO quote_items (quote_id, user_id, product_unique_id, item_type, name, unit,
             qty, unit_price, vat_percent, discount_percent, surcharge_percent, description, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [id, req.userId, it.product_unique_id || null, it.item_type || 'Tovar',
+          [id, dataUserId, it.product_unique_id || null, it.item_type || 'Tovar',
            it.name, it.unit || 'ks', it.qty || 1, it.unit_price || 0,
            it.vat_percent ?? 20, it.discount_percent ?? 0, it.surcharge_percent ?? 0,
            it.description || null, i]
@@ -1764,7 +1809,8 @@ apiRouter.delete('/quotes/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
   try {
-    const { rowCount } = await pool.query('DELETE FROM quotes WHERE id = $1 AND user_id = $2', [id, req.userId]);
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rowCount } = await pool.query('DELETE FROM quotes WHERE id = $1 AND user_id = $2', [id, dataUserId]);
     if (rowCount === 0) return res.status(404).json({ error: 'Ponuka nenájdená' });
     res.json({ success: true });
   } catch (err) {
@@ -1780,13 +1826,14 @@ apiRouter.post('/products', async (req, res) => {
   const { unique_id, name, plu, ean, unit = 'ks', qty = 0, warehouse_id = null } = req.body || {};
   if (!unique_id || !name || !plu) return res.status(400).json({ error: 'unique_id, name a plu sú povinné' });
   try {
+    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
       `INSERT INTO products (unique_id, warehouse_id, name, plu, ean, unit, qty, user_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (unique_id, warehouse_id) DO UPDATE SET
          name = EXCLUDED.name, plu = EXCLUDED.plu, ean = EXCLUDED.ean, unit = EXCLUDED.unit
        RETURNING unique_id, name, plu, ean, unit, qty`,
-      [unique_id, warehouse_id, name, plu, ean || null, unit, qty, req.userId]
+      [unique_id, warehouse_id, name, plu, ean || null, unit, qty, dataUserId]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

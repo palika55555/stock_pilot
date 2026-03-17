@@ -1,5 +1,5 @@
 import '../../models/user.dart';
-import '../database/database_service.dart';
+import '../Database/database_service.dart';
 
 class PasswordService {
   final DatabaseService _dbService = DatabaseService();

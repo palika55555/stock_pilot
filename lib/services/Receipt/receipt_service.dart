@@ -2,7 +2,7 @@ import 'dart:async';
 import '../../models/product.dart';
 import '../../models/receipt.dart';
 import '../../models/stock_out.dart';
-import '../database/database_service.dart';
+import '../Database/database_service.dart';
 import '../Notifications/notification_service.dart';
 
 class ReceiptService {

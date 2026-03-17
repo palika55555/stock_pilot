@@ -4,7 +4,7 @@ import '../../models/customer.dart';
 import '../../models/supplier.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/customer/customer_service.dart';
-import '../../services/supplier/supplier_service.dart';
+import '../../services/Supplier/supplier_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../warehouse/warehouse_supplies.dart';

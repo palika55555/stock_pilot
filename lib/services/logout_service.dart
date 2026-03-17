@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_sync_service.dart';
 import 'Database/database_service.dart';
 import 'user_session.dart';
@@ -12,6 +13,8 @@ class LogoutService {
   static Future<void> logout(BuildContext context) async {
     await clearTokensAndToken();
     await DatabaseService().clearSavedLogin();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('current_user_owner_name');
     UserSession.clear();
     SyncCheckService.instance.stop();
     SyncService.stopSync();

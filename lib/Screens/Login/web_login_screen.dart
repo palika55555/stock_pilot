@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
 import '../../screens/Home/Home_screen.dart';
-import '../../services/user_session.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/Common/standard_text_field.dart';
 import '../../widgets/Common/purple_button.dart';
@@ -92,10 +92,16 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         userId: backendUserId,
         username: createdUser.username,
         role: createdUser.role,
-        // Pri čisto web logine nemáme nadriadeného – sub-user sa vytvára cez admina na webe.
         ownerFullName: backendResult.ownerFullName,
         ownerUsername: backendResult.ownerUsername,
       );
+      final ownerDisplay = backendResult.ownerFullName?.isNotEmpty == true
+          ? backendResult.ownerFullName
+          : backendResult.ownerUsername;
+      if (ownerDisplay != null && ownerDisplay.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('current_user_owner_name', ownerDisplay);
+      }
 
       if (!mounted) return;
       Navigator.pushReplacement(

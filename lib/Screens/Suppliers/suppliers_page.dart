@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:stock_pilot/models/supplier.dart';
-import 'package:stock_pilot/services/supplier/supplier_service.dart';
+import 'package:stock_pilot/services/Supplier/supplier_service.dart';
 import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/suppliers/add_supplier_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';

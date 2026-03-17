@@ -1,5 +1,5 @@
 import '../../models/company.dart';
-import '../database/database_service.dart';
+import '../Database/database_service.dart';
 
 class CompanyService {
   final DatabaseService _db = DatabaseService();

@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _wasOffline = true;
   int _notificationUnreadCount = 0;
+  int _overviewRefreshKey = 0;
 
   @override
   void initState() {
@@ -53,17 +54,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else {
       DatabaseService.setCurrentUser(userId);
     }
+    if (widget.user.role == 'user' && UserSession.ownerDisplayName == null) {
+      SharedPreferences.getInstance().then((prefs) {
+        final saved = prefs.getString('current_user_owner_name');
+        if (saved != null && saved.isNotEmpty) {
+          UserSession.setOwnerDisplayName(saved);
+          if (mounted) setState(() {});
+        }
+      });
+    }
     print('DEBUG HomeScreen.initState: userId=$userId (session=${UserSession.userId})');
     _persistCurrentUser();
     _refreshNotificationCount();
     WidgetsBinding.instance.addObserver(this);
     SyncCheckService.instance.start();
     SyncService.startSync(userId);
+    _ensureInitialDataLoaded(userId);
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
       if (!mounted) return;
       _showSyncNeededSnackBar();
     });
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
+  }
+
+  /// Pri prihlásení z iného zariadenia (bez lokálnej DB): ak účtová DB nemá dáta,
+  /// stiahneme ich z webu a obnovíme prehľad.
+  Future<void> _ensureInitialDataLoaded(String userId) async {
+    try {
+      final customers = await _db.getCustomers();
+      final products = await _db.getProducts();
+      final hasLocalData = customers.isNotEmpty || products.isNotEmpty;
+      if (hasLocalData) return;
+
+      final token = await getBackendTokenAsync();
+      if (token == null || token.isEmpty) return;
+
+      final ok = await SyncService.initialSync(userId, token);
+      if (ok && mounted) {
+        setState(() => _overviewRefreshKey++);
+      }
+    } catch (_) {
+      // offline alebo chyba – prehľad zostane s nulami
+    }
   }
 
   void _onConnectivityChanged(List<ConnectivityResult> result) {
@@ -148,8 +180,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final token = getBackendToken();
     if (token == null) {
       if (mounted && !silent) {
+        final isSubUser = UserSession.role == 'user' && UserSession.ownerDisplayName != null;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Obnova z webu vyžaduje prihlásenie')),
+          SnackBar(
+            content: Text(
+              isSubUser
+                  ? 'Dáta sa obnovia po prihlásení podľa nadriadeného.'
+                  : 'Obnova z webu vyžaduje prihlásenie',
+            ),
+          ),
         );
       }
       return;
@@ -185,8 +224,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final token = getBackendToken();
     if (token == null) {
       if (mounted && !silent) {
+        final isSubUser = UserSession.role == 'user' && UserSession.ownerDisplayName != null;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nahratie na web vyžaduje prihlásenie')),
+          SnackBar(
+            content: Text(
+              isSubUser
+                  ? 'Nahratie na web sa vykoná po prihlásení podľa nadriadeného.'
+                  : 'Nahratie na web vyžaduje prihlásenie',
+            ),
+          ),
         );
       }
       return;
@@ -317,6 +363,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           Expanded(
             child: HomeOverview(
+              key: ValueKey(_overviewRefreshKey),
               userRole: _currentRole,
               user: widget.user,
               notificationUnreadCount: _notificationUnreadCount,
@@ -348,6 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       appBar: _buildMobileAppBar(),
       body: HomeOverview(
+        key: ValueKey(_overviewRefreshKey),
         userRole: _currentRole,
         user: widget.user,
         notificationUnreadCount: _notificationUnreadCount,

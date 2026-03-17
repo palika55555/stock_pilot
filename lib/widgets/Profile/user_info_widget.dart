@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import '../../services/user_session.dart';
 
 class UserInfoWidget extends StatelessWidget {
   final String userName;
@@ -100,7 +101,22 @@ class UserInfoWidget extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 3),
+                        if (UserSession.ownerDisplayName != null &&
+                            UserSession.ownerDisplayName!.isNotEmpty &&
+                            userRole == 'user') ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Nadriadený: ${UserSession.ownerDisplayName}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white70,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                        ] else
+                          const SizedBox(height: 3),
                         GestureDetector(
                           onTap: () {
                             if (onRoleSwitch != null) {

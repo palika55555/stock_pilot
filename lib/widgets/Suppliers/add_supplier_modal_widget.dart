@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/supplier.dart';
 import '../../services/External/finstat_service.dart';
-import '../../services/supplier/supplier_service.dart';
+import '../../services/Supplier/supplier_service.dart';
 import '../../theme/app_theme.dart';
 
 class AddSupplierModal extends StatefulWidget {
