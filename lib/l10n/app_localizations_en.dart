@@ -468,6 +468,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearDatabaseDone => 'Database data has been cleared.';
 
   @override
+  String get backupDatabaseDownload => 'Database backup – download';
+
+  @override
+  String get backupDatabaseSuccess => 'Backup has been saved.';
+
+  @override
+  String get backupDatabaseError => 'Backup failed.';
+
+  @override
+  String get backupDatabaseAction => 'Download';
+
+  @override
   String get adminOnly => 'Only administrator can clear database data.';
 
   @override

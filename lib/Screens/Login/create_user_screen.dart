@@ -139,6 +139,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         if (createdUser == null) {
           throw Exception('Používateľ sa nepodarilo načítať po vytvorení.');
         }
+        await syncUserToBackend(createdUser);
 
         if (!mounted) return;
         Navigator.pushReplacement(

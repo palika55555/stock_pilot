@@ -988,6 +988,30 @@ abstract class AppLocalizations {
   /// **'Dáta z databázy boli vymazané.'**
   String get clearDatabaseDone;
 
+  /// No description provided for @backupDatabaseDownload.
+  ///
+  /// In sk, this message translates to:
+  /// **'Záloha databázy – stiahnuť'**
+  String get backupDatabaseDownload;
+
+  /// No description provided for @backupDatabaseSuccess.
+  ///
+  /// In sk, this message translates to:
+  /// **'Záloha bola uložená.'**
+  String get backupDatabaseSuccess;
+
+  /// No description provided for @backupDatabaseError.
+  ///
+  /// In sk, this message translates to:
+  /// **'Záloha zlyhala.'**
+  String get backupDatabaseError;
+
+  /// No description provided for @backupDatabaseAction.
+  ///
+  /// In sk, this message translates to:
+  /// **'Stiahnuť'**
+  String get backupDatabaseAction;
+
   /// No description provided for @adminOnly.
   ///
   /// In sk, this message translates to:

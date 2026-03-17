@@ -468,6 +468,18 @@ class AppLocalizationsSk extends AppLocalizations {
   String get clearDatabaseDone => 'Dáta z databázy boli vymazané.';
 
   @override
+  String get backupDatabaseDownload => 'Záloha databázy – stiahnuť';
+
+  @override
+  String get backupDatabaseSuccess => 'Záloha bola uložená.';
+
+  @override
+  String get backupDatabaseError => 'Záloha zlyhala.';
+
+  @override
+  String get backupDatabaseAction => 'Stiahnuť';
+
+  @override
   String get adminOnly => 'Iba administrátor môže vymazať dáta z databázy.';
 
   @override

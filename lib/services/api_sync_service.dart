@@ -41,17 +41,36 @@ dynamic _decodeJwt(String? token) {
   }
 }
 
-/// Výsledok backend loginu – prístupový token, refresh token a voliteľné userId (numerické ID používateľa ako reťazec).
+/// Výsledok backend loginu – prístupový token, refresh token, userId a voliteľný profil z backendu (pre vytvorenie/aktualizáciu lokálneho používateľa).
 class BackendLoginResult {
   final String accessToken;
   final String refreshToken;
   final String? userId;
+  final Map<String, dynamic>? userProfile;
 
   BackendLoginResult({
     required this.accessToken,
     required this.refreshToken,
     this.userId,
+    this.userProfile,
   });
+}
+
+/// Z profilu vráteného backendom pri prihlásení (a hesla z formulára) vytvorí model User pre lokálnu DB.
+User userFromBackendProfile(String username, String password, Map<String, dynamic>? profile) {
+  final p = profile ?? {};
+  return User(
+    id: null,
+    username: p['username']?.toString() ?? username,
+    password: password,
+    fullName: p['full_name']?.toString() ?? p['fullName']?.toString() ?? username,
+    role: p['role']?.toString() ?? 'user',
+    email: p['email']?.toString() ?? '',
+    phone: p['phone']?.toString() ?? '',
+    department: p['department']?.toString() ?? '',
+    avatarUrl: p['avatar_url']?.toString() ?? p['avatarUrl']?.toString() ?? 'https://i.pravatar.cc/150?u=$username',
+    joinDate: DateTime.now(),
+  );
 }
 
 /// Save JWT tokens to secure storage and set in-memory access token.
@@ -248,6 +267,7 @@ Future<BackendLoginResult?> fetchBackendToken(
         accessToken: access,
         refreshToken: refresh,
         userId: userId,
+        userProfile: user is Map<String, dynamic> ? Map<String, dynamic>.from(user) : null,
       );
     }
     print('DEBUG backend login: missing access/refresh token in response');

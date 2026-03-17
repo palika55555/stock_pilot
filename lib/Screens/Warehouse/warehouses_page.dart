@@ -16,8 +16,8 @@ class WarehousesPage extends StatefulWidget {
 }
 
 class _WarehousesPageState extends State<WarehousesPage> {
-  final GlobalKey<State<WarehouseListWidget>> _warehouseListKey =
-      GlobalKey<State<WarehouseListWidget>>();
+  final GlobalKey<WarehouseListWidgetState> _warehouseListKey =
+      GlobalKey<WarehouseListWidgetState>();
   final WarehouseService _warehouseService = WarehouseService();
   final WarehouseReportService _reportService = WarehouseReportService();
 
@@ -39,6 +39,78 @@ class _WarehousesPageState extends State<WarehousesPage> {
         }
       }
     });
+  }
+
+  void _openViewSettings() {
+    final state = _warehouseListKey.currentState;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        final currentSort = state?.sortMode ?? 0;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Zobrazenie skladov',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Zoradenie',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              RadioListTile<int>(
+                value: 0,
+                groupValue: currentSort,
+                onChanged: (v) {
+                  state?.setSortMode(0);
+                  Navigator.of(ctx).pop();
+                },
+                title: Text(l10n.warehouseName),
+                dense: true,
+              ),
+              RadioListTile<int>(
+                value: 1,
+                groupValue: currentSort,
+                onChanged: (v) {
+                  state?.setSortMode(1);
+                  Navigator.of(ctx).pop();
+                },
+                title: const Text('Kód skladu (A–Z)'),
+                dense: true,
+              ),
+              RadioListTile<int>(
+                value: 2,
+                groupValue: currentSort,
+                onChanged: (v) {
+                  state?.setSortMode(2);
+                  Navigator.of(ctx).pop();
+                },
+                title: const Text('Mesto (A–Z)'),
+                dense: true,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -72,7 +144,8 @@ class _WarehousesPageState extends State<WarehousesPage> {
                 ),
                 IconButton(
                   icon: Icon(Icons.tune, color: AppColors.textPrimary),
-                  onPressed: () {},
+                  tooltip: 'Nastavenia zobrazenia',
+                  onPressed: _openViewSettings,
                 ),
                 const SizedBox(width: 8),
               ],

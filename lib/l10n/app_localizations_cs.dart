@@ -468,6 +468,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get clearDatabaseDone => 'Data z databáze byla vymazána.';
 
   @override
+  String get backupDatabaseDownload => 'Záloha databáze – stáhnout';
+
+  @override
+  String get backupDatabaseSuccess => 'Záloha byla uložena.';
+
+  @override
+  String get backupDatabaseError => 'Záloha selhala.';
+
+  @override
+  String get backupDatabaseAction => 'Stáhnout';
+
+  @override
   String get adminOnly => 'Pouze administrátor může vymazat data z databáze.';
 
   @override

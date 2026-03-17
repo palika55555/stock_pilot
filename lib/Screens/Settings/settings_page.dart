@@ -226,7 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildListTile(
                     icon: Icons.backup_rounded,
                     title: l10n.backupDatabaseDownload,
-                    trailing: l10n.download,
+                    trailing: l10n.backupDatabaseAction,
                     onTap: () => _downloadDatabaseBackup(context),
                   ),
                   _buildListTile(

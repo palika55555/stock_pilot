@@ -227,7 +227,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     const {
       rows: [user],
     } = await pool.query(
-      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date FROM users WHERE username = $1',
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked FROM users WHERE username = $1',
       [username.toString().trim()]
     );
     if (!user || user.password !== password) {
@@ -235,6 +235,13 @@ apiRouter.post('/auth/login', async (req, res) => {
       return res.status(401).json({
         success: false,
         error: 'Nesprávny login alebo heslo',
+      });
+    }
+    if (user.is_blocked) {
+      console.warn('[auth] Blocked user tried to login:', username);
+      return res.status(403).json({
+        success: false,
+        error: 'Účet je zablokovaný. Kontaktujte administrátora.',
       });
     }
     const tokens = signTokens(
@@ -1095,6 +1102,106 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   } catch (err) {
     console.error('[GET /api/dashboard/stats]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Admin: správa používateľov (iba role admin) ---
+const requireAdmin = (req, res, next) => {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Len administrátor.' });
+  }
+  next();
+};
+
+apiRouter.get('/admin/users', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, full_name, role, email, phone, department,
+              COALESCE(is_blocked, false) AS is_blocked, join_date
+       FROM users ORDER BY id ASC`
+    );
+    res.json(rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      full_name: r.full_name,
+      role: r.role,
+      email: r.email,
+      phone: r.phone,
+      department: r.department,
+      is_blocked: !!r.is_blocked,
+      join_date: r.join_date,
+    })));
+  } catch (err) {
+    console.error('[GET /admin/users]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.patch('/admin/users/:id/block', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const { block } = req.body || {};
+  const setBlocked = block === true || block === 'true';
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE users SET is_blocked = $1 WHERE id = $2',
+      [setBlocked, id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Používateľ nenájdený' });
+    console.log('[admin] User', id, setBlocked ? 'blocked' : 'unblocked');
+    res.json({ success: true, is_blocked: setBlocked });
+  } catch (err) {
+    console.error('[PATCH /admin/users/:id/block]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.delete('/admin/users/:id', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  if (id === req.userId) {
+    return res.status(400).json({ error: 'Nemôžete vymazať vlastný účet.' });
+  }
+  try {
+    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Používateľ nenájdený' });
+    console.log('[admin] User deleted:', id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /admin/users/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/admin/users/:id/delete-data', requireAdmin, async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM quote_items WHERE quote_id IN (SELECT id FROM quotes WHERE user_id = $1)', [id]);
+    await client.query('DELETE FROM quotes WHERE user_id = $1', [id]);
+    await client.query('DELETE FROM pallets WHERE user_id = $1', [id]);
+    await client.query('DELETE FROM production_batch_recipe WHERE batch_id IN (SELECT id FROM production_batches WHERE user_id = $1)', [id]);
+    await client.query('DELETE FROM production_batches WHERE user_id = $1', [id]);
+    await client.query('DELETE FROM products WHERE user_id = $1', [id]);
+    await client.query('DELETE FROM stocks WHERE user_id = $1', [id]);
+    await client.query('DELETE FROM customers WHERE user_id = $1', [id]);
+    await client.query('COMMIT');
+    console.log('[admin] User data deleted for user:', id);
+    res.json({ success: true, message: 'Dáta používateľa boli vymazané.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /admin/users/:id/delete-data]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
   }
 });
 

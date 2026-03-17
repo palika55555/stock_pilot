@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { path: '/dashboard/production', label: 'Výroba', icon: '🏭' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
   { path: '/dashboard/production/new', label: 'Príjemky', icon: '📥' },
+  { path: '/dashboard/users', label: 'Používatelia', icon: '👤', adminOnly: true },
 ]
 
 function formatSyncAgo(ts) {
@@ -105,7 +106,7 @@ export default function DashboardLayout() {
               </a>
             </div>
             <nav className="dashboard-sidebar__nav">
-              {NAV_ITEMS.map((item) => {
+              {NAV_ITEMS.filter((item) => !item.adminOnly || auth.user?.role === 'admin').map((item) => {
                 const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
                 return (
                   <button

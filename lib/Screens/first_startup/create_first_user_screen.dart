@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
 import '../../screens/Home/Home_screen.dart';
 import '../../widgets/Common/standard_text_field.dart';
@@ -51,6 +52,7 @@ class _CreateFirstUserScreenState extends State<CreateFirstUserScreen> {
         if (createdUser == null) {
           throw Exception('Používateľ sa nepodarilo načítať po vytvorení.');
         }
+        await syncUserToBackend(createdUser);
 
         if (mounted) {
           Navigator.pushReplacement(

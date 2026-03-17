@@ -178,6 +178,14 @@ class DatabaseService {
     return await getDatabasesPath();
   }
 
+  /// Cesta k priečinku pre databázu účtu prihláseného cez backend (iný PC).
+  /// Každý backend účet má vlastný priečinok, takže sa nemiešajú sklady/dáta medzi účtami.
+  Future<String> getAccountDatabasePath(String backendUserId) async {
+    final base = await getDatabasesPath();
+    final safe = backendUserId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return join(base, 'account_$safe');
+  }
+
   /// Vráti plnú cestu k súboru databázy.
   Future<String?> getDatabasePath() async {
     String basePath = _customPath ?? await getDatabasesPath();
@@ -3010,6 +3018,13 @@ class DatabaseService {
   Future<int> deleteWarehouse(int id) async {
     Database db = await database;
     return await db.delete('warehouses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Vymaže všetky sklady v aktuálnej DB (napr. pri prvom prihlásení účtu z iného PC, aby sa nezobrazovali cudzie sklady).
+  Future<void> clearAllWarehousesForNewAccount() async {
+    final db = await database;
+    await db.execute('UPDATE products SET warehouse_id = NULL WHERE warehouse_id IS NOT NULL');
+    await db.delete('warehouses');
   }
 
   static Map<String, dynamic> _emptyDashboardStats() {

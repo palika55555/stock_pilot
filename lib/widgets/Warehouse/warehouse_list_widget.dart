@@ -27,6 +27,7 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
   List<Warehouse> _filteredWarehouses = [];
   bool _loading = true;
   int _statusFilter = 0; // 0 = všetci, 1 = aktívni, 2 = neaktívni
+  int _sortMode = 0; // 0 = názov, 1 = kód, 2 = mesto
 
   late final AnimationController _listController;
 
@@ -50,6 +51,15 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
 
   void _onSearchChanged() => setState(() => _filterWarehouses());
 
+  int get sortMode => _sortMode;
+
+  void setSortMode(int mode) {
+    setState(() {
+      _sortMode = mode;
+      _filterWarehouses();
+    });
+  }
+
   void _filterWarehouses() {
     var list = _warehouses;
     if (_statusFilter == 1) list = list.where((w) => w.isActive).toList();
@@ -65,6 +75,17 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
           )
           .toList();
     }
+    // zoradenie podľa zvoleného režimu
+    list.sort((a, b) {
+      switch (_sortMode) {
+        case 1:
+          return a.code.toLowerCase().compareTo(b.code.toLowerCase());
+        case 2:
+          return (a.city ?? '').toLowerCase().compareTo((b.city ?? '').toLowerCase());
+        default:
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }
+    });
     _filteredWarehouses = list;
   }
 
@@ -204,12 +225,14 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
                 label: l10n.allActive,
                 selected: _statusFilter == 1,
                 onTap: () => _setStatus(1),
+                selectedColor: Colors.green,
               ),
               const SizedBox(width: 8),
               _FilterChip(
                 label: l10n.allInactive,
                 selected: _statusFilter == 2,
                 onTap: () => _setStatus(2),
+                selectedColor: Colors.red,
               ),
             ],
           ),
@@ -886,25 +909,30 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final Color? selectedColor;
 
   const _FilterChip({
     required this.label,
     required this.selected,
     required this.onTap,
+    this.selectedColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = selected
+        ? (selectedColor ?? const Color(0xFF1E293B))
+        : null;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1E293B) : Colors.white,
+          color: selected ? effectiveColor : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+            color: selected ? effectiveColor! : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
@@ -131,10 +132,60 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      User? user = await _dbService.getUserByUsername(_loginController.text);
+      final username = _loginController.text.trim();
+      final password = _passwordController.text;
+      User? user = await _dbService.getUserByUsername(username);
       if (!mounted) return;
 
-      if (user == null || user.password != _passwordController.text) {
+      final bool localOk = user != null && user.password == password;
+
+      if (!localOk) {
+        // Lokálny účet neexistuje alebo heslo nesedí – skús prihlásenie cez backend (iný PC / webový účet)
+        final backendResult = await fetchBackendToken(username, password, rememberMe: _rememberMe);
+        if (!mounted) return;
+        if (backendResult != null) {
+          final fromBackend = userFromBackendProfile(username, password, backendResult.userProfile);
+          // Pri prihlásení cez backend vždy prepnúť na DB daného účtu, aby sa nezobrazovali
+          // sklady/dáta z iného účtu na tomto zariadení. Ak backend nevráti userId, použije sa username.
+          final backendUserId = backendResult.userId;
+          final accountKey = (backendUserId != null && backendUserId.isNotEmpty)
+              ? backendUserId
+              : 'user_$username';
+          final accountPath = await _dbService.getAccountDatabasePath(accountKey);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('db_path', accountPath);
+          await _dbService.setCustomPath(accountPath);
+          if (!mounted) return;
+          user = await _dbService.getUserByUsername(username);
+          if (user != null) {
+            final updatedUser = User(
+              id: user.id,
+              username: fromBackend.username,
+              password: fromBackend.password,
+              fullName: fromBackend.fullName,
+              role: fromBackend.role,
+              email: fromBackend.email,
+              phone: fromBackend.phone,
+              department: fromBackend.department,
+              avatarUrl: fromBackend.avatarUrl,
+              joinDate: user.joinDate,
+            );
+            await _dbService.updateUser(updatedUser);
+            user = updatedUser;
+          } else {
+            // Pri prvom vstupe do účtovej DB odstrániť sklady z predchádzajúceho zmiešania dát.
+            await _dbService.clearAllWarehousesForNewAccount();
+            await _dbService.insertUser(fromBackend);
+            user = await _dbService.getUserByUsername(fromBackend.username);
+          }
+          if (!mounted) return;
+          if (user == null) {
+            setState(() => _isLoading = false);
+            return;
+          }
+          _finishLogin(user, backendUserId: backendResult.userId);
+          return;
+        }
         if (mounted) setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -155,36 +206,35 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       }
       if (!mounted) return;
 
-      final backendResult = await fetchBackendToken(
-        _loginController.text,
-        _passwordController.text,
-        rememberMe: _rememberMe,
-      );
+      final backendResult = await fetchBackendToken(username, password, rememberMe: _rememberMe);
       if (!mounted) return;
 
-      final userId = backendResult?.userId ?? user.id?.toString() ?? user.username;
-      UserSession.setUser(
-        userId: userId,
-        username: user.username,
-        role: user.role,
-      );
-
-      if (mounted) setState(() => _isLoading = false);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(user: user),
-        ),
-      );
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.loggedInAs(user.fullName)),
-          backgroundColor: user.role == 'admin' ? Colors.redAccent : Colors.green,
-        ),
-      );
+      _finishLogin(user, backendUserId: backendResult?.userId);
     }
+  }
+
+  void _finishLogin(User user, {String? backendUserId}) {
+    final userId = backendUserId ?? user.id?.toString() ?? user.username;
+    UserSession.setUser(
+      userId: userId,
+      username: user.username,
+      role: user.role,
+    );
+    if (mounted) setState(() => _isLoading = false);
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeScreen(user: user),
+      ),
+    );
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.loggedInAs(user.fullName)),
+        backgroundColor: user.role == 'admin' ? Colors.redAccent : Colors.green,
+      ),
+    );
   }
 
   @override
