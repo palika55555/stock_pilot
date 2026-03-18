@@ -25,6 +25,7 @@ import '../../models/production_batch_recipe_item.dart';
 import '../../models/pallet.dart';
 import '../../models/recipe.dart';
 import '../../models/production_order.dart';
+import '../data_change_notifier.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -1923,7 +1924,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(product.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('products', map);
+    final _r = await db.insert('products', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Product>> getProducts() async {
@@ -1972,18 +1975,22 @@ class DatabaseService {
   Future<int> updateProduct(Product product) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.update(
+    final _r = await db.update(
       'products',
       product.toMap(),
       where: 'unique_id = ? AND user_id = ?',
       whereArgs: [product.uniqueId, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteProduct(String id) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete('products', where: 'unique_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('products', where: 'unique_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Aktualizuje EAN lokálnych produktov podľa zoznamu z backendu (EAN priradené na webe).
@@ -2101,13 +2108,17 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(recipe.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('recipes', map);
+    final _r = await db.insert('recipes', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateRecipe(Recipe recipe) async {
     if (recipe.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('recipes', recipe.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [recipe.id, _currentUserId]);
+    final _r = await db.update('recipes', recipe.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [recipe.id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Recipe>> getRecipes({bool? activeOnly, String? search}) async {
@@ -2139,7 +2150,9 @@ class DatabaseService {
     Database db = await database;
     if (_currentUserId == null) return 0;
     await db.delete('recipe_ingredients', where: 'recipe_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
-    return await db.delete('recipes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('recipes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<RecipeIngredient>> getRecipeIngredients(int recipeId) async {
@@ -2153,13 +2166,16 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(ing.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('recipe_ingredients', map);
+    final _r = await db.insert('recipe_ingredients', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<void> deleteRecipeIngredientsByRecipeId(int recipeId) async {
     Database db = await database;
     if (_currentUserId == null) return;
     await db.delete('recipe_ingredients', where: 'recipe_id = ? AND user_id = ?', whereArgs: [recipeId, _currentUserId]);
+    DataChangeNotifier.notify();
   }
 
   Future<String> getNextProductionOrderNumber() async {
@@ -2182,13 +2198,17 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(order.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('production_orders', map);
+    final _r = await db.insert('production_orders', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateProductionOrder(ProductionOrder order) async {
     if (order.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('production_orders', order.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [order.id, _currentUserId]);
+    final _r = await db.update('production_orders', order.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [order.id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<ProductionOrder>> getProductionOrders({
@@ -2273,7 +2293,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(receipt.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('inbound_receipts', map);
+    final _r = await db.insert('inbound_receipts', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Príjemky zoradené od najnovších. Ak [warehouseId] je zadané, len príjemky daného skladu.
@@ -2332,18 +2354,22 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(item.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('inbound_receipt_items', map);
+    final _r = await db.insert('inbound_receipt_items', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateInboundReceipt(InboundReceipt receipt) async {
     if (receipt.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'inbound_receipts',
       receipt.toMap(),
       where: 'id = ? AND user_id = ?',
       whereArgs: [receipt.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateInboundReceiptStatus(
@@ -2352,22 +2378,26 @@ class DatabaseService {
   ) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.update(
+    final _r = await db.update(
       'inbound_receipts',
       {'status': status.value},
       where: 'id = ? AND user_id = ?',
       whereArgs: [id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteInboundReceiptItemsByReceiptId(int receiptId) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete(
+    final _r = await db.delete(
       'inbound_receipt_items',
       where: 'receipt_id = ? AND user_id = ?',
       whereArgs: [receiptId, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<ReceiptAcquisitionCost>> getReceiptAcquisitionCosts(int receiptId) async {
@@ -2385,16 +2415,20 @@ class DatabaseService {
     Database db = await database;
     final map = cost.toMap();
     map.remove('id');
-    return await db.insert('receipt_acquisition_costs', map);
+    final _r = await db.insert('receipt_acquisition_costs', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteReceiptAcquisitionCostsByReceiptId(int receiptId) async {
     Database db = await database;
-    return await db.delete(
+    final _r = await db.delete(
       'receipt_acquisition_costs',
       where: 'receipt_id = ?',
       whereArgs: [receiptId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Vymaže príjemku a jej položky. Len neschválené príjemky.
@@ -2408,11 +2442,13 @@ class DatabaseService {
       whereArgs: [receiptId, _currentUserId],
     );
     await deleteReceiptAcquisitionCostsByReceiptId(receiptId);
-    return await db.delete(
+    final _r = await db.delete(
       'inbound_receipts',
       where: 'id = ? AND user_id = ?',
       whereArgs: [receiptId, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Aktualizuje celú príjemku (vrátane nových stĺpcov schválenia).
@@ -2425,6 +2461,7 @@ class DatabaseService {
       where: 'id = ? AND user_id = ?',
       whereArgs: [receipt.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
   }
 
   /// Označí príjemku, že bolo množstvo pričítané/odpočítané na sklad. [applied] = false pri storne s odpočítaním.
@@ -2437,6 +2474,7 @@ class DatabaseService {
       where: 'id = ? AND user_id = ?',
       whereArgs: [receiptId, _currentUserId],
     );
+    DataChangeNotifier.notify();
   }
 
   /// Používatelia s danou rolou (admin, user, manager).
@@ -2639,7 +2677,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(supplier.toMap());
     map['user_id'] = _currentUserId;
-    return await db.insert('suppliers', map);
+    final _r = await db.insert('suppliers', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Supplier>> getSuppliers() async {
@@ -2677,19 +2717,23 @@ class DatabaseService {
     if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'suppliers',
       supplier.toMap(),
       where: 'id = ? AND user_id = ?',
       whereArgs: [supplier.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteSupplier(int id) async {
     if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
     if (_currentUserId == null) return 0;
     Database db = await database;
-    return await db.delete('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('suppliers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   // Customer CRUD
@@ -2708,7 +2752,9 @@ class DatabaseService {
     map['user_id'] = _currentUserId;
     print('DEBUG insertCustomer: user_id = $_currentUserId | instance: ${_instance.hashCode}');
     print('DEBUG insertCustomer map: $map');
-    return await db.insert('customers', map);
+    final _r = await db.insert('customers', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Customer>> getCustomers() async {
@@ -2756,18 +2802,22 @@ class DatabaseService {
   Future<int> updateCustomer(Customer customer) async {
     if (customer.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'customers',
       customer.toMap(),
       where: 'id = ? AND user_id = ?',
       whereArgs: [customer.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteCustomer(int id) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete('customers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('customers', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Nahradí lokálnych zákazníkov zoznamom z backendu. Vkladá s user_id = _currentUserId.
@@ -2845,7 +2895,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(quote.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('quotes', map);
+    final _r = await db.insert('quotes', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<Quote?> getQuoteById(int id) async {
@@ -2878,19 +2930,23 @@ class DatabaseService {
   Future<int> updateQuote(Quote quote) async {
     if (quote.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'quotes',
       quote.toMap(),
       where: 'id = ? AND user_id = ?',
       whereArgs: [quote.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteQuote(int id) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
     await db.delete('quote_items', where: 'quote_id = ?', whereArgs: [id]);
-    return await db.delete('quotes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('quotes', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<QuoteItem>> getQuoteItems(int quoteId) async {
@@ -2909,34 +2965,42 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(item.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('quote_items', map);
+    final _r = await db.insert('quote_items', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateQuoteItem(QuoteItem item) async {
     if (item.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'quote_items',
       item.toMap(),
       where: 'id = ? AND user_id = ?',
       whereArgs: [item.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteQuoteItem(int id) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete('quote_items', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('quote_items', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteQuoteItemsByQuoteId(int quoteId) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete(
+    final _r = await db.delete(
       'quote_items',
       where: 'quote_id = ? AND user_id = ?',
       whereArgs: [quoteId, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<Company?> getCompany() async {
@@ -2950,17 +3014,21 @@ class DatabaseService {
     Database db = await database;
     final map = company.toMap();
     map['id'] = 1;
-    return await db.insert(
+    final _r = await db.insert(
       'company',
       map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   // Warehouse CRUD
   Future<int> insertWarehouse(Warehouse warehouse) async {
     Database db = await database;
-    return await db.insert('warehouses', warehouse.toMap());
+    final _r = await db.insert('warehouses', warehouse.toMap());
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Warehouse>> getWarehouses() async {
