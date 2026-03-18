@@ -138,7 +138,7 @@ class _WarehouseInventorySheetWidgetState
   }
 
   int _getActualQty(Product p) {
-    return _actualQty[_productKey(p)] ?? p.qty;
+    return _actualQty[_productKey(p)] ?? p.qty.round();
   }
 
   void _setActualQty(Product p, int value) {

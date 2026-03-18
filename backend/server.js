@@ -921,13 +921,44 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
   const eanVal = ean != null ? String(ean).trim() || null : null;
   try {
     const dataUserId = req.dataUserId ?? req.userId;
+    // Zisti pôvodnú hodnotu EAN (pre activity log)
+    const before = await pool.query(
+      'SELECT ean, version FROM products WHERE user_id = $1 AND unique_id = $2 LIMIT 1',
+      [dataUserId, uniqueId]
+    );
+    const oldEan = before.rows[0]?.ean ?? null;
+    const oldVersion = before.rows[0]?.version ?? 1;
+
     const { rowCount } = await pool.query(
-      'UPDATE products SET ean = $1 WHERE user_id = $2 AND unique_id = $3',
+      'UPDATE products SET ean = $1, version = version + 1, updated_at = NOW() WHERE user_id = $2 AND unique_id = $3',
       [eanVal, dataUserId, uniqueId]
     );
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Produkt nenájdený' });
     }
+
+    // Activity log: priradenie/odstránenie EAN
+    try {
+      await pool.query(
+        `INSERT INTO sync_events
+         (entity_type, entity_id, operation, field_changes, client_timestamp,
+          device_id, user_id, session_id, client_version, server_version)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          'product',
+          uniqueId,
+          'update',
+          JSON.stringify({ ean: eanVal, old_ean: oldEan }),
+          new Date().toISOString(),
+          'web',
+          dataUserId,
+          null,
+          oldVersion,
+          oldVersion + 1,
+        ]
+      );
+    } catch (_) {}
+
     const { rows } = await pool.query(
       'SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE user_id = $1 AND unique_id = $2 GROUP BY unique_id, name, plu, ean, unit',
       [dataUserId, uniqueId]
@@ -1355,6 +1386,120 @@ apiRouter.get('/dashboard/stats', async (req, res) => {
   } catch (err) {
     console.error('[GET /api/dashboard/stats]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Dashboard posledná aktivita (unified feed) – per user ---
+// Vráti posledné udalosti naprieč prijemkami/výdajkami/naskladnením/produktami atď.
+// Query: ?limit=30 (max 200)
+apiRouter.get('/dashboard/activity', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  }
+  const dataUserId = req.dataUserId ?? req.userId;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 30, 200);
+
+  // Primárny zdroj: sync_events (granulárne udalosti: EAN, aplikovanie skladu, zmeny statusu, ...)
+  // Poznámka: niektoré tabuľky môžu byť v starších DB absentujúce → fallback na prázdny feed.
+  try {
+    const evRes = await pool.query(
+      `SELECT entity_type, entity_id, operation, field_changes, server_timestamp, device_id
+       FROM sync_events
+       WHERE user_id = $1
+       ORDER BY server_timestamp DESC
+       LIMIT $2`,
+      [dataUserId, limit]
+    );
+    const events = evRes.rows || [];
+
+    // Enrichment: názvy a čísla dokladov
+    const productIds = [...new Set(events.filter((e) => e.entity_type === 'product').map((e) => e.entity_id))];
+    const receiptLocalIds = [...new Set(events.filter((e) => e.entity_type === 'inbound_receipt').map((e) => Number(e.entity_id)).filter((n) => Number.isFinite(n)))];
+    const stockOutLocalIds = [...new Set(events.filter((e) => e.entity_type === 'stock_out').map((e) => Number(e.entity_id)).filter((n) => Number.isFinite(n)))];
+
+    const [prodRes, recRes, outRes] = await Promise.all([
+      productIds.length
+        ? pool.query(
+            `SELECT unique_id, MAX(name) AS name, MAX(plu) AS plu, MAX(ean) AS ean
+             FROM products WHERE user_id = $1 AND unique_id = ANY($2)
+             GROUP BY unique_id`,
+            [dataUserId, productIds]
+          )
+        : { rows: [] },
+      receiptLocalIds.length
+        ? pool.query(
+            `SELECT local_id, receipt_number, supplier_name, status, stock_applied
+             FROM inbound_receipts WHERE user_id = $1 AND local_id = ANY($2)`,
+            [dataUserId, receiptLocalIds]
+          )
+        : { rows: [] },
+      stockOutLocalIds.length
+        ? pool.query(
+            `SELECT local_id, document_number, recipient_name, status
+             FROM stock_outs WHERE user_id = $1 AND local_id = ANY($2)`,
+            [dataUserId, stockOutLocalIds]
+          )
+        : { rows: [] },
+    ]);
+
+    const prodMap = new Map((prodRes.rows || []).map((r) => [String(r.unique_id), r]));
+    const recMap = new Map((recRes.rows || []).map((r) => [String(r.local_id), r]));
+    const outMap = new Map((outRes.rows || []).map((r) => [String(r.local_id), r]));
+
+    const activity = events.map((e) => {
+      const type = e.entity_type;
+      const id = String(e.entity_id);
+      const op = e.operation;
+      const changes = e.field_changes || {};
+
+      let title = '';
+      let subtitle = '';
+      const meta = { operation: op, device_id: e.device_id, field_changes: changes };
+
+      if (type === 'product') {
+        const p = prodMap.get(id);
+        title = p?.name || 'Produkt';
+        // zobrazi PLU + špeciálne EAN zmenu
+        if (changes?.ean !== undefined) {
+          subtitle = changes.ean ? `EAN priradený: ${changes.ean}` : 'EAN odstránený';
+        } else {
+          subtitle = p?.plu ? `PLU: ${p.plu}` : (op === 'create' ? 'Vytvorený produkt' : 'Upravený produkt');
+        }
+      } else if (type === 'inbound_receipt') {
+        const r = recMap.get(id);
+        title = r?.receipt_number || 'Príjemka';
+        if (changes?.stock_applied !== undefined) {
+          subtitle = Number(changes.stock_applied) === 1 ? 'Aplikované do skladu' : 'Zrušené aplikovanie skladu';
+        } else if (changes?.status) {
+          subtitle = `Status: ${changes.status}`;
+        } else {
+          subtitle = r?.supplier_name || 'Naskladnenie';
+        }
+      } else if (type === 'stock_out') {
+        const s = outMap.get(id);
+        title = s?.document_number || 'Výdajka';
+        if (changes?.status) subtitle = `Status: ${changes.status}`;
+        else subtitle = s?.recipient_name || 'Vyskladnenie';
+      } else {
+        title = type;
+        subtitle = op;
+      }
+
+      return {
+        type,
+        entity_id: id,
+        occurred_at: e.server_timestamp,
+        title,
+        subtitle,
+        meta,
+      };
+    });
+
+    res.json({ ok: true, activity, count: activity.length });
+  } catch (err) {
+    // Ak DB nemá niektoré tabuľky/kolóny, nezhodi web – vráť prázdny feed.
+    console.error('[GET /api/dashboard/activity]', err.message);
+    res.json({ ok: true, activity: [], count: 0 });
   }
 });
 

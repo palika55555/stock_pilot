@@ -332,7 +332,7 @@ class _StockOutModalState extends State<StockOutModal> {
         productUniqueId: row.product!.uniqueId!,
         productName: row.product!.name,
         plu: row.product!.plu,
-        qty: qty,
+        qty: qty.toDouble(),
         unit: row.unit,
         unitPrice: price,
         batchNumber: batchText.isNotEmpty ? batchText : null,

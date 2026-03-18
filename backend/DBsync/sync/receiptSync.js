@@ -21,9 +21,12 @@ async function syncReceipts(pool, body, userId) {
       if (localId == null || Number.isNaN(localId)) continue;
 
       const existing = await client.query(
-        'SELECT id FROM inbound_receipts WHERE user_id = $1 AND local_id = $2',
+        'SELECT id, status, stock_applied FROM inbound_receipts WHERE user_id = $1 AND local_id = $2',
         [userId, localId]
       );
+      const existed = existing.rows.length > 0;
+      const oldStatus = existed ? existing.rows[0].status : null;
+      const oldApplied = existed ? Number(existing.rows[0].stock_applied) || 0 : 0;
 
       const vals = [
         userId, localId,
@@ -61,7 +64,7 @@ async function syncReceipts(pool, body, userId) {
         r.po_number || null,
       ];
 
-      if (existing.rows.length > 0) {
+      if (existed) {
         await client.query(
           `UPDATE inbound_receipts SET
             receipt_number=$3, created_at=$4, supplier_name=$5, notes=$6, username=$7,
@@ -92,6 +95,41 @@ async function syncReceipts(pool, body, userId) {
           vals
         );
       }
+
+      // Activity log: vytvorenie/úprava + špeciálne "aplikovanie skladu"
+      try {
+        const newStatus = vals[10];
+        const newApplied = Number(vals[27]) || 0; // stock_applied
+        const changes = {};
+        if (!existed) {
+          changes.receipt_number = vals[2];
+          changes.status = newStatus;
+          changes.stock_applied = newApplied;
+          changes.supplier_name = vals[4];
+        } else {
+          if (oldStatus !== newStatus) changes.status = newStatus;
+          if (oldApplied !== newApplied) changes.stock_applied = newApplied;
+        }
+        if (Object.keys(changes).length > 0) {
+          await client.query(
+            `INSERT INTO sync_events
+             (entity_type, entity_id, operation, field_changes, client_timestamp,
+              device_id, user_id, session_id, client_version, server_version)
+             VALUES ($1,$2,$3,$4,NOW(),$5,$6,$7,$8,$9)`,
+            [
+              'inbound_receipt',
+              String(localId),
+              existed ? 'update' : 'create',
+              JSON.stringify(changes),
+              'flutter',
+              userId,
+              null,
+              1,
+              1,
+            ]
+          );
+        }
+      } catch (_) {}
     }
 
     for (const item of items) {

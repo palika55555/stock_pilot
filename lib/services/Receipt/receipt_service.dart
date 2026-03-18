@@ -308,7 +308,7 @@ class ReceiptService {
     for (final item in items) {
       final product = await _db.getProductByUniqueId(item.productUniqueId);
       if (product != null && receipt.warehouseId != null && product.warehouseId == receipt.warehouseId) {
-        final newQty = (product.qty - item.qty).clamp(0, double.infinity).round();
+        final newQty = (product.qty - item.qty).clamp(0.0, double.infinity);
         final updated = Product(
           uniqueId: product.uniqueId,
           name: product.name,
@@ -378,7 +378,7 @@ class ReceiptService {
         final weightedPurchasePriceWithoutVat = product.qty <= 0 ? itemPriceWithoutVat : _roundPrice((product.qty * product.purchasePriceWithoutVat + item.qty * itemPriceWithoutVat) / newQty);
         final updated = Product(
           uniqueId: product.uniqueId, name: product.name, plu: product.plu, ean: product.ean, category: product.category,
-          qty: newQty.round(), unit: product.unit, price: product.price, withoutVat: product.withoutVat, vat: product.vat, discount: product.discount,
+          qty: newQty, unit: product.unit, price: product.price, withoutVat: product.withoutVat, vat: product.vat, discount: product.discount,
           lastPurchasePrice: _roundPrice(itemPriceWithVat), lastPurchasePriceWithoutVat: _roundPrice(itemPriceWithoutVat), lastPurchaseDate: today,
           currency: product.currency, location: product.location, purchasePrice: weightedPurchasePriceWithVat, purchasePriceWithoutVat: weightedPurchasePriceWithoutVat,
           purchaseVat: product.purchaseVat, recyclingFee: product.recyclingFee, productType: product.productType,
@@ -427,7 +427,7 @@ class ReceiptService {
           await _notificationService.createForStockLow(
             productName: product.name ?? product.uniqueId ?? '',
             warehouseName: wh?.name ?? 'Sklad',
-            currentQty: product.qty,
+            currentQty: product.qty.round(),
             minQty: product.minQuantity,
           );
         }

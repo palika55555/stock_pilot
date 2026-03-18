@@ -234,7 +234,7 @@ class DatabaseService {
         name TEXT,
         plu TEXT,
         category TEXT,
-        qty INTEGER,
+        qty REAL,
         unit TEXT,
         price REAL,
         without_vat REAL,
@@ -412,7 +412,7 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
         FOREIGN KEY (receipt_id) REFERENCES inbound_receipts(id),
@@ -448,7 +448,7 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
         FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
@@ -477,7 +477,7 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         direction TEXT NOT NULL DEFAULT 'OUT',
         FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
@@ -497,7 +497,7 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT NOT NULL,
         product_plu TEXT NOT NULL,
-        quantity INTEGER NOT NULL,
+        quantity REAL NOT NULL,
         unit TEXT NOT NULL,
         created_at TEXT NOT NULL,
         notes TEXT,
@@ -908,7 +908,7 @@ class DatabaseService {
           product_unique_id TEXT NOT NULL,
           product_name TEXT,
           plu TEXT,
-          qty INTEGER NOT NULL,
+          qty REAL NOT NULL,
           unit TEXT NOT NULL,
           unit_price REAL NOT NULL,
           FOREIGN KEY (receipt_id) REFERENCES inbound_receipts(id),
@@ -1052,7 +1052,7 @@ class DatabaseService {
           product_unique_id TEXT NOT NULL,
           product_name TEXT,
           plu TEXT,
-          qty INTEGER NOT NULL,
+          qty REAL NOT NULL,
           unit TEXT NOT NULL,
           unit_price REAL NOT NULL,
           discount_percent INTEGER NOT NULL DEFAULT 0,
@@ -1139,7 +1139,7 @@ class DatabaseService {
           product_unique_id TEXT NOT NULL,
           product_name TEXT,
           plu TEXT,
-          qty INTEGER NOT NULL,
+          qty REAL NOT NULL,
           unit TEXT NOT NULL,
           unit_price REAL NOT NULL,
           FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
@@ -1159,7 +1159,7 @@ class DatabaseService {
           product_unique_id TEXT NOT NULL,
           product_name TEXT NOT NULL,
           product_plu TEXT NOT NULL,
-          quantity INTEGER NOT NULL,
+          quantity REAL NOT NULL,
           unit TEXT NOT NULL,
           created_at TEXT NOT NULL,
           notes TEXT,
@@ -1241,7 +1241,7 @@ class DatabaseService {
           product_unique_id TEXT NOT NULL,
           product_name TEXT,
           plu TEXT,
-          qty INTEGER NOT NULL,
+          qty REAL NOT NULL,
           unit TEXT NOT NULL,
           direction TEXT NOT NULL DEFAULT 'OUT',
           FOREIGN KEY (stock_out_id) REFERENCES stock_outs(id)
@@ -1838,7 +1838,7 @@ class DatabaseService {
         product_unique_id TEXT NOT NULL,
         product_name TEXT,
         plu TEXT,
-        qty INTEGER NOT NULL,
+        qty REAL NOT NULL,
         unit TEXT NOT NULL,
         unit_price REAL NOT NULL,
         vat_percent INTEGER,
@@ -2094,7 +2094,7 @@ class DatabaseService {
       final name = (map['name'] as String?)?.trim() ?? '';
       final plu = (map['plu'] as String?)?.trim() ?? '';
       final unit = (map['unit'] as String?)?.trim() ?? 'ks';
-      final qty = (map['qty'] as num?)?.toInt() ?? 0;
+      final qty = (map['qty'] as num?)?.toDouble() ?? 0.0;
       final eanRaw = map['ean'];
       final ean = eanRaw is String ? eanRaw.trim() : (eanRaw != null ? eanRaw.toString().trim() : null);
       final existing = await getProductByUniqueId(uniqueId);
@@ -3252,7 +3252,7 @@ class DatabaseService {
           plu: transfer.productPlu,
           ean: source.ean,
           category: source.category,
-          qty: transfer.quantity,
+          qty: transfer.quantity.toDouble(),
           unit: transfer.unit,
           price: source.price,
           withoutVat: source.withoutVat,
@@ -3398,7 +3398,7 @@ class DatabaseService {
           productUniqueId: item.productUniqueId,
           productName: item.productName,
           plu: item.plu,
-          qty: item.qty,
+          qty: item.qty.round(),
           unit: item.unit,
           direction: 'OUT',
         ).toMap();

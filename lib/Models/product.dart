@@ -5,7 +5,7 @@ class Product {
   /// EAN / čiarový kód – pre vyhľadanie pri skenovaní a zobrazenie množstva.
   final String? ean;
   final String category;
-  final int qty;
+  final double qty;
   final String unit;
   final double price; // Sales price with VAT
   final double withoutVat; // Sales price without VAT
@@ -135,7 +135,7 @@ class Product {
       plu: map['plu'],
       ean: map['ean'] as String?,
       category: map['category'],
-      qty: (map['qty'] as num?)?.toInt() ?? 0,
+      qty: (map['qty'] as num?)?.toDouble() ?? 0.0,
       unit: map['unit'],
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       withoutVat: (map['without_vat'] as num?)?.toDouble() ?? 0.0,
@@ -176,7 +176,7 @@ class Product {
     String? plu,
     String? ean,
     String? category,
-    int? qty,
+    double? qty,
     String? unit,
     double? price,
     double? withoutVat,

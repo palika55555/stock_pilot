@@ -154,7 +154,7 @@ class WarehouseReportService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value =
           TextCellValue(products[i].name);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value =
-          IntCellValue(products[i].qty);
+          IntCellValue(products[i].qty.round());
     }
 
     excel.setDefaultSheet(sheetName);

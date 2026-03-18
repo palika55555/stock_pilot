@@ -88,6 +88,12 @@ class PrijemkaPdfGenerator {
     return p.length == 3 ? '${p[2]}.${p[1]}.${p[0]}' : iso;
   }
 
+  static String _formatQty(double qty) {
+    final isWhole = qty == qty.roundToDouble();
+    final s = isWhole ? qty.toInt().toString() : qty.toString();
+    return s.replaceAll('.', ',');
+  }
+
   static String _typeLabel(PrintType t) {
     switch (t) {
       case PrintType.standard:  return 'Účtovná príjemka';
@@ -463,7 +469,7 @@ class PrijemkaPdfGenerator {
         _cell(f, item.plu ?? '',                           bg: bg, color: _textMuted, mono: true),
         if (hasBatch)  _cell(f, item.batchNumber ?? '',   bg: bg, color: _textMuted),
         if (hasExpiry) _cell(f, _expiry(item.expiryDate), bg: bg, color: _textMuted),
-        _cell(f, '${item.qty}',           align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
+        _cell(f, _formatQty(item.qty),    align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
         _cell(f, item.unit,               bg: bg, color: _textMuted),
         _cell(f, _formatCurrency(unitNV), align: pw.TextAlign.right, bg: bg, mono: true),
         _amberPill(f, '$vat %',           cellBg: bg),
@@ -519,7 +525,7 @@ class PrijemkaPdfGenerator {
       rows.add(pw.TableRow(children: [
         _cell(f, item.productName ?? item.productUniqueId, bg: bg),
         _cell(f, item.plu ?? '',              bg: bg, color: _textMuted, mono: true),
-        _cell(f, '${item.qty}',               align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
+        _cell(f, _formatQty(item.qty),        align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
         _cell(f, item.unit,                   bg: bg, color: _textMuted),
         _cell(f, _formatCurrency(unitNV),     align: pw.TextAlign.right, bg: bg, mono: true),
         _amberPill(f, '$vat %',               cellBg: bg),
@@ -600,7 +606,7 @@ class PrijemkaPdfGenerator {
       final bg = i.isOdd ? _bgRow : _white;
       rows.add(pw.TableRow(children: [
         _cell(f, item.productName ?? item.productUniqueId, bg: bg),
-        _cell(f, '${item.qty} ${item.unit}', align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
+        _cell(f, '${_formatQty(item.qty)} ${item.unit}', align: pw.TextAlign.right, bg: bg, bold: true, mono: true),
         _cell(f, product != null ? '$stavPred' : '–', align: pw.TextAlign.right, bg: bg, color: _textMuted, mono: true),
         _cell(f, product != null ? '${product.qty}' : '–', align: pw.TextAlign.right, bg: bg, color: _greenText, bold: true, mono: true),
       ]));

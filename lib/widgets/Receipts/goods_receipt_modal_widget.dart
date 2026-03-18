@@ -13,7 +13,7 @@ import '../../services/Supplier/supplier_service.dart';
 import '../products/add_product_modal_widget.dart';
 import '../suppliers/add_supplier_modal_widget.dart';
 
-/// Input formatter: digits and one decimal point, max 5 decimal places.
+/// Input formatter: digits and one decimal separator ("," or "."), max 5 decimals.
 class _DecimalInputFormatter extends TextInputFormatter {
   static const int maxDecimals = 5;
 
@@ -25,10 +25,23 @@ class _DecimalInputFormatter extends TextInputFormatter {
     final text = newValue.text;
     if (text.isEmpty) return newValue;
     if (text == '-') return newValue;
-    final match = RegExp(r'^\d*\.?\d{0,5}$').firstMatch(text);
+    final match = RegExp(r'^\d*(?:[.,]\d{0,5})?$').firstMatch(text);
     if (match == null) return oldValue;
     return newValue;
   }
+}
+
+double? _tryParseDecimal(String raw) {
+  final t = raw.trim();
+  if (t.isEmpty) return null;
+  return double.tryParse(t.replaceAll(',', '.'));
+}
+
+bool _isWholeNumber(double v) => v == v.roundToDouble();
+
+String _formatQtyForInput(double qty) {
+  if (_isWholeNumber(qty)) return qty.toInt().toString();
+  return qty.toString().replaceAll('.', ',');
 }
 
 class _ReceiptItemRow {
@@ -290,7 +303,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         }
         final row = _ReceiptItemRow();
         row.product = product;
-        row.qtyController.text = item.qty.toString();
+        row.qtyController.text = _formatQtyForInput(item.qty);
 
         double unitPriceForRow = item.unitPrice;
         if (unitPriceForRow <= 0 && product != null && product.purchasePrice > 0) {
@@ -471,8 +484,8 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         }
         continue;
       }
-      final qty = int.tryParse(row.qtyController.text.trim());
-      if (qty == null || qty < 1) {
+      final qty = _tryParseDecimal(row.qtyController.text) ?? 0.0;
+      if (qty <= 0) {
         if (!allowEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Riadok ${i + 1}: zadajte platné množstvo')),
@@ -481,9 +494,16 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
         }
         continue;
       }
-      final priceWithoutVat = double.tryParse(
-        row.unitPriceWithoutVatController.text.trim().replaceAll(',', '.'),
-      );
+      if (row.product?.ibaCeleMnozstva == true && !_isWholeNumber(qty)) {
+        if (!allowEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Riadok ${i + 1}: množstvo musí byť celé číslo')),
+          );
+          return null;
+        }
+        continue;
+      }
+      final priceWithoutVat = _tryParseDecimal(row.unitPriceWithoutVatController.text);
       if (priceWithoutVat == null || priceWithoutVat < 0) {
         if (!allowEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1906,9 +1926,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     double goodsWithVat = 0;
     for (final row in _rows) {
       if (row.product == null) continue;
-      final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+      final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
       if (qty <= 0) continue;
-      final priceWithout = double.tryParse(row.unitPriceWithoutVatController.text.trim().replaceAll(',', '.')) ?? 0;
+      final priceWithout = _tryParseDecimal(row.unitPriceWithoutVatController.text) ?? 0;
       final vat = _effectiveVatForRow(row);
       goodsWithoutVat += qty * priceWithout;
       goodsWithVat += qty * _receiptService.calculateWithVat(priceWithout, vat);
@@ -1968,22 +1988,20 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   }
 
   double _rowTotal(_ReceiptItemRow row) {
-    final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+    final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
     final priceStr = _pricesIncludeVat
-        ? row.unitPriceWithVatController.text.trim().replaceAll(',', '.')
-        : row.unitPriceWithoutVatController.text.trim().replaceAll(',', '.');
-    final price = double.tryParse(priceStr) ?? 0;
+        ? row.unitPriceWithVatController.text.trim()
+        : row.unitPriceWithoutVatController.text.trim();
+    final price = _tryParseDecimal(priceStr) ?? 0;
     return (qty * price * 100).round() / 100;
   }
 
   /// Suma riadku s DPH (pre rozpočítanie obstarávacích nákladov podľa hodnoty).
   double _rowTotalWithVat(_ReceiptItemRow row) {
     if (row.product == null) return 0;
-    final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+    final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
     if (qty <= 0) return 0;
-    final priceWithVat = double.tryParse(
-      row.unitPriceWithVatController.text.trim().replaceAll(',', '.'),
-    ) ?? 0;
+    final priceWithVat = _tryParseDecimal(row.unitPriceWithVatController.text) ?? 0;
     return _roundPrice(qty * priceWithVat);
   }
 
@@ -2015,7 +2033,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
       if (row.product == null) continue;
-      final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+      final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
       if (qty <= 0) continue;
       validRows.add(i);
       if (_costDistributionMethod == 'manual') {
@@ -2025,7 +2043,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
       } else if (_costDistributionMethod == 'by_value') {
         weights.add(_rowTotalWithVat(row));
       } else {
-        weights.add(qty.toDouble()); // by_quantity, by_weight (fallback)
+        weights.add(qty); // by_quantity, by_weight (fallback)
       }
     }
     final totalCost = _totalAcquisitionCostsWithVat();
@@ -2051,8 +2069,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     if (!_isWithCosts) return 0;
     final validIndices = <int>[];
     for (var i = 0; i < _rows.length; i++) {
-      if (_rows[i].product != null &&
-          (int.tryParse(_rows[i].qtyController.text.trim()) ?? 0) > 0) {
+      if (_rows[i].product != null && (_tryParseDecimal(_rows[i].qtyController.text) ?? 0) > 0) {
         validIndices.add(i);
       }
     }
@@ -2066,11 +2083,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   double _getTrueUnitPriceWithVatForRow(int rowIndex) {
     final row = _rows[rowIndex];
     if (row.product == null) return 0;
-    final qty = int.tryParse(row.qtyController.text.trim()) ?? 0;
+    final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
     if (qty <= 0) return 0;
-    final priceWithVat = double.tryParse(
-      row.unitPriceWithVatController.text.trim().replaceAll(',', '.'),
-    ) ?? 0;
+    final priceWithVat = _tryParseDecimal(row.unitPriceWithVatController.text) ?? 0;
     final alloc = _getAllocatedCostForRow(rowIndex);
     return _roundPrice((priceWithVat * qty + alloc) / qty);
   }
@@ -2078,6 +2093,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
   TableRow _buildTableRow(int index) {
     final row = _rows[index];
     final hasProduct = row.product != null;
+    final allowDecimalsQty = row.product?.ibaCeleMnozstva != true;
     return TableRow(
       decoration: BoxDecoration(
         color: index.isEven ? AppColors.bgCard : AppColors.bgElevated,
@@ -2211,7 +2227,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
           padding: _compactPaddingTiny,
           child: TextFormField(
             controller: row.qtyController,
-            keyboardType: TextInputType.number,
+            keyboardType: allowDecimalsQty
+                ? const TextInputType.numberWithOptions(decimal: true, signed: false)
+                : TextInputType.number,
             onChanged: (_) => setState(() {}),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12),
@@ -2224,7 +2242,9 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
                 borderSide: const BorderSide(color: AppColors.borderDefault),
               ),
             ),
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: allowDecimalsQty
+                ? [_DecimalInputFormatter()]
+                : [FilteringTextInputFormatter.digitsOnly],
           ),
         ),
         Padding(
@@ -2347,7 +2367,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               ),
               child: Center(
                 child: Text(
-                  hasProduct && (int.tryParse(row.qtyController.text.trim()) ?? 0) > 0
+                  hasProduct && (_tryParseDecimal(row.qtyController.text) ?? 0) > 0
                       ? '${_getTrueUnitPriceWithVatForRow(index).toStringAsFixed(2)} €'
                       : '—',
                   style: TextStyle(

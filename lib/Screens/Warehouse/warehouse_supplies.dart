@@ -809,7 +809,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   selectedWarehouseName: _selectedWarehouse?.name,
                 ),
                 WarehouseQuickStats(
-                  totalQty: _foundProducts.fold<int>(0, (sum, p) => sum + p.qty),
+                  totalQty: _foundProducts.fold<int>(0, (sum, p) => sum + p.qty.round()),
                   totalValue: _foundProducts.fold<double>(
                     0,
                     (sum, p) => sum + (p.price * p.qty),

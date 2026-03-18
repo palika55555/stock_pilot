@@ -465,7 +465,7 @@ class BulkReceiptImportService {
           productUniqueId: product.uniqueId!,
           productName: product.name,
           plu: product.plu,
-          qty: row.qty,
+          qty: row.qty.toDouble(),
           unit: row.unit.isNotEmpty ? row.unit : product.unit,
           unitPrice: fallbackPrice,
         ));
@@ -569,7 +569,7 @@ class BulkReceiptImportService {
         productUniqueId: uniqueId,
         productName: productName,
         plu: productPlu,
-        qty: row.qty,
+        qty: row.qty.toDouble(),
         unit: row.unit.isNotEmpty ? row.unit : 'ks',
         unitPrice: unitPrice,
       ));

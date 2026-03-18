@@ -366,7 +366,7 @@ class InboundReceiptItem {
   final String productUniqueId;
   final String? productName;
   final String? plu;
-  final int qty;
+  final double qty;
   final String unit;
   final double unitPrice;
   /// DPH % pre túto položku; null = použiť DPH príjemky alebo produktu.
@@ -421,7 +421,7 @@ class InboundReceiptItem {
       productUniqueId: map['product_unique_id'] as String,
       productName: map['product_name'] as String?,
       plu: map['plu'] as String?,
-      qty: map['qty'] as int,
+      qty: (map['qty'] as num?)?.toDouble() ?? 0.0,
       unit: map['unit'] as String,
       unitPrice: (map['unit_price'] as num).toDouble(),
       vatPercent: map['vat_percent'] as int?,

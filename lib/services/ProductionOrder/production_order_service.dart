@@ -192,7 +192,7 @@ class ProductionOrderService {
         productUniqueId: product.uniqueId!,
         productName: product.name,
         plu: product.plu,
-        qty: qty,
+        qty: qty.toDouble(),
         unit: ing.unit,
         unitPrice: product.purchasePrice,
       ));
@@ -254,7 +254,7 @@ class ProductionOrderService {
       productUniqueId: finishedProduct?.uniqueId ?? recipe.finishedProductUniqueId,
       productName: finishedProduct?.name ?? recipe.finishedProductName ?? '',
       plu: finishedProduct?.plu ?? '',
-      qty: actualQuantity.round(),
+      qty: actualQuantity.round().toDouble(),
       unit: recipe.unit,
       unitPrice: costPerUnit,
       vatPercent: finishedProduct?.vat ?? 20,

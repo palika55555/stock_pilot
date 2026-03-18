@@ -195,7 +195,7 @@ class StockOutItem {
   final String productUniqueId;
   final String? productName;
   final String? plu;
-  final int qty;
+  final double qty;
   final String unit;
   final double unitPrice;
   /// Číslo šarže / lot číslo (voliteľné).
@@ -242,7 +242,7 @@ class StockOutItem {
       productUniqueId: map['product_unique_id'] as String,
       productName: map['product_name'] as String?,
       plu: map['plu'] as String?,
-      qty: map['qty'] as int,
+      qty: (map['qty'] as num?)?.toDouble() ?? 0.0,
       unit: map['unit'] as String,
       unitPrice: (map['unit_price'] as num).toDouble(),
       batchNumber: map['batch_number'] as String?,

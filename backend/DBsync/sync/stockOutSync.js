@@ -21,9 +21,11 @@ async function syncStockOuts(pool, body, userId) {
       if (localId == null || Number.isNaN(localId)) continue;
 
       const existing = await client.query(
-        'SELECT id FROM stock_outs WHERE user_id = $1 AND local_id = $2',
+        'SELECT id, status FROM stock_outs WHERE user_id = $1 AND local_id = $2',
         [userId, localId]
       );
+      const existed = existing.rows.length > 0;
+      const oldStatus = existed ? existing.rows[0].status : null;
 
       const vals = [
         userId, localId,
@@ -76,6 +78,38 @@ async function syncStockOuts(pool, body, userId) {
           vals
         );
       }
+
+      // Activity log: vytvorenie/úprava výdajky + zmena statusu
+      try {
+        const newStatus = vals[7];
+        const changes = {};
+        if (!existed) {
+          changes.document_number = vals[2];
+          changes.status = newStatus;
+          changes.recipient_name = vals[4];
+        } else {
+          if (oldStatus !== newStatus) changes.status = newStatus;
+        }
+        if (Object.keys(changes).length > 0) {
+          await client.query(
+            `INSERT INTO sync_events
+             (entity_type, entity_id, operation, field_changes, client_timestamp,
+              device_id, user_id, session_id, client_version, server_version)
+             VALUES ($1,$2,$3,$4,NOW(),$5,$6,$7,$8,$9)`,
+            [
+              'stock_out',
+              String(localId),
+              existed ? 'update' : 'create',
+              JSON.stringify(changes),
+              'flutter',
+              userId,
+              null,
+              1,
+              1,
+            ]
+          );
+        }
+      } catch (_) {}
     }
 
     for (const item of items) {

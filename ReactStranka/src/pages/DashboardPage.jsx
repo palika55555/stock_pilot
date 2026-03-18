@@ -66,7 +66,7 @@ export default function DashboardPage() {
     sales_trend_week: 0,
     last_sync_at: 0,
   })
-  const [batches, setBatches] = useState([])
+  const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)
   const [notifTab, setNotifTab] = useState('all')
   const [syncing, setSyncing] = useState(false)
@@ -83,7 +83,7 @@ export default function DashboardPage() {
     const headers = getAuthHeaders(auth)
     const promises = [
       fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return {} }; return r.ok ? r.json() : {} }),
-      fetch(`${API_BASE_FOR_CALLS}/batches?limit=10`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return [] }; return r.ok ? r.json() : [] }),
+      fetch(`${API_BASE_FOR_CALLS}/dashboard/activity?limit=20`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return { activity: [] } }; return r.ok ? r.json() : { activity: [] } }),
     ]
     if (auth?.user?.role === 'db_owner') {
       promises.push(fetch(`${API_BASE_FOR_CALLS}/admin/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return null }; return r.ok ? r.json() : null }))
@@ -91,7 +91,7 @@ export default function DashboardPage() {
     Promise.all(promises)
       .then((results) => {
         if (cancelled) return
-        const [data, batchList, adminStatsData] = results
+        const [data, activityRes, adminStatsData] = results
         setStats((s) => ({
           ...s,
           products_count: data?.products_count ?? data?.products ?? 0,
@@ -103,7 +103,7 @@ export default function DashboardPage() {
           sales_trend_week: data?.sales_trend_week ?? 0,
           last_sync_at: data?.last_sync_at ?? 0,
         }))
-        setBatches(Array.isArray(batchList) ? batchList : [])
+        setActivity(Array.isArray(activityRes?.activity) ? activityRes.activity : [])
         if (adminStatsData) setAdminStats(adminStatsData)
       })
       .catch(() => {})
@@ -134,6 +134,17 @@ export default function DashboardPage() {
   const trendLabel = (v) => (v > 0 ? `↑ ${v}%` : v < 0 ? `↓ ${Math.abs(v)}%` : '→ 0%')
 
   if (!auth) return null
+
+  const activityIcon = (t) => {
+    switch (t) {
+      case 'inbound_receipt': return '⬆️'
+      case 'stock_out': return '⬇️'
+      case 'product': return '📦'
+      case 'production_batch': return '🏭'
+      case 'pallet': return '🧱'
+      default: return '•'
+    }
+  }
 
   return (
     <div className="dashboard-overview">
@@ -290,25 +301,29 @@ export default function DashboardPage() {
                   <thead>
                     <tr>
                       <th>Typ</th>
-                      <th>Produkt</th>
-                      <th>Mn.</th>
+                      <th>Aktivita</th>
+                      <th>Detail</th>
                       <th>Čas</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {batches.length === 0 ? (
+                    {activity.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="dashboard-activity__empty">
                           Žiadne pohyby. Synchronizujte aplikáciu.
                         </td>
                       </tr>
                     ) : (
-                      batches.slice(0, 10).map((b) => (
-                        <tr key={b.id}>
-                          <td><span className="dashboard-activity__type dashboard-activity__type--batch">↔</span></td>
-                          <td>{b.product_type || '—'}</td>
-                          <td>+{b.quantity_produced ?? 0}</td>
-                          <td>{b.created_at ? formatAgo(b.created_at) : '—'}</td>
+                      activity.slice(0, 20).map((a) => (
+                        <tr key={`${a.type}-${a.entity_id}-${a.occurred_at}`}>
+                          <td>
+                            <span className="dashboard-activity__type dashboard-activity__type--batch">
+                              {activityIcon(a.type)}
+                            </span>
+                          </td>
+                          <td>{a.title || '—'}</td>
+                          <td>{a.subtitle || '—'}</td>
+                          <td>{a.occurred_at ? formatAgo(a.occurred_at) : '—'}</td>
                         </tr>
                       ))
                     )}

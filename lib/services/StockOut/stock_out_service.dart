@@ -8,8 +8,8 @@ import '../api_sync_service.dart' show syncStockOutsToBackend;
 class InsufficientStockException implements Exception {
   final String productName;
   final String plu;
-  final int requested;
-  final int available;
+  final double requested;
+  final double available;
 
   InsufficientStockException({
     required this.productName,
@@ -107,7 +107,7 @@ class StockOutService {
         productUniqueId: item.productUniqueId,
         productName: item.productName,
         plu: item.plu,
-        qty: item.qty,
+        qty: item.qty.round(),
         unit: item.unit,
         direction: 'OUT',
       ));
