@@ -16,6 +16,11 @@ import WarehousesPage from './pages/WarehousesPage'
 import SuppliersPage from './pages/SuppliersPage'
 import UsersPage from './pages/UsersPage'
 import Prijemka from './pages/Prijemka'
+import PrijemkyListPage from './pages/PrijemkyListPage'
+import VydajkyPage from './pages/VydajkyPage'
+import RecepturyPage from './pages/RecepturyPage'
+import VyrobneProkazaPage from './pages/VyrobneProkazaPage'
+import TransportyPage from './pages/TransportyPage'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
 import { getAuth } from './utils/auth'
@@ -51,8 +56,13 @@ function App() {
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="suppliers" element={<SuppliersPage />} />
           <Route path="users" element={<UsersPage />} />
+          <Route path="prijemky" element={<PrijemkyListPage />} />
           <Route path="prijemky/:id" element={<Prijemka />} />
           <Route path="prijemky/preview" element={<Prijemka />} />
+          <Route path="vydajky" element={<VydajkyPage />} />
+          <Route path="receptury" element={<RecepturyPage />} />
+          <Route path="vyroba-prikazy" element={<VyrobneProkazaPage />} />
+          <Route path="transporty" element={<TransportyPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

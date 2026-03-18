@@ -12,9 +12,13 @@ const NAV_ITEMS_USER = [
   { path: '/dashboard/warehouses', label: 'Sklady', icon: '🏪' },
   { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '🚚' },
   { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '📄' },
-  { path: '/dashboard/production', label: 'Výroba', icon: '🏭' },
+  { path: '/dashboard/prijemky', label: 'Príjemky', icon: '📥' },
+  { path: '/dashboard/vydajky', label: 'Výdajky', icon: '📤' },
+  { path: '/dashboard/receptury', label: 'Receptúry', icon: '📋' },
+  { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
+  { path: '/dashboard/transporty', label: 'Transporty', icon: '🚗' },
+  { path: '/dashboard/production', label: 'Výrobné šarže', icon: '📊' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
-  { path: '/dashboard/production/new', label: 'Príjemky', icon: '📥' },
 ]
 
 // Admin (a db_owner) vidí všetky moduly + extra sekciu Používatelia

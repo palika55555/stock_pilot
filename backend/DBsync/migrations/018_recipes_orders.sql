@@ -1,0 +1,70 @@
+-- Migrácia 018: Receptúry (recipes), ingrediencie a výrobné príkazy (production_orders)
+
+CREATE TABLE IF NOT EXISTS recipes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  local_id INTEGER NOT NULL,
+  name TEXT,
+  finished_product_unique_id TEXT,
+  finished_product_name TEXT,
+  output_quantity NUMERIC(12,3),
+  unit TEXT,
+  production_warehouse_id INTEGER,
+  output_warehouse_id INTEGER,
+  production_time_minutes INTEGER,
+  note TEXT,
+  is_active INTEGER DEFAULT 1,
+  min_approval_quantity NUMERIC(12,3),
+  UNIQUE(user_id, local_id)
+);
+
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  local_id INTEGER NOT NULL,
+  recipe_local_id INTEGER NOT NULL,
+  product_unique_id TEXT,
+  product_name TEXT,
+  plu TEXT,
+  quantity NUMERIC(12,3),
+  unit TEXT,
+  UNIQUE(user_id, local_id)
+);
+
+CREATE TABLE IF NOT EXISTS production_orders (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  local_id INTEGER NOT NULL,
+  order_number TEXT,
+  recipe_local_id INTEGER,
+  recipe_name TEXT,
+  planned_quantity NUMERIC(12,3),
+  production_date TEXT,
+  source_warehouse_id INTEGER,
+  destination_warehouse_id INTEGER,
+  notes TEXT,
+  status TEXT DEFAULT 'draft',
+  requires_approval INTEGER DEFAULT 0,
+  created_by_username TEXT,
+  created_at TEXT,
+  submitted_at TEXT,
+  approver_username TEXT,
+  approved_at TEXT,
+  rejection_reason TEXT,
+  rejected_at TEXT,
+  started_at TEXT,
+  completed_at TEXT,
+  completed_by_username TEXT,
+  actual_quantity NUMERIC(12,3),
+  variance NUMERIC(12,3),
+  material_cost NUMERIC(12,4),
+  labor_cost NUMERIC(12,4),
+  energy_cost NUMERIC(12,4),
+  overhead_cost NUMERIC(12,4),
+  other_cost NUMERIC(12,4),
+  total_cost NUMERIC(12,4),
+  cost_per_unit NUMERIC(12,4),
+  raw_materials_stock_out_local_id INTEGER,
+  finished_goods_receipt_local_id INTEGER,
+  UNIQUE(user_id, local_id)
+);

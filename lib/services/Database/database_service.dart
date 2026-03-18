@@ -3580,6 +3580,13 @@ class DatabaseService {
     await db.insert('transports', map);
   }
 
+  Future<List<Transport>> getAllTransports() async {
+    Database db = await database;
+    if (_currentUserId == null) return [];
+    final maps = await db.query('transports', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC');
+    return maps.map((m) => Transport.fromMap(m)).toList();
+  }
+
   Future<List<StockOut>> getStockOuts() async {
     Database db = await database;
     if (_currentUserId == null) return [];
@@ -4108,5 +4115,226 @@ class DatabaseService {
       where: 'id = ? AND user_id = ?',
       whereArgs: [customerId, _currentUserId],
     );
+  }
+
+  // ============================================================
+  // MERGE metódy – nahradenie lokálnych dát dátami z backendu
+  // ============================================================
+
+  /// Nahradí lokálne prijemky dátami z backendu (pri initial sync).
+  Future<void> mergeReceiptsFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final receipts = data['receipts'] as List<dynamic>? ?? [];
+    final items = data['items'] as List<dynamic>? ?? [];
+    final costs = data['costs'] as List<dynamic>? ?? [];
+
+    // Delete & replace všetkých dát
+    await db.delete('receipt_acquisition_costs', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('inbound_receipt_items', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('inbound_receipts', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final r in receipts) {
+      final map = Map<String, dynamic>.from(r as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['linked_stock_out_id'] = map.remove('linked_stock_out_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('inbound_receipts', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final item in items) {
+      final map = Map<String, dynamic>.from(item as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['receipt_id'] = map.remove('receipt_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('inbound_receipt_items', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final cost in costs) {
+      final map = Map<String, dynamic>.from(cost as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['receipt_id'] = map.remove('receipt_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('receipt_acquisition_costs', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Nahradí lokálne výdajky dátami z backendu (pri initial sync).
+  Future<void> mergeStockOutsFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final outs = data['stock_outs'] as List<dynamic>? ?? [];
+    final items = data['items'] as List<dynamic>? ?? [];
+    final movements = data['movements'] as List<dynamic>? ?? [];
+
+    await db.delete('stock_movements', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('stock_out_items', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('stock_outs', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final s in outs) {
+      final map = Map<String, dynamic>.from(s as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['linked_receipt_id'] = map.remove('linked_receipt_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('stock_outs', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final item in items) {
+      final map = Map<String, dynamic>.from(item as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['stock_out_id'] = map.remove('stock_out_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('stock_out_items', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final mv in movements) {
+      final map = Map<String, dynamic>.from(mv as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['stock_out_id'] = map.remove('stock_out_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('stock_movements', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Nahradí lokálne receptúry dátami z backendu (pri initial sync).
+  Future<void> mergeRecipesFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final recipes = data['recipes'] as List<dynamic>? ?? [];
+    final ingredients = data['ingredients'] as List<dynamic>? ?? [];
+
+    await db.delete('recipe_ingredients', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('recipes', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final r in recipes) {
+      final map = Map<String, dynamic>.from(r as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('recipes', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final ing in ingredients) {
+      final map = Map<String, dynamic>.from(ing as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['recipe_id'] = map.remove('recipe_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('recipe_ingredients', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Nahradí lokálne výrobné príkazy dátami z backendu (pri initial sync).
+  Future<void> mergeProductionOrdersFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final orders = data['production_orders'] as List<dynamic>? ?? [];
+
+    await db.delete('production_orders', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final o in orders) {
+      final map = Map<String, dynamic>.from(o as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['recipe_id'] = map.remove('recipe_local_id');
+      map['raw_materials_stock_out_id'] = map.remove('raw_materials_stock_out_local_id');
+      map['finished_goods_receipt_id'] = map.remove('finished_goods_receipt_local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('production_orders', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Nahradí lokálne ponuky dátami z backendu (pri initial sync).
+  Future<void> mergeQuotesFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final quotes = data['quotes'] as List<dynamic>? ?? [];
+    final items = data['items'] as List<dynamic>? ?? [];
+
+    await db.delete('quote_items', where: 'user_id = ?', whereArgs: [_currentUserId]);
+    await db.delete('quotes', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final q in quotes) {
+      final map = Map<String, dynamic>.from(q as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['user_id'] = _currentUserId;
+      // Mapovanie polí z backendu na lokálne
+      if (map.containsKey('issue_date')) {
+        map['created_at'] = map.remove('issue_date');
+      }
+      await db.insert('quotes', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    for (final item in items) {
+      final map = Map<String, dynamic>.from(item as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['quote_id'] = map.remove('quote_local_id') ?? map['quote_id'];
+      map['user_id'] = _currentUserId;
+      // Backend vracia 'name', lokálne je 'product_name'
+      if (!map.containsKey('product_name') && map.containsKey('name')) {
+        map['product_name'] = map.remove('name');
+      }
+      await db.insert('quote_items', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Nahradí lokálne transporty dátami z backendu (pri initial sync).
+  Future<void> mergeTransportsFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final transports = data['transports'] as List<dynamic>? ?? [];
+
+    await db.delete('transports', where: 'user_id = ?', whereArgs: [_currentUserId]);
+
+    for (final t in transports) {
+      final map = Map<String, dynamic>.from(t as Map);
+      final localId = map['local_id'] as int?;
+      if (localId == null) continue;
+      map['id'] = localId;
+      map.remove('local_id');
+      map['user_id'] = _currentUserId;
+      await db.insert('transports', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Aktualizuje lokálne firemné údaje dátami z backendu (pri initial sync).
+  Future<void> mergeCompanyFromBackend(Map<String, dynamic> data) async {
+    if (_currentUserId == null) return;
+    final db = await database;
+    final existing = await db.query('company', where: 'id = 1');
+    final map = Map<String, dynamic>.from(data);
+    map.remove('id');
+    map.remove('user_id');
+    map.remove('logo_path');
+    if (existing.isEmpty) {
+      map['id'] = 1;
+      await db.insert('company', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    } else {
+      await db.update('company', map, where: 'id = 1');
+    }
   }
 }

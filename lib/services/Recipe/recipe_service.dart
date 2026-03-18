@@ -1,6 +1,7 @@
 import '../../models/recipe.dart';
 import '../../models/product.dart';
 import '../Database/database_service.dart';
+import '../api_sync_service.dart' show syncRecipesToBackend;
 
 /// Ingredient row with current stock and sufficient flag for UI.
 class RecipeIngredientWithStock {
@@ -42,11 +43,13 @@ class RecipeService {
     for (final ing in ingredients) {
       await _db.insertRecipeIngredient(ing.copyWith(recipeId: recipeId));
     }
+    syncRecipesToBackend().ignore();
     return recipeId;
   }
 
   Future<void> deleteRecipe(int id) async {
     await _db.deleteRecipe(id);
+    syncRecipesToBackend().ignore();
   }
 
   Future<List<RecipeIngredient>> getRecipeIngredients(int recipeId) async {

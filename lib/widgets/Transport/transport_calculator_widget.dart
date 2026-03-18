@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import '../../services/Transport/transport_service.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/Transport/transport_pdf_service.dart';
+import '../../services/api_sync_service.dart' show syncTransportsToBackend;
 import '../../models/transport.dart';
 import '../../widgets/common/glassmorphism_container.dart';
 import 'address_autocomplete_field.dart';
@@ -692,6 +693,7 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
 
       final db = DatabaseService();
       await db.insertTransport(transport);
+      syncTransportsToBackend().ignore();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

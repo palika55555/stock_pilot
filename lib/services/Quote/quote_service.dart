@@ -1,5 +1,6 @@
 import '../../models/quote.dart';
 import '../Database/database_service.dart';
+import '../api_sync_service.dart' show syncQuotesToBackend;
 
 class QuoteService {
   final DatabaseService _db = DatabaseService();
@@ -9,7 +10,9 @@ class QuoteService {
   }
 
   Future<int> createQuote(Quote quote) async {
-    return await _db.insertQuote(quote);
+    final id = await _db.insertQuote(quote);
+    syncQuotesToBackend().ignore();
+    return id;
   }
 
   Future<Quote?> getQuoteById(int id) async {
@@ -25,11 +28,15 @@ class QuoteService {
   }
 
   Future<int> updateQuote(Quote quote) async {
-    return await _db.updateQuote(quote);
+    final n = await _db.updateQuote(quote);
+    syncQuotesToBackend().ignore();
+    return n;
   }
 
   Future<int> deleteQuote(int id) async {
-    return await _db.deleteQuote(id);
+    final n = await _db.deleteQuote(id);
+    syncQuotesToBackend().ignore();
+    return n;
   }
 
   Future<List<QuoteItem>> getQuoteItems(int quoteId) async {

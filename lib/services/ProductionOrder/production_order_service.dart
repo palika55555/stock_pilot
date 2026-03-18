@@ -7,6 +7,7 @@ import '../Recipe/recipe_service.dart';
 import '../StockOut/stock_out_service.dart';
 import '../Receipt/receipt_service.dart';
 import '../Notifications/notification_service.dart';
+import '../api_sync_service.dart' show syncProductionOrdersToBackend;
 
 class ProductionOrderService {
   final DatabaseService _db = DatabaseService();
@@ -39,11 +40,16 @@ class ProductionOrderService {
   Future<int> createOrder({
     required ProductionOrder order,
   }) async {
-    return _db.insertProductionOrder(order);
+    final id = await _db.insertProductionOrder(order);
+    syncProductionOrdersToBackend().ignore();
+    return id;
   }
 
   Future<void> updateOrder(ProductionOrder order) async {
-    if (order.id != null) await _db.updateProductionOrder(order);
+    if (order.id != null) {
+      await _db.updateProductionOrder(order);
+      syncProductionOrdersToBackend().ignore();
+    }
   }
 
   /// Submit for approval (draft -> pending). Notifies managers.
@@ -60,6 +66,7 @@ class ProductionOrderService {
       plannedQuantity: order.plannedQuantity,
       orderId: orderId,
     );
+    syncProductionOrdersToBackend().ignore();
   }
 
   /// Approve (pending -> approved). Notifies creator.
@@ -81,6 +88,7 @@ class ProductionOrderService {
         targetUsername: order.createdByUsername!,
       );
     }
+    syncProductionOrdersToBackend().ignore();
   }
 
   /// Reject (pending -> draft conceptually; we keep status rejected and creator can edit and resubmit).
@@ -101,6 +109,7 @@ class ProductionOrderService {
         targetUsername: order.createdByUsername!,
       );
     }
+    syncProductionOrdersToBackend().ignore();
   }
 
   /// Set order back to draft after rejection so creator can edit and resubmit.
@@ -114,6 +123,7 @@ class ProductionOrderService {
       rejectedAt: null,
     );
     await _db.updateProductionOrder(updated);
+    syncProductionOrdersToBackend().ignore();
   }
 
   /// Start production (approved or draft when no approval needed -> in_progress).
@@ -125,6 +135,7 @@ class ProductionOrderService {
       startedAt: DateTime.now(),
     );
     await _db.updateProductionOrder(updated);
+    syncProductionOrdersToBackend().ignore();
   }
 
   /// Complete production: create výdajka (raw materials), príjemka (finished product), update costs and product avg price.
@@ -277,6 +288,7 @@ class ProductionOrderService {
       actualQuantity: actualQuantity,
       orderId: orderId,
     );
+    syncProductionOrdersToBackend().ignore();
   }
 
   Future<int> getCountByStatus(String status) => _db.getProductionOrderCountByStatus(status);

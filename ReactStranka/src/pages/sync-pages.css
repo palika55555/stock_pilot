@@ -1,0 +1,148 @@
+/* Zdielaný CSS pre sync read-only stranky (prijemky, výdajky, receptúry, výrobné príkazy, transporty) */
+
+.sync-page {
+  max-width: 960px;
+}
+
+/* Info banner – dáta sú read-only, edituje sa v aplikácii */
+.sync-readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  color: #93c5fd;
+  margin-bottom: 1.25rem;
+}
+
+/* Filters */
+.sync-filters {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.sync-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.6rem 0.875rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.sync-search:focus { outline: none; border-color: var(--accent); }
+
+.sync-select {
+  padding: 0.6rem 0.875rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.sync-select:focus { outline: none; border-color: var(--accent); }
+
+/* List */
+.sync-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sync-list-item {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.sync-list-item:hover { border-color: var(--accent); }
+
+.sync-list-item__body {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.875rem 1.25rem;
+  color: var(--text);
+  font-family: inherit;
+  cursor: default;
+}
+
+.sync-list-item__top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.2rem;
+}
+
+.sync-list-item__number {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.sync-list-item__sub {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.sync-list-item__meta {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.sync-list-item__accent {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Status badges */
+.sync-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.18rem 0.55rem;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.sync-badge--draft     { background: rgba(255,255,255,0.1);   color: var(--text-muted); }
+.sync-badge--pending   { background: rgba(251,191,36,0.2);    color: #fbbf24; }
+.sync-badge--approved  { background: rgba(34,197,94,0.2);     color: #4ade80; }
+.sync-badge--rejected  { background: rgba(239,68,68,0.2);     color: #f87171; }
+.sync-badge--green     { background: rgba(34,197,94,0.2);     color: #4ade80; }
+.sync-badge--blue      { background: rgba(59,130,246,0.2);    color: #60a5fa; }
+.sync-badge--amber     { background: rgba(251,191,36,0.2);    color: #fbbf24; }
+.sync-badge--red       { background: rgba(239,68,68,0.2);     color: #f87171; }
+.sync-badge--gray      { background: rgba(255,255,255,0.08);  color: var(--text-muted); }
+.sync-badge--inprogress{ background: rgba(168,85,247,0.2);    color: #c084fc; }
+.sync-badge--completed { background: rgba(34,197,94,0.2);     color: #4ade80; }
+.sync-badge--active    { background: rgba(34,197,94,0.18);    color: #4ade80; }
+.sync-badge--inactive  { background: rgba(255,255,255,0.08);  color: var(--text-muted); }
+
+/* Empty state */
+.sync-empty {
+  text-align: center;
+  padding: 3rem 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}

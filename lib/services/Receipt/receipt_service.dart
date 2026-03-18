@@ -4,6 +4,7 @@ import '../../models/receipt.dart';
 import '../../models/stock_out.dart';
 import '../Database/database_service.dart';
 import '../Notifications/notification_service.dart';
+import '../api_sync_service.dart' show syncReceiptsToBackend, syncStockOutsToBackend;
 
 class ReceiptService {
   final DatabaseService _db = DatabaseService();
@@ -171,6 +172,8 @@ class ReceiptService {
       );
       await _db.updateStockOutStatus(stockOutId, StockOutStatus.schvalena);
     }
+    syncReceiptsToBackend().ignore();
+    syncStockOutsToBackend().ignore();
     return receiptId;
   }
 
@@ -219,6 +222,7 @@ class ReceiptService {
         ));
       }
     }
+    syncReceiptsToBackend().ignore();
   }
 
   /// Odoslí príjemku na schválenie (draft/vykazana -> pending). Notifikuje manažérov/adminov.
@@ -232,6 +236,7 @@ class ReceiptService {
     );
     await _db.updateInboundReceiptFull(updated);
     await _notificationService.createForReceiptSubmitted(receipt: updated, creatorName: creatorName);
+    syncReceiptsToBackend().ignore();
   }
 
   /// Stiahne príjemku zo schválenia (pending -> vykazana). Notifikuje manažérov/adminov.
@@ -244,6 +249,7 @@ class ReceiptService {
     );
     await _db.updateInboundReceiptFull(updated);
     await _notificationService.createForReceiptRecalled(receipt: updated, creatorName: creatorName);
+    syncReceiptsToBackend().ignore();
   }
 
   /// Zamietne príjemku. Notifikuje tvorcu.
@@ -258,6 +264,7 @@ class ReceiptService {
     );
     await _db.updateInboundReceiptFull(updated);
     await _notificationService.createForReceiptRejected(receipt: updated, rejectionReason: rejectionReason);
+    syncReceiptsToBackend().ignore();
   }
 
   /// Zruší príjemku, ktorá ešte nebola vykázaná (žiadny vplyv na sklad). Nastaví status na cancelled.
@@ -266,6 +273,7 @@ class ReceiptService {
     if (receipt == null || receipt.stockApplied) return;
     final updated = receipt.copyWith(status: InboundReceiptStatus.cancelled);
     await _db.updateInboundReceiptFull(updated);
+    syncReceiptsToBackend().ignore();
   }
 
   /// Stornuje vykázanú príjemku. [deductFromStock] = true odpočíta prijaté množstvá zo skladu, false len zmení status.
@@ -289,6 +297,7 @@ class ReceiptService {
     );
     await _db.updateInboundReceiptFull(updated);
     await _notificationService.createForReceiptReversed(receipt: updated, userName: userName, reason: reason);
+    syncReceiptsToBackend().ignore();
   }
 
   /// Odpočíta množstvá položiek príjemky zo skladu (inverzia k _applyReceiptToStock).
@@ -424,6 +433,7 @@ class ReceiptService {
         }
       }
     }
+    syncReceiptsToBackend().ignore();
   }
 
   /// Vypočíta cenu s DPH.

@@ -11,6 +11,13 @@ const { syncCustomers } = require('./DBsync/sync/customerSync');
 const { syncProducts } = require('./DBsync/sync/productSync');
 const { syncWarehouses } = require('./DBsync/sync/warehouseSync');
 const { syncSuppliers } = require('./DBsync/sync/supplierSync');
+const { syncReceipts, fetchReceipts } = require('./DBsync/sync/receiptSync');
+const { syncStockOuts, fetchStockOuts } = require('./DBsync/sync/stockOutSync');
+const { syncRecipes, fetchRecipes } = require('./DBsync/sync/recipeSync');
+const { syncProductionOrders, fetchProductionOrders } = require('./DBsync/sync/productionOrderSync');
+const { syncQuotesFull, fetchQuotesFull } = require('./DBsync/sync/quoteSyncFull');
+const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
+const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
 const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -604,6 +611,115 @@ apiRouter.post('/sync/batches', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// ============================================================
+// SYNC: Prijemky, Výdajky, Receptúry, Výrobné príkazy, Ponuky, Transporty, Firma
+// ============================================================
+
+apiRouter.post('/sync/receipts', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncReceipts(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/receipts/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchReceipts(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní prijemiek' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/stock-outs', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncStockOuts(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/stock-outs/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchStockOuts(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní výdajiek' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/recipes', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncRecipes(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/recipes/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchRecipes(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní receptúr' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/production-orders', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncProductionOrders(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/production-orders/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchProductionOrders(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní výrobných príkazov' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/quotes-full', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncQuotesFull(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/quotes/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchQuotesFull(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní ponúk' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/transports', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncTransports(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true, count: result.count });
+});
+
+apiRouter.get('/transports/all', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchTransports(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní transportov' });
+  res.status(200).json(data);
+});
+
+apiRouter.post('/sync/company', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  const result = await syncCompany(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) return res.status(500).json({ success: false, error: result.error });
+  lastSyncAt = Date.now();
+  res.status(200).json({ success: true });
+});
+
+apiRouter.get('/company/info', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const data = await fetchCompany(pool, req.dataUserId ?? req.userId);
+  if (!data) return res.status(404).json({ error: 'Firemné údaje nenájdené' });
+  res.status(200).json(data);
 });
 
 // --- API: Zákazníci (zoznam a detail) – per user ---

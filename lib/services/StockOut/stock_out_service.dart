@@ -2,6 +2,7 @@ import '../../models/product.dart';
 import '../../models/stock_out.dart';
 import '../../models/stock_movement.dart';
 import '../Database/database_service.dart';
+import '../api_sync_service.dart' show syncStockOutsToBackend;
 
 /// Chyba pri nedostatočnom stave skladu pre výdaj.
 class InsufficientStockException implements Exception {
@@ -195,6 +196,7 @@ class StockOutService {
       await _validateStock(items);
       await _applyStockOutToProducts(toInsert, stockOutId);
     }
+    syncStockOutsToBackend().ignore();
   }
 
   /// Aktualizuje výdajku. Zásoby sa neodpisujú – až pri schválení.
@@ -234,6 +236,7 @@ class StockOutService {
       await _validateStock(itemsWithId);
       await _applyStockOutToProducts(stockOut, stockOut.id!);
     }
+    syncStockOutsToBackend().ignore();
   }
 
   /// Schváli výdajku a odpočíta zásoby zo skladu (pre draft: až teraz sa množstvo odpisuje a vytvoría pohyby).
@@ -246,6 +249,7 @@ class StockOutService {
       await _applyStockOutToProducts(stockOut, stockOutId);
     }
     await _db.updateStockOutStatus(stockOutId, StockOutStatus.schvalena);
+    syncStockOutsToBackend().ignore();
   }
 
   /// Vráti výdajky filtrované podľa skladu (null = všetky).
@@ -261,5 +265,6 @@ class StockOutService {
       await _revertStockOutFromProducts(stockOutId);
     }
     await _db.updateStockOutStatus(stockOutId, StockOutStatus.stornovana);
+    syncStockOutsToBackend().ignore();
   }
 }
