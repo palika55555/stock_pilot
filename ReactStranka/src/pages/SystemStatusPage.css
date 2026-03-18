@@ -1,0 +1,202 @@
+.ss-page {
+  max-width: 1000px;
+}
+
+.ss-refreshed {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+
+.ss-refresh-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.ss-refresh-btn:hover { border-color: var(--accent); }
+.ss-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Sections */
+.ss-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.ss-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+}
+
+/* Status dot */
+.ss-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.ss-dot--ok    { background: #4ade80; box-shadow: 0 0 4px #4ade8080; }
+.ss-dot--warn  { background: #fbbf24; box-shadow: 0 0 4px #fbbf2480; }
+.ss-dot--error { background: #f87171; box-shadow: 0 0 4px #f8717180; }
+
+/* Cards */
+.ss-card-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ss-card {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+}
+
+.ss-card-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ss-card-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+}
+
+.ss-card-value--big {
+  font-size: 1.5rem;
+}
+
+.ss-card-value--warn {
+  color: #fbbf24;
+}
+
+/* Meta grid */
+.ss-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+
+.ss-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.ss-meta-label {
+  color: var(--text-muted);
+}
+
+.ss-meta-value {
+  font-weight: 600;
+}
+
+.ss-meta-value--accent {
+  color: var(--accent);
+}
+
+/* Tables */
+.ss-table-wrap {
+  overflow-x: auto;
+}
+
+.ss-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.ss-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.ss-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+}
+
+.ss-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ss-table-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.ss-table-muted {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.ss-table-mono {
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: #93c5fd;
+}
+
+/* Method badge */
+.ss-method {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+}
+.ss-method--get    { background: rgba(34,197,94,0.15);  color: #4ade80; }
+.ss-method--post   { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.ss-method--put    { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.ss-method--patch  { background: rgba(168,85,247,0.15); color: #c084fc; }
+.ss-method--delete { background: rgba(239,68,68,0.15);  color: #f87171; }
+
+/* Endpoint status text */
+.ss-ep-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.ss-ep-status--ok    { color: #4ade80; }
+.ss-ep-status--warn  { color: #fbbf24; }
+.ss-ep-status--error { color: #f87171; }

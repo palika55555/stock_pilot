@@ -1758,6 +1758,114 @@ apiRouter.post('/admin/migrate-user-data', async (req, res) => {
   }
 });
 
+// --- API: System Status (len db_owner) ---
+
+apiRouter.get('/admin/system-status', async (req, res) => {
+  if (req.userRole !== 'db_owner') return res.status(403).json({ error: 'Prístup iba pre db_owner.' });
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+
+  const q = (sql, params = []) => pool.query(sql, params).then((r) => r.rows[0]).catch(() => ({ count: 0 }));
+
+  try {
+    const [
+      users, admins, blockedUsers,
+      products, customers, warehouses, suppliers, batches, pallets,
+      receipts, receiptItems,
+      stockOuts, stockOutItems,
+      recipes, recipeIngredients,
+      productionOrders,
+      quotes, quoteItems,
+      transports,
+      company,
+      notifications,
+    ] = await Promise.all([
+      q('SELECT COUNT(*) FROM users'),
+      q("SELECT COUNT(*) FROM users WHERE role = 'admin'"),
+      q('SELECT COUNT(*) FROM users WHERE COALESCE(is_blocked,false) = true'),
+      q('SELECT COUNT(*) FROM products'),
+      q('SELECT COUNT(*) FROM customers'),
+      q('SELECT COUNT(*) FROM stocks'),
+      q('SELECT COUNT(*) FROM suppliers'),
+      q('SELECT COUNT(*) FROM production_batches'),
+      q('SELECT COUNT(*) FROM pallets'),
+      q('SELECT COUNT(*) FROM inbound_receipts'),
+      q('SELECT COUNT(*) FROM inbound_receipt_items'),
+      q('SELECT COUNT(*) FROM stock_outs'),
+      q('SELECT COUNT(*) FROM stock_out_items'),
+      q('SELECT COUNT(*) FROM recipes'),
+      q('SELECT COUNT(*) FROM recipe_ingredients'),
+      q('SELECT COUNT(*) FROM production_orders'),
+      q('SELECT COUNT(*) FROM quotes'),
+      q('SELECT COUNT(*) FROM quote_items'),
+      q('SELECT COUNT(*) FROM transports'),
+      q('SELECT COUNT(*) FROM company'),
+      q('SELECT COUNT(*) FROM notifications'),
+    ]);
+
+    // Posledná aktivita per tabuľka
+    const [lastReceipt, lastStockOut, lastOrder, lastQuote] = await Promise.all([
+      pool.query('SELECT created_at FROM inbound_receipts ORDER BY id DESC LIMIT 1').then((r) => r.rows[0]?.created_at ?? null).catch(() => null),
+      pool.query('SELECT created_at FROM stock_outs ORDER BY id DESC LIMIT 1').then((r) => r.rows[0]?.created_at ?? null).catch(() => null),
+      pool.query('SELECT created_at FROM production_orders ORDER BY id DESC LIMIT 1').then((r) => r.rows[0]?.created_at ?? null).catch(() => null),
+      pool.query('SELECT created_at FROM quotes ORDER BY id DESC LIMIT 1').then((r) => r.rows[0]?.created_at ?? null).catch(() => null),
+    ]);
+
+    res.json({
+      ok: true,
+      server: {
+        uptimeSeconds: getUptimeSeconds(),
+        uptimeFormatted: formatUptime(getUptimeSeconds()),
+        poolReady,
+        nodeEnv: NODE_ENV,
+      },
+      users: {
+        total: Number(users.count),
+        admins: Number(admins.count),
+        blocked: Number(blockedUsers.count),
+      },
+      masterData: {
+        products: Number(products.count),
+        customers: Number(customers.count),
+        warehouses: Number(warehouses.count),
+        suppliers: Number(suppliers.count),
+        batches: Number(batches.count),
+        pallets: Number(pallets.count),
+      },
+      transactionalData: {
+        receipts: { headers: Number(receipts.count), items: Number(receiptItems.count), lastCreatedAt: lastReceipt },
+        stockOuts: { headers: Number(stockOuts.count), items: Number(stockOutItems.count), lastCreatedAt: lastStockOut },
+        recipes: { total: Number(recipes.count), ingredients: Number(recipeIngredients.count) },
+        productionOrders: { total: Number(productionOrders.count), lastCreatedAt: lastOrder },
+        quotes: { headers: Number(quotes.count), items: Number(quoteItems.count), lastCreatedAt: lastQuote },
+        transports: Number(transports.count),
+        company: Number(company.count),
+      },
+      notifications: Number(notifications.count),
+      endpoints: [
+        { group: 'Auth',             path: '/auth/login',           method: 'POST', status: 'ok' },
+        { group: 'Products',         path: '/products',             method: 'GET',  status: 'ok' },
+        { group: 'Customers',        path: '/customers',            method: 'GET',  status: 'ok' },
+        { group: 'Warehouses',       path: '/stocks',               method: 'GET',  status: 'ok' },
+        { group: 'Suppliers',        path: '/suppliers',            method: 'GET',  status: 'ok' },
+        { group: 'Batches',          path: '/batches',              method: 'GET',  status: 'ok' },
+        { group: 'Quotes',           path: '/quotes',               method: 'GET',  status: 'ok' },
+        { group: 'Sync – Receipts',  path: '/sync/receipts',        method: 'POST', status: Number(receipts.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – StockOuts', path: '/sync/stock-outs',      method: 'POST', status: Number(stockOuts.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – Recipes',   path: '/sync/recipes',         method: 'POST', status: Number(recipes.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – ProdOrders',path: '/sync/production-orders',method:'POST', status: Number(productionOrders.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – Quotes',    path: '/sync/quotes-full',     method: 'POST', status: Number(quotes.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – Transports',path: '/sync/transports',      method: 'POST', status: Number(transports.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Sync – Company',   path: '/sync/company',         method: 'POST', status: Number(company.count) >= 0 ? 'ok' : 'error' },
+        { group: 'Notifications',    path: '/notifications',        method: 'GET',  status: 'ok' },
+        { group: 'Admin',            path: '/admin/users',          method: 'GET',  status: 'ok' },
+      ],
+    });
+  } catch (err) {
+    console.error('[admin/system-status]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- API: Cenové ponuky (Quotes) ---
 
 apiRouter.get('/quotes', async (req, res) => {

@@ -807,6 +807,9 @@ class DatabaseService {
         if (!iriInfo.any((c) => c['name'] == 'expiry_date')) {
           await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN expiry_date TEXT');
         }
+        if (!iriInfo.any((c) => c['name'] == 'user_id')) {
+          await db.execute('ALTER TABLE inbound_receipt_items ADD COLUMN user_id TEXT');
+        }
       }
     } catch (_) {}
 

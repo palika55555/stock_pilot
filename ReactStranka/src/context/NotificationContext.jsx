@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { API_BASE_FOR_CALLS } from '../config'
 
 const NOTIFICATION_STORAGE_KEY = 'stockpilot_notifications'
@@ -37,6 +37,9 @@ function saveStored(userId, list) {
 export function NotificationProvider({ children, auth }) {
   const [notifications, setNotifications] = useState([])
   const userId = auth?.user?.id || auth?.user?.username || null
+  // Keep token as a ref to avoid re-creating callbacks when token object identity changes
+  const tokenRef = useRef(auth?.token)
+  tokenRef.current = auth?.token
 
   const load = useCallback(() => {
     const stored = loadStored(userId)
@@ -46,12 +49,6 @@ export function NotificationProvider({ children, auth }) {
   useEffect(() => {
     load()
   }, [load])
-
-  // Auto-fetch pri prvom moute s tokenom (1x, cooldown bráni ďalším)
-  useEffect(() => {
-    if (auth?.token) addFromApi(auth.token)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth?.token])
 
   // Cooldown: zabrání opakovanému fetch pri rýchlej navigácii (min. 30s medzi volaniami)
   const lastFetchRef = useRef(0)
@@ -100,10 +97,19 @@ export function NotificationProvider({ children, auth }) {
     [userId, load]
   )
 
+  // Auto-fetch pri prvom moute s tokenom (1x, cooldown bráni ďalším)
+  const addFromApiRef = useRef(addFromApi)
+  addFromApiRef.current = addFromApi
+  useEffect(() => {
+    if (tokenRef.current) addFromApiRef.current(tokenRef.current)
+    // Only run once on mount – cooldown prevents duplicate calls
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const refresh = useCallback(({ force = false } = {}) => {
     load()
-    if (auth?.token) addFromApi(auth.token, { force })
-  }, [auth?.token, load, addFromApi])
+    if (tokenRef.current) addFromApiRef.current(tokenRef.current, { force })
+  }, [load])
 
   const markAsRead = useCallback(
     (id) => {
@@ -124,18 +130,16 @@ export function NotificationProvider({ children, auth }) {
     })
   }, [userId])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-  const last5 = notifications.slice(0, 5)
-
-  const value = {
+  // Memoize value so context consumers don't re-render unless actual data changes
+  const value = useMemo(() => ({
     notifications,
-    unreadCount,
-    last5,
+    unreadCount: notifications.filter((n) => !n.read).length,
+    last5: notifications.slice(0, 5),
     markAsRead,
     markAllAsRead,
     refresh,
     addFromApi,
-  }
+  }), [notifications, markAsRead, markAllAsRead, refresh, addFromApi])
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
 }

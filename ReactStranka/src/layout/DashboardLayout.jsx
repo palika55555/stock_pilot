@@ -21,10 +21,11 @@ const NAV_ITEMS_USER = [
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
 ]
 
-// Admin (a db_owner) vidí všetky moduly + extra sekciu Používatelia
+// Admin (a db_owner) vidí všetky moduly + extra sekcie
 const NAV_ITEMS_ADMIN = [
   ...NAV_ITEMS_USER,
   { path: '/dashboard/users', label: 'Používatelia', icon: '👤' },
+  { path: '/dashboard/system-status', label: 'System Status', icon: '🖥' },
 ]
 
 function formatSyncAgo(ts) {
@@ -63,10 +64,17 @@ export default function DashboardLayout() {
     setSyncStatus((s) => ({ ...s, loading: true }))
     fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
       .then((r) => {
-        if (r.status === 401) { navigate('/', { replace: true }); return {} }
-        return r.ok ? r.json() : {}
+        if (r.status === 401) { navigate('/', { replace: true }); return null }
+        return r.ok ? r.json() : null
       })
-      .then((d) => d && Object.keys(d).length && setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false }))
+      .then((d) => {
+        if (d && d.last_sync_at !== undefined) {
+          setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false })
+        } else {
+          // Server returned empty or no useful data – stop loading spinner
+          setSyncStatus((s) => ({ ...s, loading: false }))
+        }
+      })
       .catch(() => setSyncStatus((s) => ({ ...s, loading: false })))
   }, [navigate])
 
@@ -104,6 +112,7 @@ export default function DashboardLayout() {
   const syncState = syncStatus.loading ? 'syncing' : syncAgoMin < 5 ? 'ok' : syncAgoMin < 30 ? 'warn' : 'error'
 
   const isAdmin = auth.user?.role === 'admin' || auth.user?.role === 'db_owner'
+  const isDbOwner = auth.user?.role === 'db_owner'
 
   return (
     <div
@@ -113,7 +122,7 @@ export default function DashboardLayout() {
         <div className="dashboard-sidebar-wrap">
           <aside className="dashboard-sidebar">
             <div className="dashboard-sidebar__logo">
-              <a href="/dashboard" className="dashboard-sidebar__logo-link" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); setSidebarOpenMobile(false) }}>
+              <a href="/dashboard" className="dashboard-sidebar__logo-link" onClick={(e) => { e.preventDefault(); if (pathname !== '/dashboard') navigate('/dashboard'); setSidebarOpenMobile(false) }}>
                 <span className="dashboard-sidebar__logo-label">STOCK</span>
                 <h1 className="dashboard-sidebar__logo-title">PILOT</h1>
               </a>
@@ -121,18 +130,18 @@ export default function DashboardLayout() {
             {isAdmin && (
               <div className="dashboard-sidebar__admin-badge">
                 <span className="dashboard-sidebar__admin-badge-icon">⚙</span>
-                <span className="dashboard-sidebar__admin-badge-text">Admin panel</span>
+                <span className="dashboard-sidebar__admin-badge-text">{isDbOwner ? 'DB Owner' : 'Admin panel'}</span>
               </div>
             )}
             <nav className="dashboard-sidebar__nav">
-              {(isAdmin ? NAV_ITEMS_ADMIN : NAV_ITEMS_USER).map((item) => {
+              {(isDbOwner ? NAV_ITEMS_ADMIN : isAdmin ? NAV_ITEMS_ADMIN.filter(i => i.path !== '/dashboard/system-status') : NAV_ITEMS_USER).map((item) => {
                 const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
                 return (
                   <button
                     key={item.path + item.label}
                     type="button"
                     className={`dashboard-sidebar__nav-item ${isActive ? 'dashboard-sidebar__nav-item--active' : ''}`}
-                    onClick={() => { navigate(item.path); setSidebarOpenMobile(false) }}
+                    onClick={() => { if (!isActive) navigate(item.path); setSidebarOpenMobile(false) }}
                   >
                     <span className="dashboard-sidebar__nav-icon" aria-hidden="true">{item.icon}</span>
                     <span className="dashboard-sidebar__nav-text">{item.label}</span>

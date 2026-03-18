@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -21,18 +20,16 @@ import VydajkyPage from './pages/VydajkyPage'
 import RecepturyPage from './pages/RecepturyPage'
 import VyrobneProkazaPage from './pages/VyrobneProkazaPage'
 import TransportyPage from './pages/TransportyPage'
+import SystemStatusPage from './pages/SystemStatusPage'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
 import { getAuth } from './utils/auth'
 import './App.css'
 
+// Read auth once from localStorage – no state needed here, auth is stable until logout
 function PrivateRoute({ children }) {
-  const [auth, setAuth] = useState(getAuth())
-  useEffect(() => {
-    setAuth(getAuth())
-  }, [])
-  // Require both auth object and token so we redirect if only user was saved (old bug)
-  if (!auth || !auth.token) return <Navigate to="/" replace />
+  const auth = getAuth()
+  if (!auth?.token) return <Navigate to="/" replace />
   return <NotificationProvider auth={auth}>{children}</NotificationProvider>
 }
 
@@ -63,6 +60,7 @@ function App() {
           <Route path="receptury" element={<RecepturyPage />} />
           <Route path="vyroba-prikazy" element={<VyrobneProkazaPage />} />
           <Route path="transporty" element={<TransportyPage />} />
+          <Route path="system-status" element={<SystemStatusPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
