@@ -3047,7 +3047,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(transfer.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('warehouse_transfers', map);
+    final _r = await db.insert('warehouse_transfers', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Vykoná presun medzi skladmi: zníži zásobu v zdrojovom sklade, zvýši (alebo vytvorí kartu) v cieľovom, zapíše presun.
@@ -3355,17 +3357,21 @@ class DatabaseService {
   Future<int> updateWarehouse(Warehouse warehouse) async {
     if (warehouse.id == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'warehouses',
       warehouse.toMap(),
       where: 'id = ?',
       whereArgs: [warehouse.id],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteWarehouse(int id) async {
     Database db = await database;
-    return await db.delete('warehouses', where: 'id = ?', whereArgs: [id]);
+    final _r = await db.delete('warehouses', where: 'id = ?', whereArgs: [id]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Vymaže všetky sklady v aktuálnej DB (napr. pri prvom prihlásení účtu z iného PC, aby sa nezobrazovali cudzie sklady).
@@ -3649,6 +3655,7 @@ class DatabaseService {
     final map = Map<String, dynamic>.from(transport.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
     await db.insert('transports', map);
+    DataChangeNotifier.notify();
   }
 
   Future<List<Transport>> getAllTransports() async {
@@ -3736,7 +3743,9 @@ class DatabaseService {
     Database db = await database;
     final map = Map<String, dynamic>.from(stockOut.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('stock_outs', map);
+    final _r = await db.insert('stock_outs', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<void> insertStockOutItem(StockOutItem item) async {
@@ -3744,24 +3753,29 @@ class DatabaseService {
     final map = Map<String, dynamic>.from(item.toMap());
     if (_currentUserId != null) map['user_id'] = _currentUserId;
     await db.insert('stock_out_items', map);
+    DataChangeNotifier.notify();
   }
 
   Future<void> deleteStockOutItemsByStockOutId(int stockOutId) async {
     Database db = await database;
     if (_currentUserId == null) return;
     await db.delete('stock_out_items', where: 'stock_out_id = ?', whereArgs: [stockOutId]);
+    DataChangeNotifier.notify();
   }
 
   Future<int> updateStockOut(StockOut stockOut) async {
     if (stockOut.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update('stock_outs', stockOut.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [stockOut.id, _currentUserId]);
+    final _r = await db.update('stock_outs', stockOut.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [stockOut.id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<void> updateStockOutStatus(int stockOutId, StockOutStatus status) async {
     Database db = await database;
     if (_currentUserId == null) return;
     await db.update('stock_outs', {'status': status.value}, where: 'id = ? AND user_id = ?', whereArgs: [stockOutId, _currentUserId]);
+    DataChangeNotifier.notify();
   }
 
   Future<List<MovementType>> getMovementTypes() async {
@@ -3924,18 +3938,24 @@ class DatabaseService {
 
   Future<int> insertProductKind(ProductKind kind) async {
     Database db = await database;
-    return await db.insert('product_kinds', kind.toMap());
+    final _r = await db.insert('product_kinds', kind.toMap());
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateProductKind(ProductKind kind) async {
     if (kind.id == null) return 0;
     Database db = await database;
-    return await db.update('product_kinds', kind.toMap(), where: 'id = ?', whereArgs: [kind.id]);
+    final _r = await db.update('product_kinds', kind.toMap(), where: 'id = ?', whereArgs: [kind.id]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteProductKind(int id) async {
     Database db = await database;
-    return await db.delete('product_kinds', where: 'id = ?', whereArgs: [id]);
+    final _r = await db.delete('product_kinds', where: 'id = ?', whereArgs: [id]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<List<Product>> getProductsByWarehouseId(int warehouseId) async {
@@ -3949,6 +3969,7 @@ class DatabaseService {
     for (final e in changes.entries) {
       await db.update('products', {'qty': e.value}, where: 'unique_id = ?', whereArgs: [e.key]);
     }
+    DataChangeNotifier.notify();
   }
 
   // ---------- Výroba – šarže a receptúry ----------
@@ -3968,7 +3989,9 @@ class DatabaseService {
       ..remove('id')
       ..['created_at'] = batch.createdAt ?? DateTime.now().toIso8601String();
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('production_batches', map);
+    final _r = await db.insert('production_batches', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<ProductionBatch?> getProductionBatchById(int id) async {
@@ -4019,35 +4042,43 @@ class DatabaseService {
     Database db = await database;
     final map = item.toMap()..remove('id');
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('production_batch_recipe', map);
+    final _r = await db.insert('production_batch_recipe', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteProductionBatchRecipeItems(int batchId) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
-    return await db.delete(
+    final _r = await db.delete(
       'production_batch_recipe',
       where: 'batch_id = ? AND user_id = ?',
       whereArgs: [batchId, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> updateProductionBatch(ProductionBatch batch) async {
     if (batch.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'production_batches',
       batch.toMap()..remove('id'),
       where: 'id = ? AND user_id = ?',
       whereArgs: [batch.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<int> deleteProductionBatch(int id) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
     await db.delete('production_batch_recipe', where: 'batch_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
-    return await db.delete('production_batches', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    final _r = await db.delete('production_batches', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   // ---------- Palety (Expedícia) ----------
@@ -4057,7 +4088,9 @@ class DatabaseService {
       ..remove('id')
       ..['created_at'] = pallet.createdAt ?? DateTime.now().toIso8601String();
     if (_currentUserId != null) map['user_id'] = _currentUserId;
-    return await db.insert('pallets', map);
+    final _r = await db.insert('pallets', map);
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   Future<Pallet?> getPalletById(int id) async {
@@ -4083,12 +4116,14 @@ class DatabaseService {
   Future<int> updatePallet(Pallet pallet) async {
     if (pallet.id == null || _currentUserId == null) return 0;
     Database db = await database;
-    return await db.update(
+    final _r = await db.update(
       'pallets',
       pallet.toMap()..remove('id'),
       where: 'id = ? AND user_id = ?',
       whereArgs: [pallet.id, _currentUserId],
     );
+    DataChangeNotifier.notify();
+    return _r;
   }
 
   /// Priradí paletu zákazníkovi: status U zákazníka, zvýši customer.palletBalance o 1.

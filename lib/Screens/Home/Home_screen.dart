@@ -13,6 +13,7 @@ import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
 import '../../services/sync_check_service.dart';
 import '../../services/sync_service.dart';
+import '../../services/auto_push_service.dart';
 import '../../services/Notifications/notification_service.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 import '../../screens/Search/search_screen.dart';
@@ -69,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     SyncCheckService.instance.start();
     SyncService.startSync(userId);
+    AutoPushService.instance.start();
     _ensureInitialDataLoaded(userId);
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
       if (!mounted) return;
@@ -116,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _connectivitySubscription?.cancel();
     SyncCheckService.instance.stop();
     SyncService.stopSync();
+    AutoPushService.instance.stop();
     super.dispose();
   }
 
