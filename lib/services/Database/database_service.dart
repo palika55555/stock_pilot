@@ -3,6 +3,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../user_session.dart';
+import '../sync/sync_event.dart';
+import '../sync/sync_manager.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
@@ -1926,6 +1928,13 @@ class DatabaseService {
     if (_currentUserId != null) map['user_id'] = _currentUserId;
     final _r = await db.insert('products', map);
     DataChangeNotifier.notify();
+    await _tryEnqueueSyncEvent(
+      entityType: 'product',
+      entityId: product.uniqueId ?? '',
+      operation: 'create',
+      fieldChanges: Map<String, dynamic>.from(product.toMap()),
+      clientVersion: 1,
+    );
     return _r;
   }
 
@@ -1972,9 +1981,10 @@ class DatabaseService {
     return byPlu.isEmpty ? null : byPlu.first;
   }
 
-  Future<int> updateProduct(Product product) async {
+  Future<int> updateProduct(Product product, {bool enqueueSync = true}) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
+    final old = enqueueSync ? await getProductByUniqueId(product.uniqueId ?? '') : null;
     final _r = await db.update(
       'products',
       product.toMap(),
@@ -1982,15 +1992,76 @@ class DatabaseService {
       whereArgs: [product.uniqueId, _currentUserId],
     );
     DataChangeNotifier.notify();
+    if (enqueueSync) {
+      final changes = _diffProduct(old, product);
+      await _tryEnqueueSyncEvent(
+        entityType: 'product',
+        entityId: product.uniqueId ?? '',
+        operation: 'update',
+        fieldChanges: changes,
+        clientVersion: 1,
+      );
+    }
     return _r;
   }
 
-  Future<int> deleteProduct(String id) async {
+  Future<int> deleteProduct(String id, {bool enqueueSync = true}) async {
     Database db = await database;
     if (_currentUserId == null) return 0;
     final _r = await db.delete('products', where: 'unique_id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
     DataChangeNotifier.notify();
+    if (enqueueSync) {
+      await _tryEnqueueSyncEvent(
+        entityType: 'product',
+        entityId: id,
+        operation: 'delete',
+        fieldChanges: const {},
+        clientVersion: 1,
+      );
+    }
     return _r;
+  }
+
+  Map<String, dynamic> _diffProduct(Product? old, Product next) {
+    if (old == null) return Map<String, dynamic>.from(next.toMap());
+    final a = old.toMap();
+    final b = next.toMap();
+    final out = <String, dynamic>{};
+    for (final k in b.keys) {
+      if (k == 'unique_id') continue;
+      if (a[k] != b[k]) out[k] = b[k];
+    }
+    return out;
+  }
+
+  Future<void> _tryEnqueueSyncEvent({
+    required String entityType,
+    required String entityId,
+    required String operation,
+    required Map<String, dynamic> fieldChanges,
+    required int clientVersion,
+  }) async {
+    try {
+      final userId = UserSession.userId;
+      final deviceId = SyncManager.instance.deviceId;
+      if (userId == null || userId.isEmpty) return;
+      if (deviceId == null || deviceId.isEmpty) return;
+      if (entityId.isEmpty) return;
+
+      await SyncManager.instance.enqueueChange(SyncEvent(
+        entityType: entityType,
+        entityId: entityId,
+        operation: operation,
+        fieldChanges: fieldChanges,
+        timestamp: DateTime.now().toIso8601String(),
+        deviceId: deviceId,
+        userId: userId,
+        sessionId: '',
+        clientVersion: clientVersion,
+      ));
+    } catch (_) {
+      // offline-first: DB operácia nesmie spadnúť kvôli sync enqueue
+    }
   }
 
   /// Aktualizuje EAN lokálnych produktov podľa zoznamu z backendu (EAN priradené na webe).
@@ -2005,7 +2076,7 @@ class DatabaseService {
       if (ean == null || ean.isEmpty) continue;
       final product = await getProductByUniqueId(uniqueId);
       if (product == null || product.ean == ean) continue;
-      await updateProduct(product.copyWith(ean: ean));
+      await updateProduct(product.copyWith(ean: ean), enqueueSync: false);
       count++;
     }
     return count;
@@ -2037,7 +2108,7 @@ class DatabaseService {
             unit: unit,
             qty: qty,
             ean: ean?.isEmpty == true ? null : ean,
-          ));
+          ), enqueueSync: false);
           updated++;
         }
       } else {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/sync/sync_config.dart';
 import '../../services/sync/sync_manager.dart';
-import 'sync_status_badge.dart';
 
 /// Widget pre zobrazenie a manuálne rozriešenie sync konfliktu.
 ///

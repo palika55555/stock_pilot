@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
+import '../../services/sync/sync_manager.dart';
 import '../../screens/Home/Home_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/Common/standard_text_field.dart';
@@ -95,6 +96,12 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         ownerFullName: backendResult.ownerFullName,
         ownerUsername: backendResult.ownerUsername,
       );
+
+      final token = getBackendToken();
+      if (token != null && token.isNotEmpty) {
+        await SyncManager.instance.initialize(backendUserId, token);
+      }
+
       final ownerDisplay = backendResult.ownerFullName?.isNotEmpty == true
           ? backendResult.ownerFullName
           : backendResult.ownerUsername;

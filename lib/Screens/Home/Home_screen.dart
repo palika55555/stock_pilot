@@ -14,10 +14,12 @@ import '../../services/api_sync_service.dart';
 import '../../services/sync_check_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/auto_push_service.dart';
+import '../../services/sync/sync_manager.dart';
 import '../../services/Notifications/notification_service.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 import '../../screens/Search/search_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/sync/sync_status_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   final User user;
@@ -448,6 +450,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const Spacer(),
+                  StreamBuilder<SyncStatus>(
+                    stream: SyncManager.instance.statusStream,
+                    builder: (ctx, snap) => SyncStatusBadge(
+                      status: snap.data ?? SyncStatus.idle,
+                    ),
+                  ),
                 _MobileIconButton(
                   icon: Icons.search_rounded,
                   onTap: () => Navigator.push(

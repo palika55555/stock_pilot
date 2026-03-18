@@ -6,6 +6,7 @@ import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
+import '../../services/sync/sync_manager.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
@@ -183,7 +184,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             setState(() => _isLoading = false);
             return;
           }
-          _finishLogin(
+          await _finishLogin(
             user,
             backendUserId: backendResult.userId,
             ownerFullName: backendResult.ownerFullName,
@@ -214,7 +215,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       final backendResult = await fetchBackendToken(username, password, rememberMe: _rememberMe);
       if (!mounted) return;
 
-      _finishLogin(
+      await _finishLogin(
         user,
         backendUserId: backendResult?.userId,
         ownerFullName: backendResult?.ownerFullName,
@@ -223,12 +224,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
   }
 
-  void _finishLogin(
+  Future<void> _finishLogin(
     User user, {
     String? backendUserId,
     String? ownerFullName,
     String? ownerUsername,
-  }) {
+  }) async {
     final userId = backendUserId ?? user.id?.toString() ?? user.username;
     UserSession.setUser(
       userId: userId,
@@ -237,6 +238,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       ownerFullName: ownerFullName,
       ownerUsername: ownerUsername,
     );
+
+    final token = getBackendToken();
+    if (token != null && token.isNotEmpty) {
+      await SyncManager.instance.initialize(userId, token);
+    }
+
     final ownerDisplay = ownerFullName?.isNotEmpty == true ? ownerFullName : ownerUsername;
     if (ownerDisplay != null && ownerDisplay.isNotEmpty) {
       SharedPreferences.getInstance().then((prefs) =>
