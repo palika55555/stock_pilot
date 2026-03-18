@@ -19,6 +19,7 @@ const { syncQuotesFull, fetchQuotesFull } = require('./DBsync/sync/quoteSyncFull
 const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
 const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
 const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
+const { registerSyncRoutes } = require('./sync/syncRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -817,6 +818,10 @@ apiRouter.put('/customers/:id', async (req, res) => {
   }
 });
 
+// --- Generický sync systém: push / pull / conflicts / resolve / SSE stream ---
+// Dokumentácia: backend/sync/syncRoutes.js
+registerSyncRoutes(apiRouter, pool);
+
 // --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
 apiRouter.get('/sync/check', (_req, res) => {
   res.json({
@@ -1406,6 +1411,110 @@ apiRouter.get('/suppliers', async (req, res) => {
   } catch (err) {
     if (err.message?.includes('relation "suppliers" does not exist')) return res.json([]);
     console.error('[GET /api/suppliers]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Dodávatelia – PUT (update) a POST (create) ---
+apiRouter.put('/suppliers/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const { name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'Meno je povinné' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rowCount } = await pool.query(
+      `UPDATE suppliers SET name=$1, ico=$2, email=$3, address=$4, city=$5, postal_code=$6, dic=$7, ic_dph=$8, default_vat_rate=$9, is_active=$10
+       WHERE user_id=$11 AND id=$12`,
+      [name.trim(), ico?.trim()||null, email?.trim()||null, address?.trim()||null, city?.trim()||null,
+       postal_code?.trim()||null, dic?.trim()||null, ic_dph?.trim()||null,
+       default_vat_rate != null ? parseInt(default_vat_rate,10)||20 : 20,
+       is_active !== undefined ? (is_active ? 1 : 0) : 1,
+       dataUserId, id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Dodávateľ nenájdený' });
+    const { rows } = await pool.query(
+      `SELECT id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active FROM suppliers WHERE user_id=$1 AND id=$2`,
+      [dataUserId, id]
+    );
+    const r = rows[0];
+    res.json({ ...r, is_active: (r.is_active ?? 1) !== 0 });
+  } catch (err) {
+    console.error('[PUT /api/suppliers/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/suppliers', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'Meno je povinné' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows } = await pool.query(
+      `INSERT INTO suppliers (user_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active`,
+      [dataUserId, name.trim(), ico?.trim()||null, email?.trim()||null, address?.trim()||null,
+       city?.trim()||null, postal_code?.trim()||null, dic?.trim()||null, ic_dph?.trim()||null,
+       default_vat_rate != null ? parseInt(default_vat_rate,10)||20 : 20,
+       is_active !== undefined ? (is_active ? 1 : 0) : 1]
+    );
+    const r = rows[0];
+    res.status(201).json({ ...r, is_active: (r.is_active ?? 1) !== 0 });
+  } catch (err) {
+    console.error('[POST /api/suppliers]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Zákazníci – POST (create) ---
+apiRouter.post('/customers', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active } = req.body || {};
+  if (!name?.trim() || !ico?.trim()) return res.status(400).json({ error: 'Meno a IČO sú povinné' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows } = await pool.query(
+      `INSERT INTO customers (user_id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active)
+       VALUES ($1, 0, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, local_id, name, ico, email, address, city, postal_code, dic, ic_dph, default_vat_rate, is_active`,
+      [dataUserId, name.trim(), ico.trim(), email?.trim()||null, address?.trim()||null,
+       city?.trim()||null, postal_code?.trim()||null, dic?.trim()||null, ic_dph?.trim()||null,
+       default_vat_rate != null ? parseInt(default_vat_rate,10)||20 : 20,
+       is_active !== undefined ? (is_active ? 1 : 0) : 1]
+    );
+    lastCustomersUpdatedAt = Date.now();
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[POST /api/customers]', err.message);
+    if (err.code === '23505') return res.status(409).json({ error: 'Zákazník s týmto IČO už existuje' });
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Produkty – PUT (full update) ---
+apiRouter.put('/products/:uniqueId', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const uniqueId = (req.params.uniqueId ?? '').toString().trim();
+  if (!uniqueId) return res.status(400).json({ error: 'uniqueId je povinný' });
+  const { name, plu, ean, unit } = req.body || {};
+  if (!name?.trim() || !plu?.trim()) return res.status(400).json({ error: 'Názov a PLU sú povinné' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rowCount } = await pool.query(
+      `UPDATE products SET name=$1, plu=$2, ean=$3, unit=$4 WHERE user_id=$5 AND unique_id=$6`,
+      [name.trim(), plu.trim(), ean?.trim()||null, unit?.trim()||'ks', dataUserId, uniqueId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Produkt nenájdený' });
+    const { rows } = await pool.query(
+      `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty FROM products WHERE user_id=$1 AND unique_id=$2 GROUP BY unique_id, name, plu, ean, unit`,
+      [dataUserId, uniqueId]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[PUT /api/products/:uniqueId]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });
