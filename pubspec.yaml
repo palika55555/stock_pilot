@@ -62,6 +62,9 @@ dependencies:
   qr_flutter: ^4.1.0
   fl_chart: ^0.69.0
   google_fonts: ^6.2.1
+  base32: ^2.2.0
+  archive: ^3.6.1
+  lzma: ^1.0.1
 
 dev_dependencies:
   flutter_test:
