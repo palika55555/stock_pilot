@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../Providers/theme_locale_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/auto_lock_service.dart';
 import '../../l10n/app_localizations.dart';
 import 'company_edit_screen.dart';
 import 'receipt_pdf_style_screen.dart';
@@ -26,6 +27,9 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
   String? _dbPath;
+  int _autoLockMinutes = 0;
+
+  static const List<int> _autoLockOptions = [0, 5, 15, 30, 60];
 
   @override
   void initState() {
@@ -35,10 +39,43 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final lockMinutes = await AutoLockService.loadTimeout();
     setState(() {
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
       _dbPath = prefs.getString('db_path');
+      _autoLockMinutes = lockMinutes;
     });
+  }
+
+  String _autoLockLabel(int minutes) {
+    if (minutes == 0) return 'Vypnuté';
+    if (minutes == 60) return '1 hodina';
+    return '$minutes minút';
+  }
+
+  Future<void> _showAutoLockDialog() async {
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Auto-odhlásenie'),
+        children: _autoLockOptions.map((m) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, m),
+            child: Row(
+              children: [
+                Expanded(child: Text(_autoLockLabel(m))),
+                if (m == _autoLockMinutes)
+                  Icon(Icons.check, color: AppColors.accentGold, size: 20),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+    if (selected == null) return;
+    await AutoLockService.saveTimeout(selected);
+    AutoLockService.instance.updateTimeout(selected);
+    setState(() => _autoLockMinutes = selected);
   }
 
   Future<void> _saveNotifications(bool value) async {
@@ -311,6 +348,18 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+                ),
+              ],
+            ),
+            _buildSection(
+              title: 'Bezpečnosť',
+              icon: Icons.security_rounded,
+              children: [
+                _buildListTile(
+                  icon: Icons.lock_clock_outlined,
+                  title: 'Auto-odhlásenie',
+                  trailing: _autoLockLabel(_autoLockMinutes),
+                  onTap: _showAutoLockDialog,
                 ),
               ],
             ),

@@ -11,6 +11,8 @@ class AppColors {
   // Accent
   static const Color accentGold = Color(0xFFF5A623);
   static const Color accentGoldSubtle = Color(0x1FF5A623); // ~12% opacity
+  static const Color accentPurple = Color(0xFF9B59B6);
+  static const Color accentPurpleSubtle = Color(0x1F9B59B6); // ~12% opacity
 
   // Semantic
   static const Color success = Color(0xFF22C55E);

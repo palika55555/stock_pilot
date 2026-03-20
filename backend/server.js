@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 const { runMigrations } = require('./DBsync/runMigrations');
 const { syncUser } = require('./DBsync/sync/userSync');
 const { syncCustomers } = require('./DBsync/sync/customerSync');
+const { syncProjects } = require('./DBsync/sync/projectSync');
 const { syncProducts } = require('./DBsync/sync/productSync');
 const { syncWarehouses } = require('./DBsync/sync/warehouseSync');
 const { syncSuppliers } = require('./DBsync/sync/supplierSync');
@@ -16,6 +17,7 @@ const { syncStockOuts, fetchStockOuts } = require('./DBsync/sync/stockOutSync');
 const { syncRecipes, fetchRecipes } = require('./DBsync/sync/recipeSync');
 const { syncProductionOrders, fetchProductionOrders } = require('./DBsync/sync/productionOrderSync');
 const { syncQuotesFull, fetchQuotesFull } = require('./DBsync/sync/quoteSyncFull');
+const { syncInvoicesFull, fetchInvoicesFull } = require('./DBsync/sync/invoiceSync');
 const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
 const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
 const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
@@ -497,6 +499,20 @@ apiRouter.post('/sync/customers', async (req, res) => {
   lastCustomersUpdatedAt = Date.now();
   lastSyncAt = Date.now();
   console.log('[sync] Customers OK:', result.count);
+  res.status(200).json({ success: true, count: result.count });
+});
+
+// --- Sync zákaziek z Flutter do PostgreSQL – per user ---
+apiRouter.post('/sync/projects', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const result = await syncProjects(pool, req.body, req.dataUserId ?? req.userId);
+  if (!result.ok) {
+    return res.status(500).json({ success: false, error: result.error || 'Chyba servera' });
+  }
+  lastSyncAt = Date.now();
+  console.log('[sync] Projects OK:', result.count);
   res.status(200).json({ success: true, count: result.count });
 });
 
@@ -1639,6 +1655,107 @@ apiRouter.post('/customers', async (req, res) => {
   }
 });
 
+// --- API: Zákazky (Projects) ---
+apiRouter.get('/projects', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows } = await pool.query(
+      `SELECT id, local_id, project_number, name, status, customer_id, customer_name,
+              site_address, site_city, start_date, end_date, budget, responsible_person, notes, created_at
+       FROM projects WHERE user_id = $1 ORDER BY created_at DESC`,
+      [dataUserId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/projects]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/projects/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows } = await pool.query(
+      `SELECT id, local_id, project_number, name, status, customer_id, customer_name,
+              site_address, site_city, start_date, end_date, budget, responsible_person, notes, created_at
+       FROM projects WHERE user_id = $1 AND id = $2`,
+      [dataUserId, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Zákazka nebola nájdená' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /api/projects/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/projects', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { project_number, name, status, customer_id, customer_name, site_address, site_city, start_date, end_date, budget, responsible_person, notes } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'Názov zákazky je povinný' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows } = await pool.query(
+      `INSERT INTO projects (user_id, project_number, name, status, customer_id, customer_name, site_address, site_city, start_date, end_date, budget, responsible_person, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING id, project_number, name, status, customer_id, customer_name, site_address, site_city, start_date, end_date, budget, responsible_person, notes, created_at`,
+      [dataUserId, project_number?.trim()||null, name.trim(), status||'active',
+       customer_id||null, customer_name?.trim()||null, site_address?.trim()||null, site_city?.trim()||null,
+       start_date||null, end_date||null, budget||null, responsible_person?.trim()||null, notes?.trim()||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[POST /api/projects]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.put('/projects/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const { project_number, name, status, customer_id, customer_name, site_address, site_city, start_date, end_date, budget, responsible_person, notes } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'Názov zákazky je povinný' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows, rowCount } = await pool.query(
+      `UPDATE projects SET project_number=$1, name=$2, status=$3, customer_id=$4, customer_name=$5,
+       site_address=$6, site_city=$7, start_date=$8, end_date=$9, budget=$10,
+       responsible_person=$11, notes=$12, updated_at=NOW()
+       WHERE user_id=$13 AND id=$14
+       RETURNING id, project_number, name, status, customer_id, customer_name, site_address, site_city, start_date, end_date, budget, responsible_person, notes, created_at`,
+      [project_number?.trim()||null, name.trim(), status||'active',
+       customer_id||null, customer_name?.trim()||null, site_address?.trim()||null, site_city?.trim()||null,
+       start_date||null, end_date||null, budget||null, responsible_person?.trim()||null, notes?.trim()||null,
+       dataUserId, id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Zákazka nebola nájdená' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[PUT /api/projects/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.delete('/projects/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rowCount } = await pool.query('DELETE FROM projects WHERE user_id = $1 AND id = $2', [dataUserId, id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Zákazka nebola nájdená' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/projects/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
 // --- API: Produkty – PUT (full update) ---
 apiRouter.put('/products/:uniqueId', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
@@ -2316,6 +2433,738 @@ apiRouter.post('/products', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[POST /api/products]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- API: Rozšírená cenotvorba – pricing_rules ---
+
+// GET /products/:productId/pricing-rules
+apiRouter.get('/products/:productId/pricing-rules', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { productId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT * FROM pricing_rules
+       WHERE product_unique_id = $1 AND user_id = $2
+       ORDER BY quantity_from ASC, price ASC`,
+      [productId, dataUserId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /products/:productId/pricing-rules]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// POST /products/:productId/pricing-rules  – pridá jedno pravidlo
+apiRouter.post('/products/:productId/pricing-rules', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { productId } = req.params;
+    const { label, price, quantity_from = 1, quantity_to, customer_group, valid_from, valid_to } = req.body || {};
+    if (price == null || isNaN(Number(price)) || Number(price) < 0) {
+      return res.status(400).json({ error: 'Pole price je povinné a musí byť ≥ 0.' });
+    }
+    if (quantity_to != null && Number(quantity_to) < Number(quantity_from)) {
+      return res.status(400).json({ error: 'quantity_to musí byť ≥ quantity_from.' });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO pricing_rules
+         (product_unique_id, user_id, label, price, quantity_from, quantity_to, customer_group, valid_from, valid_to)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [productId, dataUserId, label || null, Number(price), Number(quantity_from),
+       quantity_to != null ? Number(quantity_to) : null,
+       customer_group || null,
+       valid_from || null, valid_to || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[POST /products/:productId/pricing-rules]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// PUT /products/:productId/pricing-rules/bulk  – DELETE all + INSERT (sync z Flutter)
+apiRouter.put('/products/:productId/pricing-rules/bulk', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const client = await pool.connect();
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { productId } = req.params;
+    const { rules = [] } = req.body || {};
+    await client.query('BEGIN');
+    await client.query(
+      'DELETE FROM pricing_rules WHERE product_unique_id = $1 AND user_id = $2',
+      [productId, dataUserId]
+    );
+    const inserted = [];
+    for (const r of rules) {
+      if (r.price == null || isNaN(Number(r.price)) || Number(r.price) < 0) continue;
+      const { rows } = await client.query(
+        `INSERT INTO pricing_rules
+           (product_unique_id, user_id, label, price, quantity_from, quantity_to, customer_group, valid_from, valid_to)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         RETURNING *`,
+        [productId, dataUserId, r.label || null, Number(r.price),
+         Number(r.quantity_from ?? 1),
+         r.quantity_to != null ? Number(r.quantity_to) : null,
+         r.customer_group || null,
+         r.valid_from || null, r.valid_to || null]
+      );
+      inserted.push(rows[0]);
+    }
+    await client.query('COMMIT');
+    res.json(inserted);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /products/:productId/pricing-rules/bulk]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /pricing-rules/:id  – aktualizuje jedno pravidlo
+apiRouter.put('/pricing-rules/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { id } = req.params;
+    const { label, price, quantity_from, quantity_to, customer_group, valid_from, valid_to } = req.body || {};
+    if (price == null || isNaN(Number(price)) || Number(price) < 0) {
+      return res.status(400).json({ error: 'Pole price je povinné a musí byť ≥ 0.' });
+    }
+    const { rows, rowCount } = await pool.query(
+      `UPDATE pricing_rules SET
+         label = $1, price = $2, quantity_from = $3, quantity_to = $4,
+         customer_group = $5, valid_from = $6, valid_to = $7, updated_at = NOW()
+       WHERE id = $8 AND user_id = $9
+       RETURNING *`,
+      [label || null, Number(price), Number(quantity_from ?? 1),
+       quantity_to != null ? Number(quantity_to) : null,
+       customer_group || null, valid_from || null, valid_to || null,
+       id, dataUserId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Pravidlo nenájdené.' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[PUT /pricing-rules/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// DELETE /pricing-rules/:id
+apiRouter.delete('/pricing-rules/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { id } = req.params;
+    const { rowCount } = await pool.query(
+      'DELETE FROM pricing_rules WHERE id = $1 AND user_id = $2',
+      [id, dataUserId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Pravidlo nenájdené.' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /pricing-rules/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAKTÚRY – CRUD + SYNC + EXPORT (Pohoda XML, ISDOC XML) + Pay by Square QR
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Generuje Pay by Square QR string (LZMA + Base32hex) pomocou npm bysquare (ESM). */
+async function _generateBySquareQR({ iban, amount, currency = 'EUR', variableSymbol, note }) {
+  try {
+    const bysquare = await import('bysquare');
+    const qrString = bysquare.encode({
+      payments: [{
+        type: 1,               // PaymentOrder
+        amount: Number(amount) || 0,
+        currencyCode: currency,
+        variableSymbol: String(variableSymbol || ''),
+        constantSymbol: '0308',
+        paymentNote: note || '',
+        bankAccounts: [{ iban: String(iban || '') }],
+      }],
+    });
+    return qrString;
+  } catch (err) {
+    console.error('[bysquare] QR generovanie zlyhalo:', err.message);
+    return null;
+  }
+}
+
+/** Generuje Pohoda XML (Windows-1250) pre jednu faktúru. */
+function _buildPohodaXml(inv, items, company) {
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const vatTypeMap = { 23: 'high', 19: 'low', 5: 'third', 0: 'none' };
+
+  const itemsXml = items.map((it, idx) => {
+    const base = parseFloat(it.unit_price) * parseFloat(it.qty) * (1 - parseFloat(it.discount_percent || 0) / 100);
+    const vatAmt = base * parseFloat(it.vat_percent) / 100;
+    const rateVAT = vatTypeMap[Math.round(parseFloat(it.vat_percent))] || 'high';
+    return `        <inv:invoiceItem>
+          <inv:text>${esc(it.name)}${it.description ? ' – ' + esc(it.description) : ''}</inv:text>
+          <inv:quantity>${parseFloat(it.qty).toFixed(3)}</inv:quantity>
+          <inv:unit>${esc(it.unit)}</inv:unit>
+          <inv:payVAT>false</inv:payVAT>
+          <inv:rateVAT>${rateVAT}</inv:rateVAT>
+          <inv:homeCurrency>
+            <typ:unitPrice>${parseFloat(it.unit_price).toFixed(4)}</typ:unitPrice>
+            <typ:price>${base.toFixed(2)}</typ:price>
+            <typ:priceVAT>${vatAmt.toFixed(2)}</typ:priceVAT>
+            <typ:priceSum>${(base + vatAmt).toFixed(2)}</typ:priceSum>
+          </inv:homeCurrency>
+        </inv:invoiceItem>`;
+  }).join('\n');
+
+  const typeMap = { issuedInvoice: 'issuedInvoice', proformaInvoice: 'issuedProformaInvoice', creditNote: 'issuedCreditNotice', debitNote: 'issuedDebitNote' };
+  const invType = typeMap[inv.invoice_type] || 'issuedInvoice';
+  const classVAT = inv.is_vat_payer ? 'inland' : 'nonSubsume';
+  const payTypeMap = { transfer: 'transfer', cash: 'cash', card: 'card' };
+  const payType = payTypeMap[inv.payment_method] || 'transfer';
+
+  return `<?xml version="1.0" encoding="windows-1250"?>
+<dat:dataPack
+  xmlns:dat="http://www.stormware.cz/schema/version_2/data.xsd"
+  xmlns:inv="http://www.stormware.cz/schema/version_2/invoice.xsd"
+  xmlns:typ="http://www.stormware.cz/schema/version_2/type.xsd"
+  version="2.0"
+  id="${esc(inv.invoice_number)}"
+  ico="${esc(company?.ico || '')}"
+  application="StockPilot"
+  note="Export faktury StockPilot">
+
+  <dat:dataPackItem id="1" version="2.0">
+    <inv:invoice version="2.0">
+      <inv:invoiceHeader>
+        <inv:invoiceType>${invType}</inv:invoiceType>
+        <inv:number><typ:numberRequested>${esc(inv.invoice_number)}</typ:numberRequested></inv:number>
+        <inv:date>${inv.issue_date || ''}</inv:date>
+        <inv:dateTax>${inv.tax_date || ''}</inv:dateTax>
+        <inv:dateDue>${inv.due_date || ''}</inv:dateDue>
+        <inv:symVar>${esc(inv.variable_symbol || inv.invoice_number)}</inv:symVar>
+        <inv:symConst>${esc(inv.constant_symbol || '0308')}</inv:symConst>
+        ${inv.specific_symbol ? `<inv:symSpec>${esc(inv.specific_symbol)}</inv:symSpec>` : ''}
+        <inv:paymentType><typ:paymentType>${payType}</typ:paymentType></inv:paymentType>
+        <inv:account>
+          <typ:iban>${esc(company?.iban || '')}</typ:iban>
+          ${company?.swift ? `<typ:swift>${esc(company.swift)}</typ:swift>` : ''}
+        </inv:account>
+        <inv:partnerIdentity>
+          <typ:address>
+            <typ:company>${esc(inv.customer_name)}</typ:company>
+            <typ:street>${esc(inv.customer_address)}</typ:street>
+            <typ:city>${esc(inv.customer_city)}</typ:city>
+            <typ:zip>${esc(inv.customer_postal_code)}</typ:zip>
+            <typ:ico>${esc(inv.customer_ico)}</typ:ico>
+            <typ:dic>${esc(inv.customer_dic)}</typ:dic>
+            ${inv.customer_ic_dph ? `<typ:icDph>${esc(inv.customer_ic_dph)}</typ:icDph>` : ''}
+          </typ:address>
+        </inv:partnerIdentity>
+        <inv:myIdentity>
+          <typ:address>
+            <typ:company>${esc(company?.name)}</typ:company>
+            <typ:street>${esc(company?.address)}</typ:street>
+            <typ:city>${esc(company?.city)}</typ:city>
+            <typ:zip>${esc(company?.postal_code)}</typ:zip>
+            <typ:ico>${esc(company?.ico)}</typ:ico>
+            <typ:dic>${esc(company?.dic)}</typ:dic>
+            ${company?.ic_dph ? `<typ:icDph>${esc(company.ic_dph)}</typ:icDph>` : ''}
+          </typ:address>
+        </inv:myIdentity>
+        <inv:classificationVAT>${classVAT}</inv:classificationVAT>
+        ${inv.notes ? `<inv:note>${esc(inv.notes)}</inv:note>` : ''}
+      </inv:invoiceHeader>
+      <inv:invoiceDetail>
+${itemsXml}
+      </inv:invoiceDetail>
+      <inv:invoiceSummary>
+        <inv:homeCurrency>
+          <inv:priceNone>0.00</inv:priceNone>
+          <inv:priceLow>0.00</inv:priceLow>
+          <inv:priceHighSum>${parseFloat(inv.total_with_vat).toFixed(2)}</inv:priceHighSum>
+        </inv:homeCurrency>
+      </inv:invoiceSummary>
+    </inv:invoice>
+  </dat:dataPackItem>
+</dat:dataPack>`;
+}
+
+/** Generuje ISDOC XML (UTF-8, otvorený štandard) pre jednu faktúru. */
+function _buildIsdocXml(inv, items, company) {
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const docTypeMap = { issuedInvoice: '1', proformaInvoice: '1', creditNote: '2', debitNote: '3' };
+  const docType = docTypeMap[inv.invoice_type] || '1';
+
+  const linesXml = items.map((it, idx) => {
+    const base = parseFloat(it.unit_price) * parseFloat(it.qty) * (1 - parseFloat(it.discount_percent || 0) / 100);
+    return `  <InvoiceLine>
+    <ID>${idx + 1}</ID>
+    <InvoicedQuantity unitCode="${esc(it.unit)}">${parseFloat(it.qty).toFixed(3)}</InvoicedQuantity>
+    <LineExtensionAmount currencyID="EUR">${base.toFixed(2)}</LineExtensionAmount>
+    <Item><Name>${esc(it.name)}${it.description ? ' – ' + esc(it.description) : ''}</Name></Item>
+    <Price><PriceAmount currencyID="EUR">${parseFloat(it.unit_price).toFixed(4)}</PriceAmount></Price>
+    <ClassifiedTaxCategory>
+      <Percent>${parseFloat(it.vat_percent).toFixed(0)}</Percent>
+      <TaxScheme>VAT</TaxScheme>
+    </ClassifiedTaxCategory>
+  </InvoiceLine>`;
+  }).join('\n');
+
+  // VAT sumarizácia podľa sadzieb
+  const vatMap = {};
+  for (const it of items) {
+    const rate = parseFloat(it.vat_percent).toFixed(0);
+    const base = parseFloat(it.unit_price) * parseFloat(it.qty) * (1 - parseFloat(it.discount_percent || 0) / 100);
+    const vat  = base * parseFloat(it.vat_percent) / 100;
+    if (!vatMap[rate]) vatMap[rate] = { base: 0, vat: 0 };
+    vatMap[rate].base += base;
+    vatMap[rate].vat  += vat;
+  }
+  const taxSubTotals = Object.entries(vatMap).map(([rate, v]) =>
+    `    <TaxSubTotal>
+      <TaxableAmount currencyID="EUR">${v.base.toFixed(2)}</TaxableAmount>
+      <TaxAmount currencyID="EUR">${v.vat.toFixed(2)}</TaxAmount>
+      <TaxCategory><Percent>${rate}</Percent><TaxScheme>VAT</TaxScheme></TaxCategory>
+    </TaxSubTotal>`
+  ).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="http://isdoc.cz/namespace/2013"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         version="6.0.2">
+  <DocumentType>${docType}</DocumentType>
+  <ID>${esc(inv.invoice_number)}</ID>
+  <UUID>${_uuid()}</UUID>
+  <IssueDateDate>${inv.issue_date || ''}</IssueDateDate>
+  <TaxPointDate>${inv.tax_date || ''}</TaxPointDate>
+  <DueDate>${inv.due_date || ''}</DueDate>
+  ${inv.notes ? `<Note>${esc(inv.notes)}</Note>` : ''}
+
+  <AccountingSupplierParty>
+    <Party>
+      <PartyIdentification><ID>${esc(company?.ico)}</ID></PartyIdentification>
+      <PartyName><Name>${esc(company?.name)}</Name></PartyName>
+      <PostalAddress>
+        <StreetName>${esc(company?.address)}</StreetName>
+        <CityName>${esc(company?.city)}</CityName>
+        <PostalZone>${esc(company?.postal_code)}</PostalZone>
+        <Country><IdentificationCode>SK</IdentificationCode></Country>
+      </PostalAddress>
+      ${company?.ic_dph ? `<PartyTaxScheme><CompanyID>${esc(company.ic_dph)}</CompanyID><TaxScheme>VAT</TaxScheme></PartyTaxScheme>` : ''}
+      ${company?.dic ? `<PartyTaxScheme><CompanyID>${esc(company.dic)}</CompanyID><TaxScheme>TIN</TaxScheme></PartyTaxScheme>` : ''}
+    </Party>
+  </AccountingSupplierParty>
+
+  <AccountingCustomerParty>
+    <Party>
+      <PartyIdentification><ID>${esc(inv.customer_ico)}</ID></PartyIdentification>
+      <PartyName><Name>${esc(inv.customer_name)}</Name></PartyName>
+      <PostalAddress>
+        <StreetName>${esc(inv.customer_address)}</StreetName>
+        <CityName>${esc(inv.customer_city)}</CityName>
+        <PostalZone>${esc(inv.customer_postal_code)}</PostalZone>
+        <Country><IdentificationCode>${esc(inv.customer_country || 'SK')}</IdentificationCode></Country>
+      </PostalAddress>
+      ${inv.customer_ic_dph ? `<PartyTaxScheme><CompanyID>${esc(inv.customer_ic_dph)}</CompanyID><TaxScheme>VAT</TaxScheme></PartyTaxScheme>` : ''}
+      ${inv.customer_dic ? `<PartyTaxScheme><CompanyID>${esc(inv.customer_dic)}</CompanyID><TaxScheme>TIN</TaxScheme></PartyTaxScheme>` : ''}
+    </Party>
+  </AccountingCustomerParty>
+
+  <PaymentMeans>
+    <Payment>
+      <PaidAmount currencyID="EUR">${parseFloat(inv.total_with_vat).toFixed(2)}</PaidAmount>
+      <Details>
+        <PaymentMeansCode>42</PaymentMeansCode>
+        <ID>${esc(company?.iban)}</ID>
+        <VariableSymbol>${esc(inv.variable_symbol || inv.invoice_number)}</VariableSymbol>
+        <ConstantSymbol>${esc(inv.constant_symbol || '0308')}</ConstantSymbol>
+      </Details>
+    </Payment>
+  </PaymentMeans>
+
+  <TaxTotal>
+    <TaxAmount currencyID="EUR">${parseFloat(inv.total_vat).toFixed(2)}</TaxAmount>
+${taxSubTotals}
+  </TaxTotal>
+
+  <LegalMonetaryTotal>
+    <TaxExclusiveAmount currencyID="EUR">${parseFloat(inv.total_without_vat).toFixed(2)}</TaxExclusiveAmount>
+    <TaxInclusiveAmount currencyID="EUR">${parseFloat(inv.total_with_vat).toFixed(2)}</TaxInclusiveAmount>
+    <PayableAmount currencyID="EUR">${parseFloat(inv.total_with_vat).toFixed(2)}</PayableAmount>
+  </LegalMonetaryTotal>
+
+${linesXml}
+</Invoice>`;
+}
+
+function _uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// --- Faktúry: CRUD ---
+
+apiRouter.get('/invoices', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { status, type, search } = req.query;
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    let where = 'WHERE i.user_id = $1';
+    const params = [dataUserId];
+    if (status) { params.push(status); where += ` AND i.status = $${params.length}`; }
+    if (type)   { params.push(type);   where += ` AND i.invoice_type = $${params.length}`; }
+    if (search) { params.push(`%${search}%`); where += ` AND (i.invoice_number ILIKE $${params.length} OR i.customer_name ILIKE $${params.length})`; }
+    const { rows } = await pool.query(
+      `SELECT i.id, i.local_id, i.invoice_number, i.invoice_type, i.status,
+              i.issue_date, i.tax_date, i.due_date,
+              i.customer_id, i.customer_name, i.customer_ico,
+              i.total_without_vat, i.total_vat, i.total_with_vat,
+              i.payment_method, i.variable_symbol, i.is_vat_payer,
+              i.created_at, i.updated_at
+       FROM invoices i ${where} ORDER BY i.issue_date DESC, i.id DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /invoices]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/invoices/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows: inv } = await pool.query(
+      'SELECT * FROM invoices WHERE id = $1 AND user_id = $2', [id, dataUserId]
+    );
+    if (inv.length === 0) return res.status(404).json({ error: 'Faktúra nenájdená' });
+    const { rows: items } = await pool.query(
+      'SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [id]
+    );
+    res.json({ ...inv[0], items });
+  } catch (err) {
+    console.error('[GET /invoices/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/invoices', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const body = req.body || {};
+  if (!body.invoice_number) return res.status(400).json({ error: 'invoice_number je povinný' });
+  const client = await pool.connect();
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    await client.query('BEGIN');
+    const fields = [
+      'user_id','local_id','invoice_number','invoice_type',
+      'issue_date','tax_date','due_date',
+      'customer_id','customer_name','customer_address','customer_city','customer_postal_code',
+      'customer_ico','customer_dic','customer_ic_dph','customer_country',
+      'quote_id','quote_number','project_id','project_name',
+      'payment_method','variable_symbol','constant_symbol','specific_symbol',
+      'total_without_vat','total_vat','total_with_vat',
+      'status','notes','original_invoice_id','original_invoice_number',
+      'is_vat_payer','qr_string',
+    ];
+    const vals = [
+      dataUserId, body.local_id ?? null, body.invoice_number, body.invoice_type || 'issuedInvoice',
+      body.issue_date, body.tax_date, body.due_date,
+      body.customer_id ?? null, body.customer_name ?? null, body.customer_address ?? null,
+      body.customer_city ?? null, body.customer_postal_code ?? null,
+      body.customer_ico ?? null, body.customer_dic ?? null, body.customer_ic_dph ?? null,
+      body.customer_country || 'SK',
+      body.quote_id ?? null, body.quote_number ?? null, body.project_id ?? null, body.project_name ?? null,
+      body.payment_method || 'transfer', body.variable_symbol ?? null, body.constant_symbol || '0308',
+      body.specific_symbol ?? null,
+      body.total_without_vat ?? 0, body.total_vat ?? 0, body.total_with_vat ?? 0,
+      body.status || 'draft', body.notes ?? null,
+      body.original_invoice_id ?? null, body.original_invoice_number ?? null,
+      body.is_vat_payer ?? 1, body.qr_string ?? null,
+    ];
+    const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+    const { rows } = await client.query(
+      `INSERT INTO invoices (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      vals
+    );
+    const invoiceId = rows[0].id;
+    const items = Array.isArray(body.items) ? body.items : [];
+    for (const [idx, it] of items.entries()) {
+      await client.query(
+        `INSERT INTO invoice_items (invoice_id, user_id, product_unique_id, item_type, name, unit, qty, unit_price, vat_percent, discount_percent, description, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [invoiceId, dataUserId, it.product_unique_id ?? null, it.item_type || 'Tovar', it.name || '', it.unit || 'ks',
+         parseFloat(it.qty) || 1, parseFloat(it.unit_price) || 0, parseFloat(it.vat_percent) || 23,
+         parseFloat(it.discount_percent) || 0, it.description ?? null, idx]
+      );
+    }
+    await client.query('COMMIT');
+    const { rows: fullItems } = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [invoiceId]);
+    res.status(201).json({ ...rows[0], items: fullItems });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /invoices]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
+  }
+});
+
+apiRouter.put('/invoices/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  const body = req.body || {};
+  const client = await pool.connect();
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE invoices SET
+        invoice_number=$3, invoice_type=$4, issue_date=$5, tax_date=$6, due_date=$7,
+        customer_id=$8, customer_name=$9, customer_address=$10, customer_city=$11,
+        customer_postal_code=$12, customer_ico=$13, customer_dic=$14, customer_ic_dph=$15,
+        customer_country=$16, quote_id=$17, quote_number=$18, project_id=$19, project_name=$20,
+        payment_method=$21, variable_symbol=$22, constant_symbol=$23, specific_symbol=$24,
+        total_without_vat=$25, total_vat=$26, total_with_vat=$27,
+        status=$28, notes=$29, original_invoice_id=$30, original_invoice_number=$31,
+        is_vat_payer=$32, qr_string=$33, updated_at=NOW()
+       WHERE id=$1 AND user_id=$2`,
+      [
+        id, dataUserId,
+        body.invoice_number, body.invoice_type || 'issuedInvoice',
+        body.issue_date, body.tax_date, body.due_date,
+        body.customer_id ?? null, body.customer_name ?? null, body.customer_address ?? null,
+        body.customer_city ?? null, body.customer_postal_code ?? null,
+        body.customer_ico ?? null, body.customer_dic ?? null, body.customer_ic_dph ?? null,
+        body.customer_country || 'SK',
+        body.quote_id ?? null, body.quote_number ?? null, body.project_id ?? null, body.project_name ?? null,
+        body.payment_method || 'transfer', body.variable_symbol ?? null, body.constant_symbol || '0308',
+        body.specific_symbol ?? null,
+        body.total_without_vat ?? 0, body.total_vat ?? 0, body.total_with_vat ?? 0,
+        body.status || 'draft', body.notes ?? null,
+        body.original_invoice_id ?? null, body.original_invoice_number ?? null,
+        body.is_vat_payer ?? 1, body.qr_string ?? null,
+      ]
+    );
+    // Nahradiť položky
+    await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [id]);
+    const items = Array.isArray(body.items) ? body.items : [];
+    for (const [idx, it] of items.entries()) {
+      await client.query(
+        `INSERT INTO invoice_items (invoice_id, user_id, product_unique_id, item_type, name, unit, qty, unit_price, vat_percent, discount_percent, description, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [id, dataUserId, it.product_unique_id ?? null, it.item_type || 'Tovar', it.name || '', it.unit || 'ks',
+         parseFloat(it.qty) || 1, parseFloat(it.unit_price) || 0, parseFloat(it.vat_percent) || 23,
+         parseFloat(it.discount_percent) || 0, it.description ?? null, idx]
+      );
+    }
+    await client.query('COMMIT');
+    const { rows: inv } = await pool.query('SELECT * FROM invoices WHERE id = $1', [id]);
+    const { rows: fullItems } = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [id]);
+    res.json({ ...inv[0], items: fullItems });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /invoices/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  } finally {
+    client.release();
+  }
+});
+
+apiRouter.delete('/invoices/:id', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rowCount } = await pool.query('DELETE FROM invoices WHERE id = $1 AND user_id = $2', [id, dataUserId]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Faktúra nenájdená' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /invoices/:id]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Faktúry: Bulk sync ---
+
+apiRouter.post('/sync/invoices-full', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const userId = req.dataUserId ?? req.userId;
+  const result = await syncInvoicesFull(pool, req.body, userId);
+  if (!result.ok) return res.status(400).json(result);
+  res.json(result);
+});
+
+apiRouter.get('/sync/invoices-full', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const userId = req.dataUserId ?? req.userId;
+  const data = await fetchInvoicesFull(pool, userId);
+  if (!data) return res.status(500).json({ error: 'Chyba pri načítaní faktúr' });
+  res.json(data);
+});
+
+// --- Faktúry: Pay by Square QR string ---
+
+apiRouter.get('/invoices/:id/qr', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    // Flutter klient môže posielať lokálne SQLite id; fallbackneme preto aj na local_id.
+    const { rows: invRows } = await pool.query(
+      'SELECT * FROM invoices WHERE user_id = $1 AND (id = $2 OR local_id = $2) ORDER BY id DESC LIMIT 1',
+      [dataUserId, id]
+    );
+    if (invRows.length === 0) return res.status(404).json({ error: 'Faktúra nenájdená' });
+    const inv = invRows[0];
+    // Nacitaj IBAN z company
+    const { rows: compRows } = await pool.query('SELECT iban FROM company WHERE user_id = $1', [dataUserId]);
+    const iban = compRows[0]?.iban || '';
+    if (!iban) return res.status(400).json({ error: 'IBAN firmy nie je nastavený' });
+    // Ak máme uložený QR string, vrátime ho; inak vygenerujeme
+    let qrString = inv.qr_string;
+    if (!qrString) {
+      qrString = await _generateBySquareQR({
+        iban,
+        amount: inv.total_with_vat,
+        currency: 'EUR',
+        variableSymbol: inv.variable_symbol || inv.invoice_number,
+        note: `Faktura ${inv.invoice_number}`,
+      });
+      if (qrString) {
+        await pool.query('UPDATE invoices SET qr_string = $1 WHERE id = $2', [qrString, id]);
+      }
+    }
+    res.json({ qr_string: qrString });
+  } catch (err) {
+    console.error('[GET /invoices/:id/qr]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Faktúry: Export Pohoda XML (Windows-1250) ---
+
+apiRouter.get('/invoices/:id/export/pohoda', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows: invRows } = await pool.query('SELECT * FROM invoices WHERE id = $1 AND user_id = $2', [id, dataUserId]);
+    if (invRows.length === 0) return res.status(404).json({ error: 'Faktúra nenájdená' });
+    const inv = invRows[0];
+    const { rows: items } = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [id]);
+    const { rows: compRows } = await pool.query('SELECT * FROM company WHERE user_id = $1', [dataUserId]);
+    const company = compRows[0] || {};
+    const xmlUtf8 = _buildPohodaXml(inv, items, company);
+    // Pohoda vyžaduje Windows-1250 encoding
+    try {
+      const iconv = require('iconv-lite');
+      const buf = iconv.encode(xmlUtf8, 'win1250');
+      res.setHeader('Content-Type', 'application/xml; charset=windows-1250');
+      res.setHeader('Content-Disposition', `attachment; filename="faktura_${inv.invoice_number}_pohoda.xml"`);
+      res.send(buf);
+    } catch {
+      // Fallback: UTF-8 (iconv-lite nie je nainštalovaný)
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="faktura_${inv.invoice_number}_pohoda.xml"`);
+      res.send(xmlUtf8);
+    }
+  } catch (err) {
+    console.error('[GET /invoices/:id/export/pohoda]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Faktúry: Export ISDOC XML (UTF-8, otvorený štandard) ---
+
+apiRouter.get('/invoices/:id/export/isdoc', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows: invRows } = await pool.query('SELECT * FROM invoices WHERE id = $1 AND user_id = $2', [id, dataUserId]);
+    if (invRows.length === 0) return res.status(404).json({ error: 'Faktúra nenájdená' });
+    const inv = invRows[0];
+    const { rows: items } = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [id]);
+    const { rows: compRows } = await pool.query('SELECT * FROM company WHERE user_id = $1', [dataUserId]);
+    const company = compRows[0] || {};
+    const xml = _buildIsdocXml(inv, items, company);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="faktura_${inv.invoice_number}.isdoc"`);
+    res.send(xml);
+  } catch (err) {
+    console.error('[GET /invoices/:id/export/isdoc]', err.message);
+    res.status(500).json({ error: 'Chyba servera' });
+  }
+});
+
+// --- Faktúry: Export viacerých faktúr naraz (Pohoda XML – dataPack) ---
+
+apiRouter.post('/invoices/export/pohoda-batch', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids (pole) je povinné' });
+  try {
+    const dataUserId = req.dataUserId ?? req.userId;
+    const { rows: compRows } = await pool.query('SELECT * FROM company WHERE user_id = $1', [dataUserId]);
+    const company = compRows[0] || {};
+    const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const vatTypeMap = { 23: 'high', 19: 'low', 5: 'third', 0: 'none' };
+    const typeMap = { issuedInvoice: 'issuedInvoice', proformaInvoice: 'issuedProformaInvoice', creditNote: 'issuedCreditNotice', debitNote: 'issuedDebitNote' };
+    const payTypeMap = { transfer: 'transfer', cash: 'cash', card: 'card' };
+
+    let packItems = '';
+    let packIdx = 0;
+    for (const rawId of ids) {
+      const id = parseInt(rawId, 10);
+      if (isNaN(id)) continue;
+      const { rows: invRows } = await pool.query('SELECT * FROM invoices WHERE id = $1 AND user_id = $2', [id, dataUserId]);
+      if (invRows.length === 0) continue;
+      const inv = invRows[0];
+      const { rows: items } = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY sort_order, id', [id]);
+      packIdx++;
+      const singleXml = _buildPohodaXml(inv, items, company);
+      // Vyextrahuj len <inv:invoice> blok
+      const match = singleXml.match(/<inv:invoice[\s\S]*<\/inv:invoice>/);
+      if (match) {
+        packItems += `  <dat:dataPackItem id="${packIdx}" version="2.0">\n    ${match[0]}\n  </dat:dataPackItem>\n`;
+      }
+    }
+
+    const batchXml = `<?xml version="1.0" encoding="windows-1250"?>\n<dat:dataPack xmlns:dat="http://www.stormware.cz/schema/version_2/data.xsd" xmlns:inv="http://www.stormware.cz/schema/version_2/invoice.xsd" xmlns:typ="http://www.stormware.cz/schema/version_2/type.xsd" version="2.0" ico="${esc(company.ico)}" application="StockPilot" note="Hromadný export faktúr">\n${packItems}</dat:dataPack>`;
+
+    try {
+      const iconv = require('iconv-lite');
+      const buf = iconv.encode(batchXml, 'win1250');
+      res.setHeader('Content-Type', 'application/xml; charset=windows-1250');
+      res.setHeader('Content-Disposition', `attachment; filename="faktury_pohoda_export.xml"`);
+      res.send(buf);
+    } catch {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="faktury_pohoda_export.xml"`);
+      res.send(batchXml);
+    }
+  } catch (err) {
+    console.error('[POST /invoices/export/pohoda-batch]', err.message);
     res.status(500).json({ error: 'Chyba servera' });
   }
 });

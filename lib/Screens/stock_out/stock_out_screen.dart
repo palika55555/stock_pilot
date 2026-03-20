@@ -35,6 +35,9 @@ class _StockOutScreenState extends State<StockOutScreen> {
   StockOutIssueType? _issueTypeFilter; // null = všetky typy
   DateTime _selectedDate = DateTime.now();
 
+  /// Minimized draft (for the restore bar)
+  StockOutModalDraft? _minimizedDraft;
+
   static bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
@@ -52,7 +55,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
   }
 
   List<StockOut> get _filteredStockOuts {
-    var list = _stockOuts.where((s) => _isSameDay(s.createdAt, _selectedDate)).toList();
+    var list =
+        _stockOuts.where((s) => _isSameDay(s.createdAt, _selectedDate)).toList();
     if (_issueTypeFilter != null) {
       list = list.where((s) => s.issueType == _issueTypeFilter).toList();
     }
@@ -61,7 +65,10 @@ class _StockOutScreenState extends State<StockOutScreen> {
 
   /// Dni (bez času), v ktorých existuje aspoň jedna výdajka – na zvýraznenie v kalendári.
   Set<DateTime> get _datesWithStockOuts {
-    return _stockOuts.map((s) => DateTime(s.createdAt.year, s.createdAt.month, s.createdAt.day)).toSet();
+    return _stockOuts
+        .map((s) =>
+            DateTime(s.createdAt.year, s.createdAt.month, s.createdAt.day))
+        .toSet();
   }
 
   Future<void> _pickDate() async {
@@ -77,7 +84,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
 
   Future<void> _loadStockOuts() async {
     setState(() => _isLoading = true);
-    final list = await _stockOutService.getStockOutsByWarehouseId(_selectedWarehouseId);
+    final list =
+        await _stockOutService.getStockOutsByWarehouseId(_selectedWarehouseId);
     if (mounted) {
       setState(() {
         _stockOuts = list;
@@ -92,7 +100,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
+          bottom:
+              BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
         ),
       ),
       child: Row(
@@ -104,19 +113,24 @@ class _StockOutScreenState extends State<StockOutScreen> {
               value: _selectedWarehouseId,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 filled: true,
                 fillColor: Colors.grey.withOpacity(0.08),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                  borderSide:
+                      BorderSide(color: Colors.grey.withOpacity(0.25)),
                 ),
               ),
               items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('Všetky sklady')),
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Všetky sklady')),
                 ..._warehouses.map(
-                  (w) => DropdownMenuItem<int?>(value: w.id, child: Text(w.name)),
+                  (w) => DropdownMenuItem<int?>(
+                      value: w.id, child: Text(w.name)),
                 ),
               ],
               onChanged: (id) {
@@ -135,17 +149,21 @@ class _StockOutScreenState extends State<StockOutScreen> {
               value: _issueTypeFilter,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 filled: true,
                 fillColor: Colors.grey.withOpacity(0.08),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                  borderSide:
+                      BorderSide(color: Colors.grey.withOpacity(0.25)),
                 ),
               ),
               items: [
-                const DropdownMenuItem<StockOutIssueType?>(value: null, child: Text('Všetky')),
+                const DropdownMenuItem<StockOutIssueType?>(
+                    value: null, child: Text('Všetky')),
                 ...StockOutIssueType.values.map(
                   (t) => DropdownMenuItem<StockOutIssueType?>(
                     value: t,
@@ -161,99 +179,251 @@ class _StockOutScreenState extends State<StockOutScreen> {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Date bar
+  // -------------------------------------------------------------------------
+
   Widget _buildDateBar() {
     final now = DateTime.now();
     final isToday = _isSameDay(_selectedDate, now);
-    final dateStr = isToday
-        ? 'Dnes'
-        : '${_selectedDate.day}. ${_selectedDate.month}. ${_selectedDate.year}';
-    return Material(
-      color: Colors.white,
-      elevation: 0,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
-        ),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: () => setState(() {
-                _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-              }),
-              icon: const Icon(Icons.chevron_left_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFFF1F5F9),
-                foregroundColor: const Color(0xFF64748B),
-              ),
-            ),
-            Expanded(
-              child: InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.calendar_today_rounded,
-                          size: 20, color: const Color(0xFFDC2626).withOpacity(0.9)),
-                      const SizedBox(width: 10),
-                      Text(
-                        dateStr,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isToday ? const Color(0xFFDC2626) : const Color(0xFF1E293B),
+    final isYesterday =
+        _isSameDay(_selectedDate, now.subtract(const Duration(days: 1)));
+    final isTomorrow =
+        _isSameDay(_selectedDate, now.add(const Duration(days: 1)));
+    String dateStr;
+    if (isToday) {
+      dateStr = 'Dnes';
+    } else if (isYesterday) {
+      dateStr = 'Včera';
+    } else if (isTomorrow) {
+      dateStr = 'Zajtra';
+    } else {
+      dateStr =
+          '${_selectedDate.day}. ${_selectedDate.month}. ${_selectedDate.year}';
+    }
+    final count = _filteredStockOuts.length;
+    return Container(
+      color: AppColors.bgCard,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        children: [
+          _dateNavBtn(
+            Icons.chevron_left_rounded,
+            () => setState(() =>
+                _selectedDate =
+                    _selectedDate.subtract(const Duration(days: 1))),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.calendar_today_rounded,
+                        size: 16,
+                        color: isToday
+                            ? AppColors.danger
+                            : AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text(
+                      dateStr,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isToday
+                            ? AppColors.danger
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    if (count > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerSubtle,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.danger),
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_drop_down_rounded,
+                        size: 20, color: AppColors.textMuted),
+                  ],
                 ),
               ),
             ),
-            IconButton(
-              onPressed: () => setState(() {
-                _selectedDate = _selectedDate.add(const Duration(days: 1));
-              }),
-              icon: const Icon(Icons.chevron_right_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFFF1F5F9),
-                foregroundColor: const Color(0xFF64748B),
+          ),
+          if (!isToday)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: TextButton(
+                onPressed: () =>
+                    setState(() => _selectedDate = DateTime.now()),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Dnes',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600)),
               ),
             ),
-          ],
+          _dateNavBtn(
+            Icons.chevron_right_rounded,
+            () => setState(() =>
+                _selectedDate =
+                    _selectedDate.add(const Duration(days: 1))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateNavBtn(IconData icon, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, size: 22, color: AppColors.textSecondary),
         ),
       ),
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Modals
+  // -------------------------------------------------------------------------
+
   void _openNewModal() {
-    showModalBottomSheet(
+    showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      barrierDismissible: false,
+      builder: (ctx) => StockOutModal(
+        initialDraft:
+            _minimizedDraft?.stockOutId == null ? _minimizedDraft : null,
+        onMinimize: (draft) {
+          if (mounted) setState(() => _minimizedDraft = draft);
+        },
       ),
-      builder: (context) => const StockOutModal(),
     ).then((saved) {
-      if (saved == true) _loadStockOuts();
+      if (saved == true) {
+        _minimizedDraft = null;
+        _loadStockOuts();
+      }
     });
   }
 
   void _openEditModal(StockOut stockOut) {
     if (stockOut.id == null || stockOut.isStorned) return;
-    showModalBottomSheet(
+    showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      barrierDismissible: false,
+      builder: (ctx) => StockOutModal(
+        stockOutId: stockOut.id,
+        onMinimize: (draft) {
+          if (mounted) setState(() => _minimizedDraft = draft);
+        },
       ),
-      builder: (context) => StockOutModal(stockOutId: stockOut.id),
     ).then((saved) {
-      if (saved == true) _loadStockOuts();
+      if (saved == true) {
+        _minimizedDraft = null;
+        _loadStockOuts();
+      }
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Minimized bar
+  // -------------------------------------------------------------------------
+
+  Widget _buildMinimizedBar() {
+    if (_minimizedDraft == null) return const SizedBox.shrink();
+    final docNum = _minimizedDraft!.documentNumber.isNotEmpty
+        ? _minimizedDraft!.documentNumber
+        : 'Nová výdajka';
+    return Material(
+      borderRadius: BorderRadius.circular(14),
+      elevation: 8,
+      color: AppColors.bgCard,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _openNewModal,
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: AppColors.accentGold.withOpacity(0.4)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.accentGoldSubtle,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.edit_document,
+                    size: 18, color: AppColors.accentGold),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(docNum,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                    const Text(
+                        'Rozpracovaná výdajka – kliknite pre pokračovanie',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () =>
+                    setState(() => _minimizedDraft = null),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.textMuted,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(28, 28),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Stock out actions
+  // -------------------------------------------------------------------------
 
   Future<void> _approveStockOut(StockOut stockOut) async {
     if (stockOut.id == null || stockOut.isApproved) return;
@@ -291,7 +461,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
     }
   }
 
-  /// Vráti null = zrušené, false = storno bez vrátenia zásob, true = storno s vrátením zásob (len pri schválených).
+  /// Vráti null = zrušené, false = storno bez vrátenia zásob, true = storno s vrátením zásob.
   Future<bool?> _showStornoVerificationDialog({
     required String documentNumber,
     required bool isApproved,
@@ -314,15 +484,18 @@ class _StockOutScreenState extends State<StockOutScreen> {
         title: const Text('Tlač výdajky'),
         children: [
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, (title: 'VÝDAJKA TOVARU', hidePrices: false)),
+            onPressed: () => Navigator.pop(
+                ctx, (title: 'VÝDAJKA TOVARU', hidePrices: false)),
             child: const Text('Výdajka (s cenami)'),
           ),
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, (title: 'DODACÍ LIST', hidePrices: false)),
+            onPressed: () => Navigator.pop(
+                ctx, (title: 'DODACÍ LIST', hidePrices: false)),
             child: const Text('Dodací list (s cenami)'),
           ),
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, (title: 'DODACÍ LIST', hidePrices: true)),
+            onPressed: () => Navigator.pop(
+                ctx, (title: 'DODACÍ LIST', hidePrices: true)),
             child: const Text('Dodací list bez cien (pre kuriéra)'),
           ),
         ],
@@ -405,6 +578,10 @@ class _StockOutScreenState extends State<StockOutScreen> {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Build
+  // -------------------------------------------------------------------------
+
   static const double _appBarHeight = 70;
   static const double _appBarFilterHeight = 56;
 
@@ -414,7 +591,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
       extendBodyBehindAppBar: true,
       backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(_appBarHeight + _appBarFilterHeight),
+        preferredSize:
+            const Size.fromHeight(_appBarHeight + _appBarFilterHeight),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -423,7 +601,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
               elevation: 0,
               centerTitle: false,
               leading: IconButton(
-                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                icon: Icon(Icons.arrow_back,
+                    color: AppColors.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
               title: Text(
@@ -435,7 +614,8 @@ class _StockOutScreenState extends State<StockOutScreen> {
                 ),
               ),
               bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(_appBarFilterHeight),
+                preferredSize:
+                    const Size.fromHeight(_appBarFilterHeight),
                 child: _buildAppBarFilters(),
               ),
             ),
@@ -443,23 +623,38 @@ class _StockOutScreenState extends State<StockOutScreen> {
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.only(top: _appBarHeight + _appBarFilterHeight),
-        child: Column(
+        padding: const EdgeInsets.only(
+            top: _appBarHeight + _appBarFilterHeight),
+        child: Stack(
           children: [
-            _buildDateBar(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
-                  : StockOutList(
-                      stockOuts: _filteredStockOuts,
-                      canEditApproved: widget.userRole == 'admin',
-                      onAddTap: _openNewModal,
-                      onApprove: _approveStockOut,
-                      onEdit: _openEditModal,
-                      onStorno: _stornoStockOut,
-                      onExportPdf: _exportStockOutPdf,
-                    ),
+            Column(
+              children: [
+                _buildDateBar(),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF6366F1)))
+                      : StockOutList(
+                          stockOuts: _filteredStockOuts,
+                          canEditApproved:
+                              widget.userRole == 'admin',
+                          onAddTap: _openNewModal,
+                          onApprove: _approveStockOut,
+                          onEdit: _openEditModal,
+                          onStorno: _stornoStockOut,
+                          onExportPdf: _exportStockOutPdf,
+                        ),
+                ),
+              ],
             ),
+            if (_minimizedDraft != null)
+              Positioned(
+                bottom: 80,
+                left: 16,
+                right: 16,
+                child: _buildMinimizedBar(),
+              ),
           ],
         ),
       ),
@@ -467,16 +662,26 @@ class _StockOutScreenState extends State<StockOutScreen> {
         onPressed: _openNewModal,
         backgroundColor: const Color(0xFFDC2626),
         elevation: 10,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        label: const Text(
-          'Nová výdajka',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        label: Text(
+          _minimizedDraft != null ? 'Pokračovať' : 'Nová výdajka',
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: Icon(
+            _minimizedDraft != null
+                ? Icons.edit_rounded
+                : Icons.add,
+            color: Colors.white),
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Storno verify dialog
+// ---------------------------------------------------------------------------
 
 class _StornoVerifyDialog extends StatefulWidget {
   final String documentNumber;
@@ -488,7 +693,8 @@ class _StornoVerifyDialog extends StatefulWidget {
   });
 
   @override
-  State<_StornoVerifyDialog> createState() => _StornoVerifyDialogState();
+  State<_StornoVerifyDialog> createState() =>
+      _StornoVerifyDialogState();
 }
 
 class _StornoVerifyDialogState extends State<_StornoVerifyDialog> {
@@ -511,7 +717,9 @@ class _StornoVerifyDialogState extends State<_StornoVerifyDialog> {
     final match = _controller.text.trim().toUpperCase() ==
         widget.documentNumber.toUpperCase();
     return AlertDialog(
-      title: Text(widget.isApproved ? 'Stornovať výdajku' : 'Zrušiť výdajku'),
+      title: Text(widget.isApproved
+          ? 'Stornovať výdajku'
+          : 'Zrušiť výdajku'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -556,15 +764,19 @@ class _StornoVerifyDialogState extends State<_StornoVerifyDialog> {
               decoration: InputDecoration(
                 hintText: 'Zadajte ${widget.documentNumber}',
                 border: const OutlineInputBorder(),
-                errorText: _controller.text.isNotEmpty && !match
-                    ? 'Nesedí s číslom výdajky'
-                    : null,
+                errorText:
+                    _controller.text.isNotEmpty && !match
+                        ? 'Nesedí s číslom výdajky'
+                        : null,
               ),
               textCapitalization: TextCapitalization.characters,
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) {
-                if (match && widget.isApproved) Navigator.pop(context, true);
-                else if (match && !widget.isApproved) Navigator.pop(context, false);
+                if (match && widget.isApproved) {
+                  Navigator.pop(context, true);
+                } else if (match && !widget.isApproved) {
+                  Navigator.pop(context, false);
+                }
               },
             ),
           ],
@@ -577,22 +789,31 @@ class _StornoVerifyDialogState extends State<_StornoVerifyDialog> {
         ),
         if (widget.isApproved)
           FilledButton(
-            onPressed: match ? () => Navigator.pop(context, true) : null,
+            onPressed:
+                match ? () => Navigator.pop(context, true) : null,
             child: const Text('Áno, vrátiť na sklad'),
           ),
         FilledButton(
-          onPressed: match ? () => Navigator.pop(context, false) : null,
+          onPressed:
+              match ? () => Navigator.pop(context, false) : null,
           style: FilledButton.styleFrom(
-            backgroundColor: widget.isApproved ? null : Colors.red,
+            backgroundColor:
+                widget.isApproved ? null : Colors.red,
           ),
           child: Text(
-            widget.isApproved ? 'Stornovať bez vrátenia' : 'Áno, zrušiť',
+            widget.isApproved
+                ? 'Stornovať bez vrátenia'
+                : 'Áno, zrušiť',
           ),
         ),
       ],
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Calendar dialog – dark themed
+// ---------------------------------------------------------------------------
 
 /// Kalendár na výber dňa so zvýraznením dní, v ktorých bola výdajka (zelená).
 class _StockOutCalendarDialog extends StatefulWidget {
@@ -605,19 +826,21 @@ class _StockOutCalendarDialog extends StatefulWidget {
   });
 
   @override
-  State<_StockOutCalendarDialog> createState() => _StockOutCalendarDialogState();
+  State<_StockOutCalendarDialog> createState() =>
+      _StockOutCalendarDialogState();
 }
 
-class _StockOutCalendarDialogState extends State<_StockOutCalendarDialog> {
+class _StockOutCalendarDialogState
+    extends State<_StockOutCalendarDialog> {
   static const _weekdays = ['Po', 'Ut', 'St', 'Št', 'Pi', 'So', 'Ne'];
-  static const _greenHighlight = Color(0xFF22C55E);
 
   late DateTime _viewMonth;
 
   @override
   void initState() {
     super.initState();
-    _viewMonth = DateTime(widget.initialDate.year, widget.initialDate.month);
+    _viewMonth =
+        DateTime(widget.initialDate.year, widget.initialDate.month);
   }
 
   bool _hasStockOut(DateTime day) {
@@ -630,13 +853,23 @@ class _StockOutCalendarDialogState extends State<_StockOutCalendarDialog> {
     final year = _viewMonth.year;
     final month = _viewMonth.month;
     final first = DateTime(year, month, 1);
-    int weekday = first.weekday - 1;
+    final weekday = first.weekday - 1;
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final list = <DateTime?>[];
     for (int i = 0; i < weekday; i++) list.add(null);
-    for (int d = 1; d <= daysInMonth; d++) list.add(DateTime(year, month, d));
+    for (int d = 1; d <= daysInMonth; d++) {
+      list.add(DateTime(year, month, d));
+    }
     while (list.length % 7 != 0) list.add(null);
     return list;
+  }
+
+  String _monthName(int month) {
+    const names = [
+      'Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún',
+      'Júl', 'August', 'September', 'Október', 'November', 'December',
+    ];
+    return names[month - 1];
   }
 
   @override
@@ -644,128 +877,228 @@ class _StockOutCalendarDialogState extends State<_StockOutCalendarDialog> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final days = _daysInMonth();
-    return AlertDialog(
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '${_monthName(_viewMonth.month)} ${_viewMonth.year}',
-            style: const TextStyle(fontSize: 18),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: () => setState(() {
-                  _viewMonth = DateTime(_viewMonth.year, _viewMonth.month - 1);
-                }),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: () => setState(() {
-                  _viewMonth = DateTime(_viewMonth.year, _viewMonth.month + 1);
-                }),
-              ),
-            ],
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 280,
+    return Dialog(
+      backgroundColor: AppColors.bgElevated,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
+      child: SizedBox(
+        width: 320,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: _weekdays.map((w) => SizedBox(
-                width: 32,
-                child: Text(w, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600])),
-              )).toList(),
-            ),
-            const SizedBox(height: 8),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: 1,
-                mainAxisSpacing: 4,
-                crossAxisSpacing: 4,
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: AppColors.bgCard,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(16)),
               ),
-              itemCount: days.length,
-              itemBuilder: (context, index) {
-                final day = days[index];
-                if (day == null) return const SizedBox();
-                final isSelected = day.year == widget.initialDate.year &&
-                    day.month == widget.initialDate.month &&
-                    day.day == widget.initialDate.day;
-                final isToday = day.year == today.year &&
-                    day.month == today.month && day.day == today.day;
-                final hasHighlight = _hasStockOut(day);
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => Navigator.pop(context, day),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFFDC2626)
-                            : (hasHighlight ? _greenHighlight.withOpacity(0.2) : null),
-                        borderRadius: BorderRadius.circular(8),
-                        border: isToday && !isSelected
-                            ? Border.all(color: _greenHighlight, width: 1.5)
-                            : null,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${day.day}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? Colors.white : (hasHighlight ? _greenHighlight : Colors.black87),
-                        ),
-                      ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_monthName(_viewMonth.month)} ${_viewMonth.year}',
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary),
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: _greenHighlight.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(4),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded,
+                        color: AppColors.textSecondary),
+                    onPressed: () => setState(() {
+                      _viewMonth = DateTime(
+                          _viewMonth.year, _viewMonth.month - 1);
+                    }),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                        minWidth: 36, minHeight: 36),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text('Deň s výdajkou', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.textSecondary),
+                    onPressed: () => setState(() {
+                      _viewMonth = DateTime(
+                          _viewMonth.year, _viewMonth.month + 1);
+                    }),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                        minWidth: 36, minHeight: 36),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.borderDefault),
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Column(
+                children: [
+                  // Weekday headers
+                  Row(
+                    children: _weekdays
+                        .map((w) => Expanded(
+                              child: Text(w,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textMuted)),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  // Days grid
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics:
+                        const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      childAspectRatio: 1,
+                      mainAxisSpacing: 2,
+                      crossAxisSpacing: 2,
+                    ),
+                    itemCount: days.length,
+                    itemBuilder: (context, index) {
+                      final day = days[index];
+                      if (day == null) return const SizedBox();
+                      final isSelected =
+                          day.year == widget.initialDate.year &&
+                              day.month ==
+                                  widget.initialDate.month &&
+                              day.day == widget.initialDate.day;
+                      final isToday =
+                          day.year == today.year &&
+                              day.month == today.month &&
+                              day.day == today.day;
+                      final hasStockOut = _hasStockOut(day);
+                      return InkWell(
+                        onTap: () =>
+                            Navigator.pop(context, day),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        child: AnimatedContainer(
+                          duration:
+                              const Duration(milliseconds: 150),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.danger
+                                : (hasStockOut
+                                    ? AppColors.success
+                                        .withOpacity(0.15)
+                                    : (isToday
+                                        ? AppColors.bgInput
+                                        : null)),
+                            borderRadius:
+                                BorderRadius.circular(8),
+                            border: isToday && !isSelected
+                                ? Border.all(
+                                    color: AppColors.danger
+                                        .withOpacity(0.5),
+                                    width: 1)
+                                : (hasStockOut && !isSelected
+                                    ? Border.all(
+                                        color: AppColors.success
+                                            .withOpacity(0.3),
+                                        width: 1)
+                                    : null),
+                          ),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisAlignment:
+                                MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${day.day}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isToday || isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (hasStockOut
+                                          ? AppColors.success
+                                          : AppColors
+                                              .textPrimary),
+                                ),
+                              ),
+                              if (hasStockOut && !isSelected)
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  margin: const EdgeInsets.only(
+                                      top: 2),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.success,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.borderDefault),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text('Deň s výdajkou',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      minimumSize: Size.zero,
+                    ),
+                    child: const Text('Zavrieť'),
+                  ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(context, today),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Dnes',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Zrušiť'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, today),
-          child: const Text('Dnes'),
-        ),
-      ],
     );
-  }
-
-  String _monthName(int month) {
-    const names = ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December'];
-    return names[month - 1];
   }
 }

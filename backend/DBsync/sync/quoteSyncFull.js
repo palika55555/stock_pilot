@@ -23,20 +23,22 @@ async function syncQuotesFull(pool, body, userId) {
       );
 
       const vals = [
-        userId, localId,
-        q.quote_number || null,
-        q.customer_id != null ? Number(q.customer_id) : null,
-        q.customer_name || null,
-        q.created_at || null,
-        q.valid_until || null,
-        q.notes || null,
-        q.prices_include_vat != null ? Number(q.prices_include_vat) : 0,
-        q.default_vat_rate != null ? parseFloat(q.default_vat_rate) : 20,
-        q.status || 'draft',
-        q.delivery_cost != null ? parseFloat(q.delivery_cost) : 0,
-        q.other_fees != null ? parseFloat(q.other_fees) : 0,
-        q.payment_method || null,
-        q.delivery_terms || null,
+        userId, localId,                                                           // $1, $2
+        q.quote_number || null,                                                    // $3
+        q.customer_id != null ? Number(q.customer_id) : null,                     // $4
+        q.customer_name || null,                                                   // $5
+        q.created_at || null,                                                      // $6
+        q.valid_until || null,                                                     // $7
+        q.notes || null,                                                           // $8
+        q.prices_include_vat != null ? Number(q.prices_include_vat) : 0,          // $9
+        q.default_vat_rate != null ? parseFloat(q.default_vat_rate) : 20,         // $10
+        q.status || 'draft',                                                       // $11
+        q.delivery_cost != null ? parseFloat(q.delivery_cost) : 0,                // $12
+        q.other_fees != null ? parseFloat(q.other_fees) : 0,                      // $13
+        q.payment_method || null,                                                  // $14
+        q.delivery_terms || null,                                                  // $15
+        q.project_id != null ? Number(q.project_id) : null,                       // $16
+        q.project_name || null,                                                    // $17
       ];
 
       if (existing.rows.length > 0) {
@@ -44,17 +46,19 @@ async function syncQuotesFull(pool, body, userId) {
           `UPDATE quotes SET
             quote_number=$3, customer_id=$4, customer_name=$5, issue_date=$6,
             valid_until=$7, notes=$8, prices_include_vat=$9, default_vat_rate=$10,
-            status=$11, delivery_cost=$12, other_fees=$13
+            status=$11, delivery_cost=$12, other_fees=$13,
+            payment_method=$14, delivery_terms=$15, project_id=$16, project_name=$17
           WHERE user_id=$1 AND local_id=$2`,
-          vals.slice(0, 13)
+          vals
         );
       } else {
         await client.query(
           `INSERT INTO quotes (
             user_id, local_id, quote_number, customer_id, customer_name, issue_date,
-            valid_until, notes, prices_include_vat, default_vat_rate, status, delivery_cost, other_fees
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          vals.slice(0, 13)
+            valid_until, notes, prices_include_vat, default_vat_rate, status, delivery_cost, other_fees,
+            payment_method, delivery_terms, project_id, project_name
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+          vals
         );
       }
     }

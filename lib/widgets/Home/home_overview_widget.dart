@@ -8,6 +8,7 @@ import '../../screens/price_quote/price_quotes_list_screen.dart';
 import '../../screens/warehouse/warehouse_supplies.dart';
 import '../../screens/stock_out/stock_out_screen.dart';
 import '../../screens/customers/customers_page.dart';
+import '../../screens/Projects/projects_page.dart';
 import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../screens/Search/search_screen.dart';
 import '../../services/dashboard/dashboard_service.dart';
@@ -198,84 +199,104 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Prehľad',
-                  style: GoogleFonts.outfit(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dateStr,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              _HeaderActionButton(
-                icon: Icons.search_rounded,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SearchScreen()),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _HeaderActionButton(
-                    icon: Icons.notifications_outlined,
-                    onTap: () => widget.onNotificationTap?.call(),
-                  ),
-                  if (widget.notificationUnreadCount > 0)
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: AppColors.danger,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.bgPrimary, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${widget.notificationUnreadCount}',
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
-                          ),
-                        ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Prehľad',
+                      style: GoogleFonts.outfit(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      dateStr,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 10),
-              _SyncButton(
-                onSyncFromWeb: () async {
-                  await widget.onSyncFromBackend?.call();
-                  _loadStats();
-                },
-                onSyncToWeb: () async {
-                  await widget.onSyncToBackend?.call();
-                  _loadStats();
-                },
+              Row(
+                children: [
+                  _HeaderQuickButton(
+                    icon: Icons.arrow_downward_rounded,
+                    label: 'Nová príjemka',
+                    color: const Color(0xFF6366F1),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
+                    ).then((_) => _loadStats()),
+                  ),
+                  const SizedBox(width: 8),
+                  _HeaderQuickButton(
+                    icon: Icons.arrow_upward_rounded,
+                    label: 'Nová výdajka',
+                    color: const Color(0xFFDC2626),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => StockOutScreen(userRole: widget.userRole)),
+                    ).then((_) => _loadStats()),
+                  ),
+                  const SizedBox(width: 16),
+                  _HeaderActionButton(
+                    icon: Icons.search_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SearchScreen()),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _HeaderActionButton(
+                        icon: Icons.notifications_outlined,
+                        onTap: () => widget.onNotificationTap?.call(),
+                      ),
+                      if (widget.notificationUnreadCount > 0)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: AppColors.danger,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.bgPrimary, width: 1.5),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${widget.notificationUnreadCount}',
+                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+                  _SyncButton(
+                    onSyncFromWeb: () async {
+                      await widget.onSyncFromBackend?.call();
+                      _loadStats();
+                    },
+                    onSyncToWeb: () async {
+                      await widget.onSyncToBackend?.call();
+                      _loadStats();
+                    },
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-    );
+        );
   }
 
   Widget _buildLoadingState() {
@@ -298,6 +319,46 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label: 'Rýchle akcie', icon: Icons.bolt_rounded),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 400;
+          return Row(
+            children: [
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.arrow_downward_rounded,
+                  label: 'Nová príjemka',
+                  color: const Color(0xFF6366F1),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
+                  ).then((_) => _loadStats()),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.arrow_upward_rounded,
+                  label: 'Nová výdajka',
+                  color: const Color(0xFFDC2626),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => StockOutScreen(userRole: widget.userRole)),
+                  ).then((_) => _loadStats()),
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
     );
   }
 
@@ -362,6 +423,17 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   value: (_stats['quotesCount'] ?? _stats['orders'] ?? 0).toString(),
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => const PriceQuotesListScreen(),
+                  )).then((_) => _loadStats()),
+                ),
+              ),
+              _FadeInWidget(
+                animation: _staggerAnim(4),
+                child: _KpiCard(
+                  icon: Icons.construction_rounded,
+                  label: 'Zákazky',
+                  value: '',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => const ProjectsPage(),
                   )).then((_) => _loadStats()),
                 ),
               ),
@@ -1386,6 +1458,135 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
             const SizedBox(width: 4),
             Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.accentGold),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderQuickButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _HeaderQuickButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_HeaderQuickButton> createState() => _HeaderQuickButtonState();
+}
+
+class _HeaderQuickButtonState extends State<_HeaderQuickButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: _hovered ? widget.color.withOpacity(0.15) : widget.color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hovered ? widget.color.withOpacity(0.5) : widget.color.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 15, color: widget.color),
+              const SizedBox(width: 7),
+              Text(
+                widget.label,
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: widget.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
+}
+
+class _QuickActionButtonState extends State<_QuickActionButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            color: _hovered ? widget.color.withOpacity(0.18) : widget.color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _hovered ? widget.color.withOpacity(0.6) : widget.color.withOpacity(0.25),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: widget.color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(widget.icon, color: widget.color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: widget.color.withOpacity(0.7)),
+            ],
+          ),
         ),
       ),
     );

@@ -90,17 +90,10 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
   }
 
   void _openNewReceiptModal() {
-    showModalBottomSheet(
+    showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.82,
-      ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => const GoodsReceiptModal(),
+      barrierDismissible: false,
+      builder: (ctx) => const GoodsReceiptModal(),
     ).then((saved) {
       if (saved == true) _loadReceipts();
     });
@@ -108,17 +101,10 @@ class _GoodsReceiptScreenState extends State<GoodsReceiptScreen> {
 
   void _openEditModal(InboundReceipt receipt) {
     if (receipt.id == null || receipt.isApproved) return;
-    showModalBottomSheet(
+    showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.82,
-      ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => GoodsReceiptModal(receiptId: receipt.id),
+      barrierDismissible: false,
+      builder: (ctx) => GoodsReceiptModal(receiptId: receipt.id),
     ).then((saved) {
       if (saved == true) _loadReceipts();
     });

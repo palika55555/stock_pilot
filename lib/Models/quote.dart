@@ -38,6 +38,8 @@ class Quote {
   final double otherFees;
   final String? paymentMethod;
   final String? deliveryTerms;
+  final int? projectId;
+  final String? projectName;
 
   Quote({
     this.id,
@@ -54,6 +56,8 @@ class Quote {
     this.otherFees = 0.0,
     this.paymentMethod,
     this.deliveryTerms,
+    this.projectId,
+    this.projectName,
   });
 
   bool get isEditable => status == QuoteStatus.draft;
@@ -74,6 +78,8 @@ class Quote {
       'other_fees': otherFees,
       'payment_method': paymentMethod,
       'delivery_terms': deliveryTerms,
+      'project_id': projectId,
+      'project_name': projectName,
     };
   }
 
@@ -95,6 +101,8 @@ class Quote {
       otherFees: (map['other_fees'] as num?)?.toDouble() ?? 0.0,
       paymentMethod: map['payment_method'] as String?,
       deliveryTerms: map['delivery_terms'] as String?,
+      projectId: map['project_id'] as int?,
+      projectName: map['project_name'] as String?,
     );
   }
 
@@ -113,6 +121,8 @@ class Quote {
     double? otherFees,
     String? paymentMethod,
     String? deliveryTerms,
+    int? projectId,
+    String? projectName,
   }) {
     return Quote(
       id: id ?? this.id,
@@ -129,6 +139,8 @@ class Quote {
       otherFees: otherFees ?? this.otherFees,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       deliveryTerms: deliveryTerms ?? this.deliveryTerms,
+      projectId: projectId ?? this.projectId,
+      projectName: projectName ?? this.projectName,
     );
   }
 }

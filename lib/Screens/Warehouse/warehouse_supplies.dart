@@ -64,6 +64,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   bool _isLoading = true;
   bool _isAscending = true;
   bool _isCardView = false;
+  String? _statusFilter; // null = všetky, 'neaktivne', 'nedostupne', 'cenotvorba', 'nizky_stav'
   int _sortColumnIndex = 4; // stĺpec pre indikátor zoradenia (predvolene Predaj s DPH)
   static const double minTableWidth = 1700;
 
@@ -207,7 +208,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       return TextStyle(color: AppColors.textMuted);
     }
     if (product.hasExtendedPricing) {
-      return TextStyle(color: AppColors.accentGold);
+      return TextStyle(color: AppColors.accentPurple);
     }
     return null;
   }
@@ -689,10 +690,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   p.warehouseId == _selectedWarehouse!.id || p.warehouseId == null)
               .toList();
       final query = _searchController.text.trim();
-      if (query.isEmpty) {
-        _foundProducts = base;
-      } else {
-        _foundProducts = base
+      if (query.isNotEmpty) {
+        base = base
             .where(
               (p) =>
                   p.name.toLowerCase().contains(query.toLowerCase()) ||
@@ -701,7 +700,54 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
             )
             .toList();
       }
+      switch (_statusFilter) {
+        case 'neaktivne':
+          base = base.where((p) => !p.isActive).toList();
+          break;
+        case 'nedostupne':
+          base = base.where((p) => p.temporarilyUnavailable).toList();
+          break;
+        case 'cenotvorba':
+          base = base.where((p) => p.hasExtendedPricing).toList();
+          break;
+        case 'nizky_stav':
+          base = base.where((p) => p.minQuantity > 0 && p.qty < p.minQuantity).toList();
+          break;
+      }
+      _foundProducts = base;
     });
+  }
+
+  Widget _buildStatusChip({
+    required String label,
+    required String? value,
+    required IconData icon,
+    Color? color,
+  }) {
+    final isSelected = _statusFilter == value;
+    final chipColor = color ?? AppColors.accentGold;
+    return FilterChip(
+      selected: isSelected,
+      label: Text(label),
+      avatar: Icon(icon, size: 15, color: isSelected ? chipColor : AppColors.textSecondary),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        color: isSelected ? chipColor : AppColors.textSecondary,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+      ),
+      backgroundColor: AppColors.bgInput,
+      selectedColor: chipColor.withValues(alpha: 0.12),
+      checkmarkColor: chipColor,
+      side: BorderSide(
+        color: isSelected ? chipColor.withValues(alpha: 0.5) : AppColors.borderDefault,
+        width: 1,
+      ),
+      showCheckmark: false,
+      onSelected: (_) {
+        setState(() => _statusFilter = isSelected ? null : value);
+        _applyFilters();
+      },
+    );
   }
 
   void _sort<T>(
@@ -937,6 +983,24 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                       ),
                     ),
                   ),
+                ],
+              ),
+            ),
+            // Statusové filtre
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  _buildStatusChip(label: 'Všetky', value: null, icon: Icons.list_rounded),
+                  const SizedBox(width: 8),
+                  _buildStatusChip(label: 'Neaktívne', value: 'neaktivne', icon: Icons.block_rounded, color: AppColors.danger),
+                  const SizedBox(width: 8),
+                  _buildStatusChip(label: 'Nedostupné', value: 'nedostupne', icon: Icons.pause_circle_outline_rounded, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  _buildStatusChip(label: 'Rozš. cenotvorba', value: 'cenotvorba', icon: Icons.auto_awesome_rounded, color: AppColors.accentPurple),
+                  const SizedBox(width: 8),
+                  _buildStatusChip(label: 'Nízky stav', value: 'nizky_stav', icon: Icons.warning_amber_rounded, color: AppColors.danger),
                 ],
               ),
             ),

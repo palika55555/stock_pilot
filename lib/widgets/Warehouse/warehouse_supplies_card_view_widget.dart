@@ -131,13 +131,33 @@ class _ProductCard extends StatelessWidget {
     required this.onHistoryTap,
   });
 
-  bool get _lowStock => product.qty < 10;
+  bool get _lowStock => product.minQuantity > 0 && product.qty < product.minQuantity;
 
   static const _cardRadius = 16.0;
 
+  Widget _buildStatusBadges() {
+    final badges = <Widget>[];
+    if (!product.isActive) {
+      badges.add(const _StatusBadge(icon: Icons.block_rounded, label: 'Neaktívna', color: AppColors.danger));
+    }
+    if (product.temporarilyUnavailable) {
+      badges.add(const _StatusBadge(icon: Icons.pause_circle_outline_rounded, label: 'Nedostupná', color: AppColors.textSecondary));
+    }
+    if (product.hasExtendedPricing) {
+      badges.add(const _StatusBadge(icon: Icons.auto_awesome_rounded, label: 'Cenotvorba', color: AppColors.accentPurple));
+    }
+    if (badges.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(spacing: 4, runSpacing: 4, children: badges),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return Opacity(
+      opacity: !product.isActive ? 0.55 : 1.0,
+      child: Material(
       color: AppColors.bgCard,
       borderRadius: BorderRadius.circular(_cardRadius),
       elevation: 0,
@@ -217,11 +237,20 @@ class _ProductCard extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
                             height: 1.3,
-                            color: AppColors.textPrimary,
+                            color: !product.isActive
+                                ? AppColors.textMuted
+                                : product.temporarilyUnavailable
+                                    ? AppColors.textSecondary
+                                    : product.hasExtendedPricing
+                                        ? AppColors.accentPurple
+                                        : AppColors.textPrimary,
+                            decoration: !product.isActive ? TextDecoration.lineThrough : null,
+                            decorationColor: AppColors.textMuted,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        _buildStatusBadges(),
                       ],
                     ),
                   ),
@@ -390,6 +419,35 @@ class _ProductCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _StatusBadge({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 3),
+          Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

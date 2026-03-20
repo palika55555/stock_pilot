@@ -1,8 +1,10 @@
 import '../../models/product.dart';
+import '../../models/invoice.dart';
 import '../../models/stock_out.dart';
 import '../../models/stock_movement.dart';
 import '../Database/database_service.dart';
 import '../api_sync_service.dart' show syncStockOutsToBackend;
+import '../pricing/pricing_service.dart';
 
 /// Chyba pri nedostatočnom stave skladu pre výdaj.
 class InsufficientStockException implements Exception {
@@ -25,6 +27,7 @@ class InsufficientStockException implements Exception {
 
 class StockOutService {
   final DatabaseService _db = DatabaseService();
+  final PricingService _pricingService = PricingService();
 
   Future<List<StockOut>> getAllStockOuts() async {
     return await _db.getStockOuts();
@@ -36,6 +39,20 @@ class StockOutService {
 
   Future<List<StockOutItem>> getStockOutItems(int stockOutId) async {
     return await _db.getStockOutItems(stockOutId);
+  }
+
+  /// Vráti efektívnu predajnú cenu pre daný produkt a množstvo.
+  /// Zohľadňuje pravidlá rozšírenej cenotvorby – vhodné na predvyplnenie ceny v UI.
+  Future<double> resolveEffectiveUnitPrice(String productUniqueId, double qty) async {
+    final product = await _db.getProductByUniqueId(productUniqueId);
+    if (product == null) return 0;
+    if (!product.hasExtendedPricing) return product.price;
+    final rules = await _db.getPricingRules(productUniqueId);
+    return _pricingService.resolveEffectivePrice(
+      product: product,
+      rules: rules,
+      quantity: qty,
+    );
   }
 
   /// Validuje, že pre každú položku je na sklade dostatok kusov. Vyhodí [InsufficientStockException] ak nie.
@@ -179,6 +196,19 @@ class StockOutService {
     final stockOutId = await _db.insertStockOut(toInsert);
 
     for (final item in items) {
+      // Ak položka nemá manuálne nastavenú cenu, vypočítaj efektívnu cenu z pravidiel cenotvorby
+      double resolvedPrice = item.unitPrice;
+      if (resolvedPrice == 0) {
+        final product = await _db.getProductByUniqueId(item.productUniqueId);
+        if (product != null && product.hasExtendedPricing) {
+          final rules = await _db.getPricingRules(item.productUniqueId);
+          resolvedPrice = _pricingService.resolveEffectivePrice(
+            product: product,
+            rules: rules,
+            quantity: item.qty,
+          );
+        }
+      }
       final dbItem = StockOutItem(
         id: null,
         stockOutId: stockOutId,
@@ -187,7 +217,7 @@ class StockOutService {
         plu: item.plu,
         qty: item.qty,
         unit: item.unit,
-        unitPrice: item.unitPrice,
+        unitPrice: resolvedPrice,
       );
       await _db.insertStockOutItem(dbItem);
     }
@@ -266,5 +296,60 @@ class StockOutService {
     }
     await _db.updateStockOutStatus(stockOutId, StockOutStatus.stornovana);
     syncStockOutsToBackend().ignore();
+  }
+
+  /// Vytvorí automatickú výdajku z faktúry pri vystavení.
+  /// Je idempotentná: pre rovnaké invoiceId sa vytvorí max. jedna výdajka.
+  Future<void> createStockOutFromInvoice({
+    required Invoice invoice,
+    required List<InvoiceItem> invoiceItems,
+  }) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null) return;
+
+    final marker = 'AUTO_FROM_INVOICE:$invoiceId';
+    final existing = await _db.getStockOuts();
+    final alreadyExists = existing.any((s) => (s.notes ?? '').contains(marker));
+    if (alreadyExists) return;
+
+    final mappedItems = <StockOutItem>[];
+    for (final i in invoiceItems) {
+      final productId = i.productUniqueId;
+      if (productId == null || productId.isEmpty || i.qty <= 0) continue;
+      final product = await _db.getProductByUniqueId(productId);
+      mappedItems.add(StockOutItem(
+        stockOutId: 0,
+        productUniqueId: productId,
+        productName: i.productName,
+        plu: product?.plu,
+        qty: i.qty,
+        unit: i.unit,
+        unitPrice: i.unitPrice,
+      ));
+    }
+    if (mappedItems.isEmpty) return;
+
+    final stockOut = StockOut(
+      documentNumber: '',
+      createdAt: DateTime.now(),
+      recipientName: invoice.customerName,
+      notes: marker,
+      status: StockOutStatus.vykazana,
+      issueType: StockOutIssueType.sale,
+      jeVysporiadana: true,
+      customerId: invoice.customerId,
+      recipientIco: invoice.customerIco,
+      recipientDic: invoice.customerDic,
+      recipientAddress: [
+        invoice.customerAddress,
+        '${invoice.customerPostalCode ?? ''} ${invoice.customerCity ?? ''}'.trim(),
+      ].where((x) => x != null && x.trim().isNotEmpty).join(', '),
+    );
+
+    await createStockOut(
+      stockOut: stockOut,
+      items: mappedItems,
+      isDraft: false,
+    );
   }
 }

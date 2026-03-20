@@ -11,10 +11,12 @@
     "node": ">=20"
   },
   "dependencies": {
+    "bysquare": "^2.3.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
+    "iconv-lite": "^0.6.3",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "pg": "^8.13.0"

@@ -12,6 +12,7 @@ import 'package:stock_pilot/screens/pallet/customers_pallets_screen.dart';
 import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
 import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Reports/reports_list_screen.dart';
+import '../../Screens/Invoices/invoices_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
@@ -68,42 +69,11 @@ class AppDrawer extends StatelessWidget {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanProductScreen()));
                     },
                   ),
-                  _DrawerMenuItem(
-                    icon: Icons.warehouse_rounded,
-                    title: l10n.warehouses,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehousesPage()));
-                    },
-                  ),
+                  _WarehousesDrawerSection(userRole: userRole),
                   _ProductsDrawerSection(
                     userRole: userRole,
                     onAddProduct: onAddProduct,
                     l10nWarehouseSupplies: l10n.warehouseSupplies,
-                  ),
-                  _DrawerMenuItem(
-                    icon: Icons.swap_horiz_rounded,
-                    title: l10n.warehouseMovements,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseMovementsScreen(userRole: userRole)));
-                    },
-                  ),
-                  _DrawerMenuItem(
-                    icon: Icons.arrow_downward_rounded,
-                    title: 'Príjemky',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()));
-                    },
-                  ),
-                  _DrawerMenuItem(
-                    icon: Icons.arrow_upward_rounded,
-                    title: l10n.outboundReceipts,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => StockOutScreen(userRole: userRole)));
-                    },
                   ),
                   _DrawerMenuItem(
                     icon: Icons.business_center_rounded,
@@ -151,6 +121,14 @@ class AppDrawer extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomersPalletsScreen()));
+                    },
+                  ),
+                  _DrawerMenuItem(
+                    icon: Icons.receipt_long_rounded,
+                    title: 'Faktúry',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -305,6 +283,78 @@ class _DrawerHeader extends StatelessWidget {
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WarehousesDrawerSection extends StatelessWidget {
+  final String userRole;
+
+  const _WarehousesDrawerSection({required this.userRole});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      child: ExpansionTile(
+        leading: Icon(Icons.warehouse_rounded, size: 20, color: AppColors.textSecondary),
+        title: Text(
+          'Sklady',
+          style: GoogleFonts.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        iconColor: AppColors.textSecondary,
+        collapsedIconColor: AppColors.textSecondary,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.warehouse_rounded,
+              title: 'Sklady',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehousesPage()));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.swap_horiz_rounded,
+              title: 'Pohyby skladu',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseMovementsScreen(userRole: userRole)));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.arrow_downward_rounded,
+              title: 'Príjemky',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.arrow_upward_rounded,
+              title: 'Výdajky',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => StockOutScreen(userRole: userRole)));
+              },
+            ),
           ),
         ],
       ),

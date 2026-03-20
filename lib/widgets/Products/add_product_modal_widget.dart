@@ -11,6 +11,8 @@ import '../../services/Product/product_kind_service.dart';
 import '../../services/Receptura/receptura_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
 import '../../services/api_sync_service.dart';
+import '../../models/pricing_rule.dart';
+import '../../services/pricing/pricing_service.dart';
 
 class AddProductModal extends StatefulWidget {
   final String? initialPlu;
@@ -80,6 +82,10 @@ class _AddProductModalState extends State<AddProductModal> {
   bool _isActive = true;
   bool _temporarilyUnavailable = false;
   bool _hasExtendedPricing = false;
+  bool _ibaCeleMnozstva = false;
+
+  List<PricingRule> _pricingRules = [];
+  final PricingService _pricingService = PricingService();
 
   static const List<String> _cardTypes = [
     'jednoduchá',
@@ -131,8 +137,12 @@ class _AddProductModalState extends State<AddProductModal> {
       _isActive = p.isActive;
       _temporarilyUnavailable = p.temporarilyUnavailable;
       _hasExtendedPricing = p.hasExtendedPricing;
+      _ibaCeleMnozstva = p.ibaCeleMnozstva;
       if (p.cardType == 'receptúra') {
         WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecepturaZlozky());
+      }
+      if (p.hasExtendedPricing && p.uniqueId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _loadPricingRules());
       }
     } else {
       if (widget.initialCardType != null &&
@@ -175,6 +185,202 @@ class _AddProductModalState extends State<AddProductModal> {
     if (mounted && karta != null) {
       setState(() => _recepturaZlozky = List.from(karta.zlozky));
     }
+  }
+
+  Future<void> _loadPricingRules() async {
+    final id = widget.productToEdit?.uniqueId;
+    if (id == null) return;
+    final rules = await _pricingService.getRulesForProduct(id);
+    if (mounted) setState(() => _pricingRules = rules);
+  }
+
+  Future<void> _showAddPricingRuleDialog() async {
+    final labelCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final qtyFromCtrl = TextEditingController(text: '1');
+    final qtyToCtrl = TextEditingController();
+    final customerGroupCtrl = TextEditingController();
+    DateTime? validFrom;
+    DateTime? validTo;
+    String? dialogError;
+
+    final product = widget.productToEdit;
+
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.bgCard,
+              title: Row(
+                children: [
+                  Icon(Icons.auto_awesome_rounded, color: AppColors.accentPurple, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('Pridať pravidlo cenotvorby'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (dialogError != null)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerSubtle,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
+                        ),
+                        child: Text(dialogError!, style: TextStyle(color: AppColors.danger, fontSize: 12)),
+                      ),
+                    TextFormField(
+                      controller: labelCtrl,
+                      decoration: const InputDecoration(labelText: 'Názov pravidla (napr. Veľkoobchod)'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: priceCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Špeciálna cena s DPH (€) *',
+                        suffixText: '€',
+                        helperText: product != null && product.purchasePriceWithoutVat > 0
+                            ? 'Min. nákupná bez DPH: ${product.purchasePriceWithoutVat.toStringAsFixed(2)} €'
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: qtyFromCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'Množstvo od'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: qtyToCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'Množstvo do (prázdne = bez limitu)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: customerGroupCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Skupina zákazníkov (prázdne = všetci)',
+                        hintText: 'napr. wholesale, vip',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                            label: Text(
+                              validFrom != null
+                                  ? '${validFrom!.day}.${validFrom!.month}.${validFrom!.year}'
+                                  : 'Platí od',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () async {
+                              final d = await showDatePicker(
+                                context: ctx,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2040),
+                              );
+                              if (d != null) setDialogState(() => validFrom = d);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                            label: Text(
+                              validTo != null
+                                  ? '${validTo!.day}.${validTo!.month}.${validTo!.year}'
+                                  : 'Platí do',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () async {
+                              final d = await showDatePicker(
+                                context: ctx,
+                                initialDate: validFrom ?? DateTime.now(),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2040),
+                              );
+                              if (d != null) setDialogState(() => validTo = d);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Zrušiť'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.accentPurple),
+                  onPressed: () {
+                    final price = double.tryParse(priceCtrl.text.replaceAll(',', '.'));
+                    if (price == null || price < 0) {
+                      setDialogState(() => dialogError = 'Zadajte platnú cenu (≥ 0).');
+                      return;
+                    }
+                    final qtyFrom = double.tryParse(qtyFromCtrl.text.replaceAll(',', '.')) ?? 1;
+                    final qtyTo = qtyToCtrl.text.trim().isEmpty
+                        ? null
+                        : double.tryParse(qtyToCtrl.text.replaceAll(',', '.'));
+                    if (qtyTo != null && qtyTo < qtyFrom) {
+                      setDialogState(() => dialogError = 'Množstvo do musí byť ≥ množstvo od.');
+                      return;
+                    }
+                    // Validácia marže
+                    if (product != null && product.purchasePriceWithoutVat > 0 && price < product.purchasePriceWithoutVat) {
+                      setDialogState(() => dialogError =
+                          'Cena (${price.toStringAsFixed(2)} €) je nižšia ako nákupná cena bez DPH (${product.purchasePriceWithoutVat.toStringAsFixed(2)} €).');
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                    final newRule = PricingRule(
+                      productUniqueId: widget.productToEdit?.uniqueId ?? '',
+                      label: labelCtrl.text.trim().isEmpty ? null : labelCtrl.text.trim(),
+                      price: price,
+                      quantityFrom: qtyFrom,
+                      quantityTo: qtyTo,
+                      customerGroup: customerGroupCtrl.text.trim().isEmpty ? null : customerGroupCtrl.text.trim(),
+                      validFrom: validFrom,
+                      validTo: validTo,
+                    );
+                    setState(() => _pricingRules.add(newRule));
+                  },
+                  child: const Text('Pridať'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _removePricingRule(int index) {
+    setState(() => _pricingRules.removeAt(index));
   }
 
   Future<void> _showAddRecepturaZlozkaDialog() async {
@@ -454,7 +660,7 @@ class _AddProductModalState extends State<AddProductModal> {
         stockGroup: _stockGroupController.text.trim().isEmpty ? null : _stockGroupController.text.trim(),
         cardType: _selectedCardType,
         hasExtendedPricing: _hasExtendedPricing,
-        ibaCeleMnozstva: existing?.ibaCeleMnozstva ?? false,
+        ibaCeleMnozstva: _ibaCeleMnozstva,
       );
 
       if (_isEditMode) {
@@ -464,6 +670,13 @@ class _AddProductModalState extends State<AddProductModal> {
       }
       if (_selectedCardType == 'receptúra' && product.uniqueId != null) {
         await _recepturaService.saveRecepturaZlozky(product.uniqueId!, _recepturaZlozky);
+      }
+      if (product.uniqueId != null) {
+        if (product.hasExtendedPricing) {
+          await _pricingService.savePricingRules(product.uniqueId!, _pricingRules);
+        } else {
+          await _pricingService.clearRulesForProduct(product.uniqueId!);
+        }
       }
       // Synchronizácia všetkých produktov na web – nový/upravený produkt bude na webe na priradenie EAN
       final allProducts = await _productService.getAllProducts();
@@ -912,22 +1125,162 @@ class _AddProductModalState extends State<AddProductModal> {
                               ),
                               CheckboxListTile(
                                 value: _isActive,
-                                onChanged: (v) => setState(() => _isActive = v ?? true),
+                                onChanged: (v) {
+                                  final active = v ?? true;
+                                  setState(() {
+                                    _isActive = active;
+                                    // Neaktívna karta nemôže byť zároveň dočasne nedostupná
+                                    if (!active) _temporarilyUnavailable = false;
+                                  });
+                                },
                                 title: const Text('Aktívna karta'),
                                 controlAffinity: ListTileControlAffinity.leading,
                                 contentPadding: EdgeInsets.zero,
                               ),
                               CheckboxListTile(
                                 value: _temporarilyUnavailable,
-                                onChanged: (v) => setState(() => _temporarilyUnavailable = v ?? false),
+                                onChanged: (v) {
+                                  final unavail = v ?? false;
+                                  setState(() {
+                                    _temporarilyUnavailable = unavail;
+                                    // Dočasne nedostupná predpokladá, že karta je aktívna
+                                    if (unavail) _isActive = true;
+                                  });
+                                },
                                 title: const Text('Dočasne nedostupná (sivá)'),
                                 controlAffinity: ListTileControlAffinity.leading,
                                 contentPadding: EdgeInsets.zero,
                               ),
                               CheckboxListTile(
                                 value: _hasExtendedPricing,
-                                onChanged: (v) => setState(() => _hasExtendedPricing = v ?? false),
+                                onChanged: (v) {
+                                  final enabled = v ?? false;
+                                  setState(() {
+                                    _hasExtendedPricing = enabled;
+                                    if (!enabled) _pricingRules = [];
+                                  });
+                                },
                                 title: const Text('Rozšírená cenotvorba (fialová)'),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              if (_hasExtendedPricing) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentPurple.withValues(alpha: 0.07),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppColors.accentPurple.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.auto_awesome_rounded,
+                                              size: 15, color: AppColors.accentPurple),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Pravidlá cenotvorby',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.accentPurple,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          TextButton.icon(
+                                            onPressed: _showAddPricingRuleDialog,
+                                            icon: Icon(Icons.add_rounded,
+                                                size: 16, color: AppColors.accentPurple),
+                                            label: Text('Pridať',
+                                                style: TextStyle(
+                                                    color: AppColors.accentPurple, fontSize: 12)),
+                                            style: TextButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_pricingRules.isEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Text(
+                                            'Žiadne pravidlá. Kliknite "Pridať" a nastavte špeciálne ceny.',
+                                            style: TextStyle(
+                                                fontSize: 12, color: AppColors.textSecondary),
+                                          ),
+                                        )
+                                      else
+                                        ...List.generate(_pricingRules.length, (i) {
+                                          final rule = _pricingRules[i];
+                                          return Padding(
+                                            padding: const EdgeInsets.only(top: 8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.bgInput,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          '${rule.price.toStringAsFixed(2)} €',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w700,
+                                                            fontSize: 14,
+                                                            color: AppColors.accentPurple,
+                                                          ),
+                                                        ),
+                                                        if (rule.label != null &&
+                                                            rule.label!.isNotEmpty)
+                                                          Text(rule.label!,
+                                                              style: TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: AppColors.textSecondary)),
+                                                        Text(
+                                                          rule.displaySummary,
+                                                          style: TextStyle(
+                                                              fontSize: 11,
+                                                              color: AppColors.textSecondary),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    icon: Icon(Icons.delete_outline,
+                                                        size: 18, color: AppColors.danger),
+                                                    onPressed: () => _removePricingRule(i),
+                                                    tooltip: 'Odstrániť pravidlo',
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                              ],
+                              CheckboxListTile(
+                                value: _ibaCeleMnozstva,
+                                onChanged: (v) => setState(() => _ibaCeleMnozstva = v ?? false),
+                                title: const Text('Iba celé množstvá'),
                                 controlAffinity: ListTileControlAffinity.leading,
                                 contentPadding: EdgeInsets.zero,
                               ),

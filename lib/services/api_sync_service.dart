@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/user.dart';
 import '../models/customer.dart';
+import '../models/project.dart';
 import '../models/product.dart';
 import '../models/warehouse.dart';
 import '../models/supplier.dart';
@@ -192,6 +193,38 @@ Future<void> syncCustomersToBackend(List<Customer> customers) async {
       .timeout(const Duration(seconds: 10));
   if (res.statusCode < 200 || res.statusCode >= 300) {
     throw Exception('sync customers failed: ${res.statusCode}');
+  }
+}
+
+/// Pošle zoznam zákaziek do backendu.
+Future<void> syncProjectsToBackend(List<Project> projects) async {
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
+  final uri = Uri.parse('$_apiBase/sync/projects');
+  final body = jsonEncode({'projects': projects.map((p) => p.toMap()).toList()});
+  final res = await http
+      .post(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)}, body: body)
+      .timeout(const Duration(seconds: 10));
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('sync projects failed: ${res.statusCode}');
+  }
+}
+
+/// Stiahne zákazky z backendu.
+Future<List<Map<String, dynamic>>?> fetchProjectsFromBackend() async {
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return null;
+  try {
+    final uri = Uri.parse('$_apiBase/projects');
+    final res = await http
+        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final list = jsonDecode(res.body) as List<dynamic>?;
+    if (list == null) return null;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  } catch (_) {
+    return null;
   }
 }
 
@@ -886,5 +919,123 @@ Future<Map<String, dynamic>?> fetchCompanyFromBackend(String token) async {
     return jsonDecode(res.body) as Map<String, dynamic>?;
   } catch (_) {
     return null;
+  }
+}
+
+// ============================================================
+// SYNC: Faktúry
+// ============================================================
+
+/// Pošle všetky faktúry do backendu (bulk sync).
+Future<void> syncInvoicesToBackend() async {
+  final token = getBackendToken();
+  if (token == null || token.isEmpty) return;
+  try {
+    final db = DatabaseService();
+    final invoices = await db.getInvoices();
+    final invoicePayloads = <Map<String, dynamic>>[];
+    final itemPayloads = <Map<String, dynamic>>[];
+    for (final inv in invoices) {
+      if (inv.id == null) continue;
+      final map = inv.toMap();
+      map['local_id'] = inv.id;
+      map.remove('id');
+      invoicePayloads.add(map);
+      final items = await db.getInvoiceItems(inv.id!);
+      for (final item in items) {
+        if (item.id == null) continue;
+        final im = item.toMap();
+        im['local_id'] = item.id;
+        im.remove('id');
+        im['invoice_local_id'] = inv.id;
+        im.remove('invoice_id');
+        itemPayloads.add(im);
+      }
+    }
+    final uri = Uri.parse('$_apiBase/sync/invoices-full');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
+          body: jsonEncode({'invoices': invoicePayloads, 'items': itemPayloads}),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      if (res.statusCode == 404) {
+        // Produkčný backend často ešte nemá tento endpoint – app použije lokálny SEPA/EPC QR.
+        print(
+          'syncInvoicesToBackend: 404 (endpoint /sync/invoices-full na serveri chýba alebo je starý deploy).',
+        );
+      } else {
+        print('syncInvoicesToBackend failed: ${res.statusCode} ${res.body}');
+      }
+    }
+  } catch (e) {
+    print('syncInvoicesToBackend error: $e');
+  }
+}
+
+/// Stiahne Pay by Square QR string pre faktúru z backendu.
+Future<String?> fetchInvoiceQrString(int invoiceId, String token) async {
+  try {
+    final uri = Uri.parse('$_apiBase/invoices/$invoiceId/qr');
+    final res = await http
+        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final data = jsonDecode(res.body) as Map<String, dynamic>?;
+    return data?['qr_string'] as String?;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Stiahne URL na export faktúry ako Pohoda XML.
+String getInvoicePohodaExportUrl(int invoiceId) =>
+    '$_apiBase/invoices/$invoiceId/export/pohoda';
+
+/// Stiahne URL na export faktúry ako ISDOC XML.
+String getInvoiceIsdocExportUrl(int invoiceId) =>
+    '$_apiBase/invoices/$invoiceId/export/isdoc';
+
+// --- Rozšírená cenotvorba – pricing_rules ---
+
+/// Stiahne všetky pravidlá cenotvorby pre daný produkt z backendu.
+Future<List<Map<String, dynamic>>?> fetchPricingRulesFromBackend(
+  String productId,
+  String token,
+) async {
+  try {
+    final uri = Uri.parse('$_apiBase/products/${Uri.encodeComponent(productId)}/pricing-rules');
+    final res = await http
+        .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final list = jsonDecode(res.body) as List<dynamic>?;
+    if (list == null) return null;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Synchronizuje pravidlá cenotvorby na backend (bulk replace).
+/// Pošle celý zoznam pravidiel – backend vymaže staré a vloží nové.
+Future<bool> syncPricingRulesToBackend(
+  String productId,
+  List<Map<String, dynamic>> rules,
+  String token,
+) async {
+  try {
+    final uri = Uri.parse('$_apiBase/products/${Uri.encodeComponent(productId)}/pricing-rules/bulk');
+    final body = jsonEncode({'rules': rules});
+    final res = await http
+        .put(uri,
+            headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
+            body: body)
+        .timeout(const Duration(seconds: 15));
+    return res.statusCode >= 200 && res.statusCode < 300;
+  } catch (_) {
+    return false;
   }
 }

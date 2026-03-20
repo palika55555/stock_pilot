@@ -1,14 +1,16 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+import '../../utils/platform_pdf_saver.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
+import '../../models/project.dart';
 import '../../models/quote.dart';
 import '../../screens/Settings/company_edit_screen.dart';
 import '../../services/Company/company_service.dart';
 import '../../services/Product/product_service.dart';
+import '../../services/Project/project_service.dart';
 import '../../services/Quote/quote_pdf_service.dart';
 import '../../services/Quote/quote_service.dart';
 import 'package:printing/printing.dart';
@@ -32,6 +34,7 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
   final QuoteService _quoteService = QuoteService();
   final ProductService _productService = ProductService();
   final CompanyService _companyService = CompanyService();
+  final ProjectService _projectService = ProjectService();
 
   Company? _company;
   Quote? _quote;
@@ -49,6 +52,9 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
   final TextEditingController _paymentMethodController = TextEditingController(text: 'Bankový prevod');
   final TextEditingController _deliveryTermsController = TextEditingController(text: 'Dohodou');
   bool _pricesIncludeVat = false;
+  List<Project> _availableProjects = [];
+  int? _selectedProjectId;
+  String? _selectedProjectName;
 
   bool get _isNewQuote => widget.quoteId == null;
 
@@ -84,14 +90,18 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
 
   Future<void> _loadProductsAndNextNumber() async {
     setState(() => _loading = true);
-    final products = await _productService.getAllProducts();
-    final nextNumber = await _quoteService.getNextQuoteNumber();
-    final company = await _companyService.getCompany();
+    final results = await Future.wait([
+      _productService.getAllProducts(),
+      _quoteService.getNextQuoteNumber(),
+      _companyService.getCompany(),
+      _projectService.getActiveProjects(),
+    ]);
     if (mounted) {
       setState(() {
-        _products = products;
-        _company = company;
-        _quoteNumberController.text = nextNumber;
+        _products = results[0] as List<Product>;
+        _company = results[2] as Company?;
+        _quoteNumberController.text = results[1] as String;
+        _availableProjects = results[3] as List<Project>;
         _loading = false;
       });
     }
@@ -103,12 +113,14 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
     final items = await _quoteService.getQuoteItems(widget.quoteId!);
     final products = await _productService.getAllProducts();
     final company = await _companyService.getCompany();
+    final projects = await _projectService.getActiveProjects();
     if (!mounted) return;
     setState(() {
       _quote = quote;
       _company = company;
       _products = products;
       _items = items;
+      _availableProjects = projects;
       if (quote != null) {
         _quoteNumberController.text = quote.quoteNumber;
         _validUntilController.text = quote.validUntil != null
@@ -121,6 +133,8 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
         _otherFeesController.text = quote.otherFees.toStringAsFixed(2);
         _paymentMethodController.text = quote.paymentMethod ?? 'Bankový prevod';
         _deliveryTermsController.text = quote.deliveryTerms ?? 'Dohodou';
+        _selectedProjectId = quote.projectId;
+        _selectedProjectName = quote.projectName;
       }
       _loading = false;
     });
@@ -178,7 +192,7 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
             SnackBar(content: Text('PDF pripravené na uloženie / zdieľanie')),
           );
       } on MissingPluginException catch (_) {
-        await _saveAndOpenPdf(pdfBytes, filename);
+        if (!kIsWeb) await _saveAndOpenPdf(pdfBytes, filename);
       }
     } catch (e) {
       if (mounted)
@@ -191,23 +205,14 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
     }
   }
 
-  /// Uloží PDF do súboru a otvorí ho (fallback keď sharePdf nie je na platforme dostupný).
+  /// Uloží PDF do súboru a otvorí ho (fallback pre desktop platformy).
   Future<void> _saveAndOpenPdf(Uint8List pdfBytes, String filename) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/$filename');
-      await file.writeAsBytes(pdfBytes);
-      if (Platform.isWindows) {
-        await Process.run('start', ['', file.path], runInShell: true);
-      } else if (Platform.isMacOS) {
-        await Process.run('open', [file.path]);
-      } else if (Platform.isLinux) {
-        await Process.run('xdg-open', [file.path]);
-      }
+      await saveAndOpenPdf(pdfBytes, filename);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('PDF uložené: ${file.path}')));
+        ).showSnackBar(SnackBar(content: Text('PDF uložené: $filename')));
       }
     } catch (e) {
       if (mounted) {
@@ -379,6 +384,8 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
           otherFees: double.tryParse(_otherFeesController.text.trim().replaceAll(',', '.')) ?? 0.0,
           paymentMethod: _paymentMethodController.text.trim().isEmpty ? null : _paymentMethodController.text.trim(),
           deliveryTerms: _deliveryTermsController.text.trim().isEmpty ? null : _deliveryTermsController.text.trim(),
+          projectId: _selectedProjectId,
+          projectName: _selectedProjectName,
         );
         final id = await _quoteService.createQuote(quote);
         for (final item in _items) {
@@ -422,6 +429,8 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
           otherFees: double.tryParse(_otherFeesController.text.trim().replaceAll(',', '.')) ?? 0.0,
           paymentMethod: _paymentMethodController.text.trim().isEmpty ? null : _paymentMethodController.text.trim(),
           deliveryTerms: _deliveryTermsController.text.trim().isEmpty ? null : _deliveryTermsController.text.trim(),
+          projectId: _selectedProjectId,
+          projectName: _selectedProjectName,
         );
         await _quoteService.updateQuote(updated);
         await _quoteService.deleteQuoteItemsByQuoteId(_quote!.id!);
@@ -633,6 +642,30 @@ class _PriceQuoteScreenState extends State<PriceQuoteScreen> {
                             labelText: 'Termín dodania / realizácie',
                             icon: Icons.event_outlined,
                             hintText: 'napr. Dohodou',
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int?>(
+                            value: _selectedProjectId,
+                            decoration: const InputDecoration(
+                              labelText: 'Zákazka',
+                              prefixIcon: Icon(Icons.construction_rounded),
+                              border: OutlineInputBorder(),
+                            ),
+                            hint: const Text('— Bez zákazky —'),
+                            isExpanded: true,
+                            items: [
+                              const DropdownMenuItem<int?>(value: null, child: Text('— Bez zákazky —')),
+                              ..._availableProjects.map((p) => DropdownMenuItem<int?>(
+                                value: p.id,
+                                child: Text('${p.projectNumber} – ${p.name}', overflow: TextOverflow.ellipsis),
+                              )),
+                            ],
+                            onChanged: (v) {
+                              setState(() {
+                                _selectedProjectId = v;
+                                _selectedProjectName = v == null ? null : _availableProjects.firstWhere((p) => p.id == v).name;
+                              });
+                            },
                           ),
                         ],
                       ),

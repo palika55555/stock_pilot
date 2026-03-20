@@ -1113,608 +1113,711 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
     return null;
   }
 
+  // -------------------------------------------------------------------------
+  // Styling helpers
+  // -------------------------------------------------------------------------
+
+  InputDecoration _styledInputDecoration(String label, {Widget? prefixIcon}) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: AppColors.bgInput,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(_radius)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: const BorderSide(color: AppColors.borderDefault),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: const BorderSide(color: AppColors.accentGold, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      prefixIcon: prefixIcon,
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Build
+  // -------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 10, 12, bottomInset + 12),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 380, maxWidth: 880),
-              child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _isEditMode ? 'Upraviť príjemku' : 'Nový príjem tovaru',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+    final screenH = MediaQuery.of(context).size.height;
+    return Dialog(
+      backgroundColor: AppColors.bgElevated,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 1100, maxHeight: screenH * 0.88),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDialogHeader(),
+              const Divider(height: 1, thickness: 1, color: AppColors.borderDefault),
+              Flexible(
+                child: SizedBox(
+                  height: screenH * 0.76,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: 320,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: _buildFormPanel(),
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                      style: IconButton.styleFrom(
-                        padding: const EdgeInsets.all(4),
-                        minimumSize: const Size(32, 32),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _receiptNumberController,
-                                  readOnly: !_manualReceiptNumber && !_isEditMode,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    labelText: 'Číslo príjemky',
-                                    isDense: true,
-                                    contentPadding: _compactPadding,
-                                    border: const OutlineInputBorder(),
-                                    prefixIcon: const Icon(Icons.tag, size: 20),
-                                    suffixIcon: _isEditMode
-                                        ? null
-                                        : IconButton(
-                                            icon: Icon(
-                                              _manualReceiptNumber
-                                                  ? Icons.auto_fix_high
-                                                  : Icons.edit,
-                                              size: 18,
-                                            ),
-                                            onPressed: () {
-                                              setState(() {
-                                                _manualReceiptNumber =
-                                                    !_manualReceiptNumber;
-                                                if (!_manualReceiptNumber)
-                                                  _generateNextReceiptNumber();
-                                              });
-                                            },
-                                            style: IconButton.styleFrom(
-                                              padding: const EdgeInsets.all(4),
-                                              minimumSize: const Size(32, 32),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ),
-                              if (!_isTransfer) ...[
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _invoiceController,
-                                    style: const TextStyle(fontSize: 13),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Číslo faktúry',
-                                      isDense: true,
-                                      contentPadding: _compactPadding,
-                                      border: OutlineInputBorder(),
-                                      prefixIcon: Icon(Icons.description, size: 20),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<Warehouse?>(
-                            isExpanded: true,
-                            value: _selectedWarehouse,
-                            decoration: const InputDecoration(
-                              labelText: 'Sklad',
-                              isDense: true,
-                              contentPadding: _compactPadding,
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.warehouse, size: 20),
-                            ),
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('— Vyberte sklad —'),
-                              ),
-                              ..._warehouses.map(
-                                (w) => DropdownMenuItem(
-                                  value: w,
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          w.name,
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (w) => setState(() => _selectedWarehouse = w),
-                          ),
-                          if (_isTransfer) ...[
-                            const SizedBox(height: 8),
-                            DropdownButtonFormField<Warehouse?>(
-                              isExpanded: true,
-                              value: _selectedSourceWarehouse,
-                              decoration: const InputDecoration(
-                                labelText: 'Zdrojový sklad *',
-                                isDense: true,
-                                contentPadding: _compactPadding,
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.warehouse_outlined, size: 20),
-                              ),
-                              items: [
-                                const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('— Vyberte zdrojový sklad —'),
-                                ),
-                                ..._warehouses
-                                    .where((w) => w.id != _selectedWarehouse?.id)
-                                    .map(
-                                  (w) => DropdownMenuItem(
-                                    value: w,
-                                    child: Text(
-                                      w.name,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (w) => setState(() => _selectedSourceWarehouse = w),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          if (!_isTransfer)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: DropdownButtonFormField<Supplier?>(
-                                    isExpanded: true,
-                                    value: _selectedSupplier,
-                                    decoration: InputDecoration(
-                                      labelText: 'Dodávateľ',
-                                      isDense: true,
-                                      contentPadding: _compactPadding,
-                                      border: const OutlineInputBorder(),
-                                      prefixIcon: const Icon(Icons.business, size: 20),
-                                      errorText: _supplierValidationError
-                                          ? 'Vyberte dodávateľa'
-                                          : null,
-                                      errorBorder: _supplierValidationError
-                                          ? OutlineInputBorder(
-                                              borderSide: const BorderSide(color: AppColors.danger),
-                                              borderRadius: BorderRadius.circular(4),
-                                            )
-                                          : null,
-                                    ),
-                                    items: [
-                                    const DropdownMenuItem(
-                                      value: null,
-                                      child: Text('— Vyberte dodávateľa —'),
-                                    ),
-                                    ..._suppliers.map(
-                                      (s) => DropdownMenuItem(
-                                        value: s,
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                '${s.name} (IČO ${s.ico})',
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 1,
-                                              ),
-                                            ),
+                      const VerticalDivider(
+                          width: 1, thickness: 1, color: AppColors.borderDefault),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildItemsHeader(),
+                            const Divider(
+                                height: 1, thickness: 1, color: AppColors.borderDefault),
+                            Expanded(
+                              child: _productsLoaded
+                                  ? SingleChildScrollView(
+                                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          _buildItemsTable(),
+                                          if (_isWithCosts) ...[
+                                            const SizedBox(height: 12),
+                                            _buildAcquisitionCostsSection(),
+                                            const SizedBox(height: 12),
+                                            _buildCostSummarySection(),
                                           ],
-                                        ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                  onChanged: (s) {
-                                    setState(() {
-                                      _selectedSupplier = s;
-                                      _supplierValidationError = false;
-                                      if (s != null) {
-                                        _vatRateController.text = s.defaultVatRate
-                                            .toString();
-                                        _vatAppliesToAll = true;
-                                        _updateAllRowPrices();
-                                      }
-                                    });
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.add_circle_outline,
-                                    color: AppColors.accentGold,
-                                    size: 20,
-                                  ),
-                                  tooltip: 'Pridať dodávateľa',
-                                  style: IconButton.styleFrom(
-                                    padding: const EdgeInsets.all(4),
-                                    minimumSize: const Size(36, 36),
-                                  ),
-                                  onPressed: () async {
-                                    final result = await showModalBottomSheet<Supplier>(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(20),
-                                        ),
-                                      ),
-                                      builder: (ctx) => const AddSupplierModal(),
-                                    );
-                                    if (!mounted) return;
-                                    await _loadSuppliers();
-                                    if (result != null && mounted)
-                                      setState(() {
-                                        final match = _suppliers.where(
-                                          (s) => s.id == result.id,
-                                        );
-                                        _selectedSupplier = match.isEmpty
-                                            ? result
-                                            : match.first;
-                                        _vatRateController.text = result.defaultVatRate
-                                            .toString();
-                                        _vatAppliesToAll = true;
-                                        _updateAllRowPrices();
-                                      });
-                                  },
-                                ),
-                              ],
+                                    )
+                                  : const Center(child: CircularProgressIndicator()),
                             ),
-                          // Supplier info chip (IČO / DIČ)
-                          if (_selectedSupplier != null) ...[
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.bgInput,
-                                border: Border.all(color: AppColors.borderDefault),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.business_outlined, size: 14, color: AppColors.textSecondary),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      [
-                                        if (_selectedSupplier!.ico.isNotEmpty) 'IČO: ${_selectedSupplier!.ico}',
-                                        if (_selectedSupplier!.dic != null && _selectedSupplier!.dic!.isNotEmpty) 'DIČ: ${_selectedSupplier!.dic}',
-                                        if (_selectedSupplier!.address != null && _selectedSupplier!.address!.isNotEmpty) _selectedSupplier!.address!,
-                                      ].join('  •  '),
-                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            const Divider(
+                                height: 1, thickness: 1, color: AppColors.borderDefault),
+                            _buildBottomBar(),
                           ],
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _deliveryNoteController,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Č. dodacieho listu',
-                                    isDense: true,
-                                    contentPadding: _compactPadding,
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.receipt_long_outlined, size: 18),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _poNumberController,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Č. objednávky (PO)',
-                                    isDense: true,
-                                    contentPadding: _compactPadding,
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.shopping_cart_outlined, size: 18),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _notesController,
-                            maxLines: 1,
-                            style: const TextStyle(fontSize: 13),
-                            decoration: const InputDecoration(
-                              labelText: 'Poznámka',
-                              isDense: true,
-                              contentPadding: _compactPadding,
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.note, size: 20),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          DropdownButtonFormField<ReceiptMovementType?>(
-                            isExpanded: true,
-                            value: _selectedMovementType,
-                            decoration: const InputDecoration(
-                              labelText: 'Druh pohybu',
-                              isDense: true,
-                              contentPadding: _compactPadding,
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.swap_horiz, size: 20),
-                            ),
-                            items: _movementTypes
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            t.name,
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 1,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (t) {
-                              setState(() {
-                                _selectedMovementType = t;
-                                if (t?.code == 'TRANSFER') {
-                                  _selectedSourceWarehouse = null;
-                                  _pricesIncludeVat = false;
-                                }
-                                if (t?.code == 'WITH_COSTS' && _acquisitionCostRows.isEmpty) {
-                                  _acquisitionCostRows.add(_AcquisitionCostRow());
-                                }
-                              });
-                            },
-                          ),
-                          if (_isTransfer) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: AppColors.infoSubtle,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppColors.info.withOpacity(0.5)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.info_outline, size: 20, color: AppColors.info),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Tovar bude presunutý z vybraného zdrojového skladu do cieľového skladu.',
-                                      style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          CheckboxListTile(
-                            title: const Text('Vysporiadané', style: TextStyle(fontSize: 13)),
-                            subtitle: const Text(
-                              'Daňový doklad zaevidovaný alebo sa neočakáva',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                            value: _isSettled,
-                            onChanged: (v) =>
-                                setState(() => _isSettled = v ?? false),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            dense: true,
-                          ),
-                          const SizedBox(height: 6),
-                          if (!_isTransfer) ...[
-                            Text(
-                              'Typ príjemky',
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: RadioListTile<bool>(
-                                    title: const Text('S DPH', style: TextStyle(fontSize: 13)),
-                                    value: true,
-                                    groupValue: _pricesIncludeVat,
-                                    onChanged: (v) =>
-                                        setState(() => _pricesIncludeVat = true),
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: RadioListTile<bool>(
-                                    title: const Text('Bez DPH', style: TextStyle(fontSize: 13)),
-                                    value: false,
-                                    groupValue: _pricesIncludeVat,
-                                    onChanged: (v) =>
-                                        setState(() => _pricesIncludeVat = false),
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            CheckboxListTile(
-                              title: const Text('Použiť DPH pre všetky položky', style: TextStyle(fontSize: 13)),
-                              value: _vatAppliesToAll,
-                              onChanged: (v) {
-                                setState(() => _vatAppliesToAll = v ?? false);
-                                _updateAllRowPrices();
-                              },
-                              controlAffinity: ListTileControlAffinity.leading,
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ],
-                          if (_vatAppliesToAll && !_isTransfer) ...[
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              width: 80,
-                              child: TextFormField(
-                                controller: _vatRateController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13),
-                                decoration: const InputDecoration(
-                                  labelText: 'DPH %',
-                                  isDense: true,
-                                  contentPadding: _compactPadding,
-                                  border: OutlineInputBorder(),
-                                ),
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Položky',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: _addRow,
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Pridať položku', style: TextStyle(fontSize: 13)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accentGold,
-                        foregroundColor: AppColors.bgPrimary,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        minimumSize: const Size(0, 36),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (!_productsLoaded)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else
-                  _buildItemsTable(),
-                if (_isWithCosts) ...[
-                  const SizedBox(height: 12),
-                  _buildAcquisitionCostsSection(),
-                  const SizedBox(height: 12),
-                  _buildCostSummarySection(),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accentGold,
-                      foregroundColor: AppColors.bgPrimary,
-                    ),
-                    child: _isSaving
-                        ? SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.bgPrimary,
-                            ),
-                          )
-                        : Text(
-                            _isEditMode && _editReceipt?.isDraft == true
-                                ? 'Vykázať príjem'
-                                : (_isEditMode
-                                      ? 'Uložiť zmeny'
-                                      : 'Uložiť príjem'),
-                          ),
+                    ],
                   ),
                 ),
-                if (!_isEditMode || _editReceipt?.isDraft == true) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 40,
-                    child: OutlinedButton.icon(
-                      onPressed: _isSaving ? null : _saveDraft,
-                      icon: const Icon(Icons.save_outlined, size: 20),
-                      label: const Text('Uložiť ako rozpracovaný'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accentGold,
-                      ),
-                    ),
-                  ),
-                ],
-                if (_isEditMode && _editReceipt != null && !_editReceipt!.isApproved) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 40,
-                    child: OutlinedButton.icon(
-                      onPressed: _isSaving ? null : _deleteReceipt,
-                      icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                      label: const Text('Odstrániť'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.danger,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
         ),
       ),
     );
   }
+
+  Widget _buildDialogHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: const BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.successSubtle,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.south_west_rounded,
+                color: AppColors.success, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _isEditMode ? 'Upraviť príjemku' : 'Nový príjem tovaru',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Zavrieť',
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              backgroundColor: AppColors.bgInput,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Číslo príjemky
+        TextFormField(
+          controller: _receiptNumberController,
+          readOnly: !_manualReceiptNumber && !_isEditMode,
+          decoration: _styledInputDecoration('Číslo príjemky',
+                  prefixIcon: const Icon(Icons.tag,
+                      size: 20, color: AppColors.textMuted))
+              .copyWith(
+            suffixIcon: _isEditMode
+                ? null
+                : IconButton(
+                    icon: Icon(
+                      _manualReceiptNumber
+                          ? Icons.auto_fix_high
+                          : Icons.edit_rounded,
+                      color: AppColors.accentGold,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _manualReceiptNumber = !_manualReceiptNumber;
+                        if (!_manualReceiptNumber) _generateNextReceiptNumber();
+                      });
+                    },
+                  ),
+          ),
+        ),
+        if (!_isTransfer) ...[
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _invoiceController,
+            decoration: _styledInputDecoration('Číslo faktúry',
+                prefixIcon: const Icon(Icons.description,
+                    size: 20, color: AppColors.textMuted)),
+          ),
+        ],
+        const SizedBox(height: 10),
+        // Druh pohybu
+        DropdownButtonFormField<ReceiptMovementType?>(
+          isExpanded: true,
+          value: _selectedMovementType,
+          decoration: _styledInputDecoration('Druh pohybu',
+              prefixIcon: const Icon(Icons.swap_horiz,
+                  size: 20, color: AppColors.textMuted)),
+          dropdownColor: AppColors.bgInput,
+          borderRadius: BorderRadius.circular(_radius),
+          items: _movementTypes
+              .map((t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(t.name, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (t) {
+            setState(() {
+              _selectedMovementType = t;
+              if (t?.code == 'TRANSFER') {
+                _selectedSourceWarehouse = null;
+                _pricesIncludeVat = false;
+              }
+              if (t?.code == 'WITH_COSTS' && _acquisitionCostRows.isEmpty) {
+                _acquisitionCostRows.add(_AcquisitionCostRow());
+              }
+            });
+          },
+        ),
+        if (_isTransfer) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.infoSubtle,
+              borderRadius: BorderRadius.circular(_radius),
+              border: Border.all(color: AppColors.info.withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: AppColors.info),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tovar bude presunutý z vybraného zdrojového skladu do cieľového skladu.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        // Cieľový sklad
+        DropdownButtonFormField<Warehouse?>(
+          isExpanded: true,
+          value: _selectedWarehouse,
+          decoration: _styledInputDecoration(
+              _isTransfer ? 'Cieľový sklad *' : 'Sklad *',
+              prefixIcon: const Icon(Icons.warehouse_outlined,
+                  size: 20, color: AppColors.textMuted)),
+          dropdownColor: AppColors.bgInput,
+          borderRadius: BorderRadius.circular(_radius),
+          items: [
+            const DropdownMenuItem(
+                value: null, child: Text('— Vyberte sklad —')),
+            ..._warehouses.map((w) => DropdownMenuItem(
+                  value: w,
+                  child: Text(w.name, overflow: TextOverflow.ellipsis),
+                )),
+          ],
+          onChanged: (w) => setState(() => _selectedWarehouse = w),
+        ),
+        if (_isTransfer) ...[
+          const SizedBox(height: 10),
+          DropdownButtonFormField<Warehouse?>(
+            isExpanded: true,
+            value: _selectedSourceWarehouse,
+            decoration: _styledInputDecoration('Zdrojový sklad *',
+                prefixIcon: const Icon(Icons.warehouse_outlined,
+                    size: 20, color: AppColors.textMuted)),
+            dropdownColor: AppColors.bgInput,
+            borderRadius: BorderRadius.circular(_radius),
+            items: [
+              const DropdownMenuItem(
+                  value: null,
+                  child: Text('— Vyberte zdrojový sklad —')),
+              ..._warehouses
+                  .where((w) => w.id != _selectedWarehouse?.id)
+                  .map((w) => DropdownMenuItem(
+                        value: w,
+                        child: Text(w.name, overflow: TextOverflow.ellipsis),
+                      )),
+            ],
+            onChanged: (w) => setState(() => _selectedSourceWarehouse = w),
+          ),
+        ],
+        if (!_isTransfer) ...[
+          const SizedBox(height: 10),
+          // Dodávateľ
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<Supplier?>(
+                  isExpanded: true,
+                  value: _selectedSupplier,
+                  decoration: _styledInputDecoration('Dodávateľ *',
+                          prefixIcon: const Icon(Icons.business_outlined,
+                              size: 20, color: AppColors.textMuted))
+                      .copyWith(
+                    errorText:
+                        _supplierValidationError ? 'Vyberte dodávateľa' : null,
+                  ),
+                  dropdownColor: AppColors.bgInput,
+                  borderRadius: BorderRadius.circular(_radius),
+                  items: [
+                    const DropdownMenuItem(
+                        value: null,
+                        child: Text('— Vyberte dodávateľa —')),
+                    ..._suppliers.map((s) => DropdownMenuItem(
+                          value: s,
+                          child: Text('${s.name} (IČO ${s.ico})',
+                              overflow: TextOverflow.ellipsis),
+                        )),
+                  ],
+                  onChanged: (s) {
+                    setState(() {
+                      _selectedSupplier = s;
+                      _supplierValidationError = false;
+                      if (s != null) {
+                        _vatRateController.text = s.defaultVatRate.toString();
+                        _vatAppliesToAll = true;
+                        _updateAllRowPrices();
+                      }
+                    });
+                  },
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline,
+                    color: AppColors.accentGold, size: 22),
+                tooltip: 'Pridať dodávateľa',
+                onPressed: () async {
+                  final result = await showModalBottomSheet<Supplier>(
+                    context: context,
+                    isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    builder: (ctx) => const AddSupplierModal(),
+                  );
+                  if (!mounted) return;
+                  await _loadSuppliers();
+                  if (result != null && mounted)
+                    setState(() {
+                      final match =
+                          _suppliers.where((s) => s.id == result.id);
+                      _selectedSupplier =
+                          match.isEmpty ? result : match.first;
+                      _vatRateController.text =
+                          result.defaultVatRate.toString();
+                      _vatAppliesToAll = true;
+                      _updateAllRowPrices();
+                    });
+                },
+              ),
+            ],
+          ),
+          if (_selectedSupplier != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.bgInput,
+                borderRadius: BorderRadius.circular(_radius),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 14, color: AppColors.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (_selectedSupplier!.ico.isNotEmpty)
+                          'IČO: ${_selectedSupplier!.ico}',
+                        if (_selectedSupplier!.dic != null &&
+                            _selectedSupplier!.dic!.isNotEmpty)
+                          'DIČ: ${_selectedSupplier!.dic}',
+                        if (_selectedSupplier!.address != null &&
+                            _selectedSupplier!.address!.isNotEmpty)
+                          _selectedSupplier!.address!,
+                      ].join('  •  '),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+        const SizedBox(height: 10),
+        // Dodací list + objednávka
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _deliveryNoteController,
+                decoration: _styledInputDecoration('Č. dodacieho listu',
+                    prefixIcon: const Icon(Icons.receipt_long_outlined,
+                        size: 18, color: AppColors.textMuted)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextFormField(
+                controller: _poNumberController,
+                decoration: _styledInputDecoration('Č. objednávky (PO)',
+                    prefixIcon: const Icon(Icons.shopping_cart_outlined,
+                        size: 18, color: AppColors.textMuted)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _notesController,
+          maxLines: 2,
+          decoration: _styledInputDecoration('Poznámka',
+              prefixIcon: const Icon(Icons.note_outlined,
+                  size: 20, color: AppColors.textMuted)),
+        ),
+        const SizedBox(height: 4),
+        // Vysporiadané
+        Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+            value: _isSettled,
+            onChanged: (v) => setState(() => _isSettled = v ?? false),
+            title: const Text('Vysporiadané',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary)),
+            subtitle: const Text(
+                'Daňový doklad zaevidovaný alebo sa neočakáva',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            activeColor: AppColors.accentGold,
+            dense: true,
+          ),
+        ),
+        // DPH nastavenia (len pre normálny príjem, nie presun)
+        if (!_isTransfer) ...[
+          const SizedBox(height: 4),
+          const Text('Typ príjemky',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+          Row(
+            children: [
+              Expanded(
+                child: RadioListTile<bool>(
+                  title: const Text('S DPH', style: TextStyle(fontSize: 13)),
+                  value: true,
+                  groupValue: _pricesIncludeVat,
+                  onChanged: (v) => setState(() => _pricesIncludeVat = true),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.accentGold,
+                ),
+              ),
+              Expanded(
+                child: RadioListTile<bool>(
+                  title: const Text('Bez DPH', style: TextStyle(fontSize: 13)),
+                  value: false,
+                  groupValue: _pricesIncludeVat,
+                  onChanged: (v) => setState(() => _pricesIncludeVat = false),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.accentGold,
+                ),
+              ),
+            ],
+          ),
+          Material(
+            color: Colors.transparent,
+            child: CheckboxListTile(
+              title: const Text('Použiť DPH pre všetky položky',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary)),
+              value: _vatAppliesToAll,
+              onChanged: (v) {
+                setState(() => _vatAppliesToAll = v ?? false);
+                _updateAllRowPrices();
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              activeColor: AppColors.accentGold,
+              dense: true,
+            ),
+          ),
+          if (_vatAppliesToAll) ...[
+            const SizedBox(height: 4),
+            SizedBox(
+              width: 90,
+              child: TextFormField(
+                controller: _vatRateController,
+                keyboardType: TextInputType.number,
+                decoration: _styledInputDecoration('DPH %'),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ),
+          ],
+        ],
+        // Rozpočítanie nákladov (len pre WITH_COSTS)
+        if (_isWithCosts) ...[
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _costDistributionMethod,
+            decoration: _styledInputDecoration('Rozpočítanie nákladov',
+                prefixIcon: const Icon(Icons.calculate_outlined,
+                    size: 20, color: AppColors.textMuted)),
+            dropdownColor: AppColors.bgInput,
+            borderRadius: BorderRadius.circular(_radius),
+            items: const [
+              DropdownMenuItem(value: 'by_value', child: Text('Podľa hodnoty')),
+              DropdownMenuItem(
+                  value: 'by_quantity', child: Text('Podľa množstva')),
+              DropdownMenuItem(
+                  value: 'by_weight', child: Text('Podľa hmotnosti')),
+              DropdownMenuItem(value: 'manual', child: Text('Manuálne')),
+            ],
+            onChanged: (v) =>
+                setState(() => _costDistributionMethod = v ?? 'by_value'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildItemsHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.list_alt_rounded,
+              size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          const Text('Položky',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary)),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: _addRow,
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: const Text('Pridať', style: TextStyle(fontSize: 12)),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentGold,
+              foregroundColor: AppColors.bgPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double get _goodsWithoutVat {
+    double sum = 0;
+    for (final row in _rows) {
+      if (row.product == null) continue;
+      final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
+      final price =
+          _tryParseDecimal(row.unitPriceWithoutVatController.text) ?? 0;
+      sum += qty * price;
+    }
+    return _roundPrice(sum);
+  }
+
+  double get _goodsWithVat {
+    double sum = 0;
+    for (final row in _rows) {
+      if (row.product == null) continue;
+      final qty = _tryParseDecimal(row.qtyController.text) ?? 0;
+      final price =
+          _tryParseDecimal(row.unitPriceWithVatController.text) ?? 0;
+      sum += qty * price;
+    }
+    return _roundPrice(sum);
+  }
+
+  Widget _buildBottomBar() {
+    final withoutVat = _goodsWithoutVat;
+    final withVat = _goodsWithVat;
+    final vatAmount = _roundPrice(withVat - withoutVat);
+    final grandTotal = _isWithCosts
+        ? _roundPrice(withVat + _totalAcquisitionCostsWithVat())
+        : withVat;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: AppColors.bgCard,
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                _miniSummaryItem('Základ', withoutVat),
+                const SizedBox(width: 16),
+                _miniSummaryItem('DPH', vatAmount),
+                const SizedBox(width: 16),
+                _miniSummaryItem(
+                    _isWithCosts ? 'Celkom s nákladmi' : 'Celkom',
+                    grandTotal,
+                    highlight: true),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (_isEditMode &&
+              _editReceipt != null &&
+              !_editReceipt!.isApproved) ...[
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _deleteReceipt,
+              icon: const Icon(Icons.delete_outline_rounded, size: 16),
+              label:
+                  const Text('Odstrániť', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.danger,
+                side: const BorderSide(color: AppColors.danger),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          if (!_isEditMode || _editReceipt?.isDraft == true)
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _saveDraft,
+              icon: const Icon(Icons.save_outlined, size: 16),
+              label: const Text('Rozpracovaný',
+                  style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.borderDefault),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+              ),
+            ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: _isSaving ? null : _submit,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentGold,
+              foregroundColor: AppColors.bgPrimary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.bgPrimary))
+                : Text(
+                    _isEditMode && _editReceipt?.isDraft == true
+                        ? 'Vykázať príjem'
+                        : (_isEditMode ? 'Uložiť zmeny' : 'Uložiť príjem'),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniSummaryItem(String label, double value,
+      {bool highlight = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10, color: AppColors.textSecondary)),
+        Text(
+          '${value.toStringAsFixed(2)} €',
+          style: TextStyle(
+            fontSize: highlight ? 16 : 13,
+            fontWeight: highlight ? FontWeight.bold : FontWeight.w600,
+            color: highlight ? AppColors.accentGold : AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
 
   Widget _buildItemsTable() {
     final withCosts = _isWithCosts;

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(flutter analyze --no-fatal-infos)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(grep -i \"purchase_price\\\\|below_cost\\\\|min_price\" backend/DBsync/migrations/*.sql)"
     ]
   }
 }

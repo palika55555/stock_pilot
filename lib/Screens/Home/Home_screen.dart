@@ -16,8 +16,11 @@ import '../../services/sync_service.dart';
 import '../../services/auto_push_service.dart';
 import '../../services/sync/sync_manager.dart';
 import '../../services/Notifications/notification_service.dart';
+import '../../services/auto_lock_service.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 import '../../screens/Search/search_screen.dart';
+import '../../screens/goods_receipt/goods_receipt_screen.dart';
+import '../../screens/stock_out/stock_out_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/sync/sync_status_badge.dart';
 
@@ -37,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final NotificationService _notificationService = NotificationService();
   late String _currentRole;
   StreamSubscription<void>? _syncSubscription;
+  StreamSubscription<void>? _dataRefreshedSubscription;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _wasOffline = true;
   int _notificationUnreadCount = 0;
@@ -70,13 +74,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _persistCurrentUser();
     _refreshNotificationCount();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) AutoLockService.instance.start(context);
+    });
     SyncCheckService.instance.start();
     SyncService.startSync(userId);
     AutoPushService.instance.start();
+    _initSyncManager(userId);
     _ensureInitialDataLoaded(userId);
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
       if (!mounted) return;
-      _showSyncNeededSnackBar();
+      // Automatická tichá synchronizácia – bez potvrdenia od používateľa
+      _autoSync();
+    });
+    // Obnoví prehľad vždy keď SyncManager úspešne stiahne zmeny zo servera
+    _dataRefreshedSubscription = SyncManager.instance.dataRefreshed.listen((_) {
+      if (!mounted) return;
+      setState(() => _overviewRefreshKey++);
     });
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
   }
@@ -107,8 +121,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         result.any((r) => r != ConnectivityResult.none && r != ConnectivityResult.bluetooth);
     if (isOnline && _wasOffline) {
       _wasOffline = false;
-      // Zostaneme offline-first: pri návrate online len označíme stav,
-      // skutočnú obnovu z webu spúšťa používateľ manuálne.
+      // Pri návrate online automaticky synchronizujeme – bez potvrdenia
+      _autoSync();
     }
     if (!isOnline) _wasOffline = true;
   }
@@ -117,10 +131,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _syncSubscription?.cancel();
+    _dataRefreshedSubscription?.cancel();
     _connectivitySubscription?.cancel();
     SyncCheckService.instance.stop();
     SyncService.stopSync();
     AutoPushService.instance.stop();
+    SyncManager.instance.stop(); // zastaví timery, zachová offline frontu
+    AutoLockService.instance.stop();
     super.dispose();
   }
 
@@ -128,8 +145,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       SyncCheckService.instance.start();
+      AutoLockService.instance.onAppResumed();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       SyncCheckService.instance.stop();
+      AutoLockService.instance.onAppPaused();
     }
   }
 
@@ -158,26 +177,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _showSyncNeededSnackBar() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.amber.shade200, size: 20),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Na webe boli zmeny v zákazníkoch. Obnoviť dáta?')),
-          ],
-        ),
-        duration: const Duration(seconds: 8),
-        action: SnackBarAction(
-          label: 'Obnoviť',
-          textColor: AppColors.accentGold,
-          onPressed: _pullCustomersFromBackend,
-        ),
-      ),
-    );
+  /// Inicializuje SyncManager po prihlásení (asynchrónne – token môže byť dostupný neskôr).
+  Future<void> _initSyncManager(String userId) async {
+    try {
+      final token = getBackendToken() ?? await getBackendTokenAsync();
+      if (token != null && token.isNotEmpty) {
+        await SyncManager.instance.initialize(userId, token);
+      }
+    } catch (_) {}
+  }
+
+  /// Tichá automatická synchronizácia – spúšťa sa pri detekcii zmien na webe
+  /// alebo pri obnove internetového pripojenia. Bez akéhokoľvek potvrdenia.
+  Future<void> _autoSync() async {
+    final token = getBackendToken();
+    if (token == null || !mounted) return;
+    try {
+      // Pull zákazníkov
+      final list = await fetchCustomersFromBackendWithToken(token);
+      if (list != null && list.isNotEmpty && mounted) {
+        await _db.mergeCustomersFromBackend(list);
+      }
+      // Pull produktov
+      if (mounted) {
+        final backendProducts = await fetchProductsFromBackendWithToken(token);
+        if (backendProducts != null && backendProducts.isNotEmpty) {
+          await _db.mergeProductsFromBackend(backendProducts);
+        }
+      }
+      // Push lokálnych produktov na server
+      if (mounted) {
+        final products = await _db.getProducts();
+        syncProductsToBackend(products);
+        setState(() => _overviewRefreshKey++);
+      }
+      // Aktualizuj timestamp aby sa notifikácia nezobrazila znova
+      await SyncCheckService.instance.updateLastKnownFromServer();
+    } catch (_) {
+      // offline alebo auth error – SyncManager zopakuje pri ďalšom pokuse
+    }
   }
 
   Future<void> _pullCustomersFromBackend({bool silent = false}) async {
@@ -347,11 +385,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth >= 800;
 
-    if (isDesktop) {
-      return _buildDesktopLayout();
-    } else {
-      return _buildMobileLayout();
-    }
+    return Listener(
+      onPointerDown: (_) => AutoLockService.instance.resetOnActivity(),
+      child: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
+    );
   }
 
   Widget _buildDesktopLayout() {
@@ -450,12 +487,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const Spacer(),
-                  StreamBuilder<SyncStatus>(
-                    stream: SyncManager.instance.statusStream,
-                    builder: (ctx, snap) => SyncStatusBadge(
-                      status: snap.data ?? SyncStatus.idle,
-                    ),
+                StreamBuilder<SyncStatus>(
+                  stream: SyncManager.instance.statusStream,
+                  builder: (ctx, snap) => SyncStatusBadge(
+                    status: snap.data ?? SyncStatus.idle,
                   ),
+                ),
+                // Quick actions – inline s ostatnými ikonami
+                _AppBarQuickButton(
+                  icon: Icons.arrow_downward_rounded,
+                  color: const Color(0xFF6366F1),
+                  tooltip: 'Nová príjemka',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _AppBarQuickButton(
+                  icon: Icons.arrow_upward_rounded,
+                  color: const Color(0xFFDC2626),
+                  tooltip: 'Nová výdajka',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => StockOutScreen(userRole: _currentRole)),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 _MobileIconButton(
                   icon: Icons.search_rounded,
                   onTap: () => Navigator.push(
@@ -527,6 +585,40 @@ class _MobileIconButton extends StatelessWidget {
           border: Border.all(color: AppColors.borderDefault, width: 1),
         ),
         child: Icon(icon, color: AppColors.textPrimary, size: 20),
+      ),
+    );
+  }
+}
+
+class _AppBarQuickButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _AppBarQuickButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.3), width: 1),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
       ),
     );
   }

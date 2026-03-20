@@ -17,6 +17,7 @@ import '../../screens/Settings/settings_page.dart';
 import '../../screens/Recipe/recipe_list_screen.dart';
 import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../screens/pallet/customers_pallets_screen.dart';
+import '../../Screens/Invoices/invoices_screen.dart';
 import '../../services/logout_service.dart';
 
 class _NavItem {
@@ -27,22 +28,22 @@ class _NavItem {
   const _NavItem({required this.icon, required this.label, required this.index});
 }
 
-const _navItems = [
+const _warehouseItems = [
   _NavItem(icon: Icons.dashboard_rounded, label: 'Prehľad', index: 0),
   _NavItem(icon: Icons.inventory_2_rounded, label: 'Produkty', index: 1),
   _NavItem(icon: Icons.warehouse_rounded, label: 'Sklady', index: 10),
-  _NavItem(icon: Icons.swap_horiz_rounded, label: 'Pohyby skladu', index: 11),
   _NavItem(icon: Icons.people_rounded, label: 'Zákazníci', index: 2),
   _NavItem(icon: Icons.local_shipping_rounded, label: 'Dodávatelia', index: 3),
+  _NavItem(icon: Icons.request_quote_rounded, label: 'Cenové ponuky', index: 7),
+  _NavItem(icon: Icons.local_shipping_outlined, label: 'Zákazníci / Palety', index: 14),
+  _NavItem(icon: Icons.receipt_long_rounded, label: 'Faktúry', index: 15),
+  _NavItem(icon: Icons.bar_chart_rounded, label: 'Štatistiky', index: 8),
+];
+
+const _productionItems = [
   _NavItem(icon: Icons.precision_manufacturing_rounded, label: 'Výroba', index: 4),
   _NavItem(icon: Icons.menu_book_rounded, label: 'Receptúry', index: 12),
   _NavItem(icon: Icons.assignment_rounded, label: 'Výrobné príkazy', index: 13),
-  _NavItem(icon: Icons.arrow_downward_rounded, label: 'Príjemky', index: 5),
-  _NavItem(icon: Icons.arrow_upward_rounded, label: 'Výdajky', index: 6),
-  _NavItem(icon: Icons.request_quote_rounded, label: 'Cenové ponuky', index: 7),
-  _NavItem(icon: Icons.local_shipping_outlined, label: 'Zákazníci / Palety', index: 14),
-  _NavItem(icon: Icons.bar_chart_rounded, label: 'Štatistiky', index: 8),
-  _NavItem(icon: Icons.settings_rounded, label: 'Nastavenia', index: 9),
 ];
 
 class AppSidebar extends StatefulWidget {
@@ -69,6 +70,7 @@ class AppSidebar extends StatefulWidget {
 class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateMixin {
   bool _isCollapsed = false;
   bool _productsExpanded = false;
+  bool _warehousesExpanded = false;
   late AnimationController _animController;
   late Animation<double> _widthAnim;
   late Animation<double> _labelOpacityAnim;
@@ -152,6 +154,9 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
       case 14:
         Navigator.push(context, _fadeRoute(const CustomersPalletsScreen()));
         break;
+      case 15:
+        Navigator.push(context, _fadeRoute(const InvoicesScreen()));
+        break;
     }
   }
 
@@ -204,26 +209,58 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
                       vertical: 4,
                       horizontal: isNarrow ? 4 : 8,
                     ),
-                    children: _navItems.map((item) {
-                      if (item.index == 1) {
-                        return _SidebarProductsExpandable(
-                          isActive: widget.activeIndex == 1,
+                    children: [
+                      ..._warehouseItems.map((item) {
+                        if (item.index == 1) {
+                          return _SidebarProductsExpandable(
+                            isActive: widget.activeIndex == 1,
+                            labelOpacity: labelOpacity,
+                            isExpanded: _productsExpanded,
+                            isNarrow: isNarrow,
+                            onToggle: () => setState(() => _productsExpanded = !_productsExpanded),
+                            onNavigateToSupplies: () => _navigate(context, 1),
+                            onAddProduct: widget.onAddProduct,
+                          );
+                        }
+                        if (item.index == 10) {
+                          return _SidebarWarehousesExpandable(
+                            isActive: widget.activeIndex == 10 || widget.activeIndex == 11 || widget.activeIndex == 5 || widget.activeIndex == 6,
+                            labelOpacity: labelOpacity,
+                            isExpanded: _warehousesExpanded,
+                            isNarrow: isNarrow,
+                            onToggle: () => setState(() => _warehousesExpanded = !_warehousesExpanded),
+                            onNavigateToWarehouses: () => _navigate(context, 10),
+                            onNavigateToMovements: () => _navigate(context, 11),
+                            onNavigateToReceipts: () => _navigate(context, 5),
+                            onNavigateToStockOut: () => _navigate(context, 6),
+                            userRole: widget.userRole,
+                          );
+                        }
+                        return _SidebarNavItem(
+                          item: item,
+                          isActive: item.index == widget.activeIndex,
                           labelOpacity: labelOpacity,
-                          isExpanded: _productsExpanded,
                           isNarrow: isNarrow,
-                          onToggle: () => setState(() => _productsExpanded = !_productsExpanded),
-                          onNavigateToSupplies: () => _navigate(context, 1),
-                          onAddProduct: widget.onAddProduct,
+                          onTap: () => _navigate(context, item.index),
                         );
-                      }
-                      return _SidebarNavItem(
+                      }),
+                      _SidebarDivider(labelOpacity: labelOpacity, label: 'Výroba'),
+                      ..._productionItems.map((item) => _SidebarNavItem(
                         item: item,
                         isActive: item.index == widget.activeIndex,
                         labelOpacity: labelOpacity,
                         isNarrow: isNarrow,
                         onTap: () => _navigate(context, item.index),
-                      );
-                    }).toList(),
+                      )),
+                      _SidebarDivider(labelOpacity: labelOpacity, label: ''),
+                      _SidebarNavItem(
+                        item: const _NavItem(icon: Icons.settings_rounded, label: 'Nastavenia', index: 9),
+                        isActive: 9 == widget.activeIndex,
+                        labelOpacity: labelOpacity,
+                        isNarrow: isNarrow,
+                        onTap: () => _navigate(context, 9),
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(height: 1),
@@ -580,6 +617,44 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
   }
 }
 
+class _SidebarDivider extends StatelessWidget {
+  final double labelOpacity;
+  final String label;
+
+  const _SidebarDivider({required this.labelOpacity, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isNarrow = labelOpacity < 0.01;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: isNarrow
+          ? const Divider(height: 1, color: AppColors.borderSubtle)
+          : Row(
+              children: [
+                Expanded(child: Divider(height: 1, color: AppColors.borderSubtle)),
+                Opacity(
+                  opacity: labelOpacity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      label.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(height: 1, color: AppColors.borderSubtle)),
+              ],
+            ),
+    );
+  }
+}
+
 class _SidebarProductsExpandable extends StatelessWidget {
   final bool isActive;
   final double labelOpacity;
@@ -606,7 +681,7 @@ class _SidebarProductsExpandable extends StatelessWidget {
       children: [
         _SidebarNavItem(
           item: const _NavItem(icon: Icons.inventory_2_rounded, label: 'Produkty', index: 1),
-          isActive: isActive && !isExpanded,
+          isActive: isActive || isExpanded,
           labelOpacity: labelOpacity,
           isNarrow: isNarrow,
           onTap: onToggle,
@@ -615,7 +690,7 @@ class _SidebarProductsExpandable extends StatelessWidget {
             child: Icon(
               isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
               size: 20,
-              color: AppColors.textSecondary,
+              color: isExpanded ? AppColors.accentGold : AppColors.textSecondary,
             ),
           ),
         ),
@@ -666,6 +741,94 @@ class _SidebarProductsExpandable extends StatelessWidget {
   }
 }
 
+class _SidebarWarehousesExpandable extends StatelessWidget {
+  final bool isActive;
+  final double labelOpacity;
+  final bool isExpanded;
+  final bool isNarrow;
+  final VoidCallback onToggle;
+  final VoidCallback onNavigateToWarehouses;
+  final VoidCallback onNavigateToMovements;
+  final VoidCallback onNavigateToReceipts;
+  final VoidCallback onNavigateToStockOut;
+  final String userRole;
+
+  const _SidebarWarehousesExpandable({
+    required this.isActive,
+    required this.labelOpacity,
+    required this.isExpanded,
+    required this.isNarrow,
+    required this.onToggle,
+    required this.onNavigateToWarehouses,
+    required this.onNavigateToMovements,
+    required this.onNavigateToReceipts,
+    required this.onNavigateToStockOut,
+    required this.userRole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SidebarNavItem(
+          item: const _NavItem(icon: Icons.warehouse_rounded, label: 'Sklady', index: 10),
+          isActive: isActive || isExpanded,
+          labelOpacity: labelOpacity,
+          isNarrow: isNarrow,
+          onTap: onToggle,
+          trailing: Opacity(
+            opacity: labelOpacity,
+            child: Icon(
+              isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              size: 20,
+              color: isExpanded ? AppColors.accentGold : AppColors.textSecondary,
+            ),
+          ),
+        ),
+        if (isExpanded) ...[
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.warehouse_rounded,
+              label: 'Sklady',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToWarehouses,
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.swap_horiz_rounded,
+              label: 'Pohyby skladu',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToMovements,
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.arrow_downward_rounded,
+              label: 'Príjemky',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToReceipts,
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.arrow_upward_rounded,
+              label: 'Výdajky',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToStockOut,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _SidebarSubItem extends StatefulWidget {
   final IconData icon;
   final String label;
@@ -700,6 +863,9 @@ class _SidebarSubItemState extends State<_SidebarSubItem> {
             decoration: BoxDecoration(
               color: _hovered ? AppColors.bgElevated : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
+              border: const Border(
+                left: BorderSide(color: AppColors.accentGold, width: 2),
+              ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(

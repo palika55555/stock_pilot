@@ -7,7 +7,9 @@ import '../sync/sync_event.dart';
 import '../sync/sync_manager.dart';
 import '../../models/company.dart';
 import '../../models/customer.dart';
+import '../../models/project.dart';
 import '../../models/product.dart';
+import '../../models/invoice.dart';
 import '../../models/quote.dart';
 import '../../models/receipt.dart';
 import '../../models/supplier.dart';
@@ -22,6 +24,7 @@ import '../../models/transport.dart';
 import '../../models/app_notification.dart';
 import '../../models/product_kind.dart';
 import '../../models/receptura_polozka.dart';
+import '../../models/pricing_rule.dart';
 import '../../models/production_batch.dart';
 import '../../models/production_batch_recipe_item.dart';
 import '../../models/pallet.dart';
@@ -47,18 +50,21 @@ class DatabaseService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kCurrentUserIdKey, userId);
     print('DEBUG setCurrentUser: $userId | instance: ${_instance.hashCode}');
+    await _instance.backfillInvoiceUserIdsForCurrentUser();
   }
 
   /// Restore current user from memory, then UserSession (reliable on Windows), then SharedPreferences.
   static Future<String?> restoreCurrentUser() async {
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       print('DEBUG restoreCurrentUser: already set to $_currentUserId | instance: ${_instance.hashCode}');
+      await _instance.backfillInvoiceUserIdsForCurrentUser();
       return _currentUserId;
     }
     final fromSession = UserSession.userId;
     if (fromSession != null && fromSession.isNotEmpty) {
       _currentUserId = fromSession;
       print('DEBUG restoreCurrentUser: from UserSession $_currentUserId | instance: ${_instance.hashCode}');
+      await _instance.backfillInvoiceUserIdsForCurrentUser();
       return _currentUserId;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -68,6 +74,9 @@ class DatabaseService {
     print('DEBUG SharedPrefs current_user_id = $value');
     _currentUserId = value;
     print('DEBUG restoreCurrentUser: restored $_currentUserId | instance: ${_instance.hashCode}');
+    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      await _instance.backfillInvoiceUserIdsForCurrentUser();
+    }
     return _currentUserId;
   }
 
@@ -106,6 +115,7 @@ class DatabaseService {
       'notification_settings',
       'app_notifications',
       'suppliers',
+      'pricing_rules',
       'receptura_polozky',
       'recipe_ingredients',
       'recipes',
@@ -146,6 +156,8 @@ class DatabaseService {
       'inbound_receipts',
       'quotes',
       'quote_items',
+      'invoices',
+      'invoice_items',
       'production_batches',
       'production_batch_recipe',
       'pallets',
@@ -157,6 +169,7 @@ class DatabaseService {
       'production_orders',
       'recipes',
       'recipe_ingredients',
+      'pricing_rules',
       'receptura_polozky',
       'suppliers',
       'app_notifications',
@@ -218,7 +231,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 35,
+      version: 36,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -390,6 +403,71 @@ class DatabaseService {
         FOREIGN KEY (product_unique_id) REFERENCES products(unique_id)
       )
     ''');
+    // ── Faktúry (SK legislatíva §71 Zák. DPH) ─────────────────────────────
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        invoice_number TEXT UNIQUE NOT NULL,
+        invoice_type TEXT NOT NULL DEFAULT 'issuedInvoice',
+        issue_date TEXT NOT NULL,
+        tax_date TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        customer_id INTEGER,
+        customer_name TEXT,
+        customer_address TEXT,
+        customer_city TEXT,
+        customer_postal_code TEXT,
+        customer_ico TEXT,
+        customer_dic TEXT,
+        customer_ic_dph TEXT,
+        customer_country TEXT NOT NULL DEFAULT 'SK',
+        quote_id INTEGER,
+        quote_number TEXT,
+        project_id INTEGER,
+        project_name TEXT,
+        payment_method TEXT NOT NULL DEFAULT 'transfer',
+        variable_symbol TEXT,
+        constant_symbol TEXT NOT NULL DEFAULT '0308',
+        specific_symbol TEXT,
+        total_without_vat REAL NOT NULL DEFAULT 0,
+        total_vat REAL NOT NULL DEFAULT 0,
+        total_with_vat REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'draft',
+        notes TEXT,
+        original_invoice_id INTEGER,
+        original_invoice_number TEXT,
+        is_vat_payer INTEGER NOT NULL DEFAULT 1,
+        qr_string TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        user_id INTEGER,
+        product_unique_id TEXT,
+        product_name TEXT,
+        qty REAL NOT NULL DEFAULT 1,
+        unit TEXT NOT NULL DEFAULT 'ks',
+        unit_price REAL NOT NULL DEFAULT 0,
+        discount_percent INTEGER NOT NULL DEFAULT 0,
+        vat_percent INTEGER NOT NULL DEFAULT 23,
+        item_type TEXT NOT NULL DEFAULT 'Tovar',
+        description TEXT,
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+      )
+    ''');
+    final invoicesInfo = await db.rawQuery('PRAGMA table_info(invoices)');
+    if (!invoicesInfo.any((c) => c['name'] == 'user_id')) {
+      await db.execute('ALTER TABLE invoices ADD COLUMN user_id INTEGER');
+    }
+    final invoiceItemsInfo = await db.rawQuery('PRAGMA table_info(invoice_items)');
+    if (!invoiceItemsInfo.any((c) => c['name'] == 'user_id')) {
+      await db.execute('ALTER TABLE invoice_items ADD COLUMN user_id INTEGER');
+    }
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)');
     await db.execute('''
       CREATE TABLE IF NOT EXISTS inbound_receipts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -615,6 +693,25 @@ class DatabaseService {
         FOREIGN KEY (id_suroviny) REFERENCES products(unique_id)
       )
     ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pricing_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_unique_id TEXT NOT NULL,
+        user_id TEXT,
+        label TEXT,
+        price REAL NOT NULL,
+        quantity_from REAL NOT NULL DEFAULT 1,
+        quantity_to REAL,
+        customer_group TEXT,
+        valid_from TEXT,
+        valid_to TEXT,
+        FOREIGN KEY (product_unique_id) REFERENCES products(unique_id)
+      )
+    ''');
+    final prInfo = await db.rawQuery('PRAGMA table_info(pricing_rules)');
+    if (prInfo.isNotEmpty && !prInfo.any((c) => c['name'] == 'user_id')) {
+      await db.execute('ALTER TABLE pricing_rules ADD COLUMN user_id TEXT');
+    }
     final whInfo = await db.rawQuery('PRAGMA table_info(warehouses)');
     if (!whInfo.any((c) => c['name'] == 'warehouse_type')) {
       await db.execute("ALTER TABLE warehouses ADD COLUMN warehouse_type TEXT DEFAULT 'Predaj'");
@@ -736,6 +833,7 @@ class DatabaseService {
       'stock_out_items', 'stock_movements', 'warehouse_transfers', 'transports',
       'production_orders', 'recipes', 'recipe_ingredients', 'receptura_polozky',
       'suppliers', 'app_notifications', 'notification_settings', 'notification_preferences',
+      'projects',
     ];
     for (final table in dataTables) {
       try {
@@ -824,6 +922,38 @@ class DatabaseService {
         }
         if (!soiInfo.any((c) => c['name'] == 'expiry_date')) {
           await db.execute('ALTER TABLE stock_out_items ADD COLUMN expiry_date TEXT');
+        }
+      }
+    } catch (_) {}
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_number TEXT NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        customer_id INTEGER,
+        customer_name TEXT,
+        site_address TEXT,
+        site_city TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        budget REAL,
+        responsible_person TEXT,
+        notes TEXT,
+        created_at TEXT,
+        user_id TEXT
+      )
+    ''');
+
+    try {
+      final quotesInfo = await db.rawQuery('PRAGMA table_info(quotes)');
+      if (quotesInfo.isNotEmpty) {
+        if (!quotesInfo.any((c) => c['name'] == 'project_id')) {
+          await db.execute('ALTER TABLE quotes ADD COLUMN project_id INTEGER');
+        }
+        if (!quotesInfo.any((c) => c['name'] == 'project_name')) {
+          await db.execute('ALTER TABLE quotes ADD COLUMN project_name TEXT');
         }
       }
     } catch (_) {}
@@ -1593,6 +1723,21 @@ class DatabaseService {
       }
     }
 
+    // Version 36: add missing user_id to invoices tables for local per-user filtering.
+    if (oldVersion < 36) {
+      final invoicesInfo = await db.rawQuery('PRAGMA table_info(invoices)');
+      if (!invoicesInfo.any((c) => c['name'] == 'user_id')) {
+        await db.execute('ALTER TABLE invoices ADD COLUMN user_id INTEGER');
+      }
+
+      final invoiceItemsInfo = await db.rawQuery('PRAGMA table_info(invoice_items)');
+      if (!invoiceItemsInfo.any((c) => c['name'] == 'user_id')) {
+        await db.execute('ALTER TABLE invoice_items ADD COLUMN user_id INTEGER');
+      }
+
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)');
+    }
+
     // Version 30: per-user data isolation – add user_id to all data tables
     if (oldVersion < 30) {
       const dataTables = [
@@ -2172,6 +2317,65 @@ class DatabaseService {
       where: 'receptura_karta_id = ? AND user_id = ?',
       whereArgs: [recepturaKartaId, _currentUserId],
     );
+  }
+
+  // Pricing Rules (Rozšírená cenotvorba)
+  Future<List<PricingRule>> getPricingRules(String productUniqueId) async {
+    final db = await database;
+    if (_currentUserId == null) return [];
+    final maps = await db.query(
+      'pricing_rules',
+      where: 'product_unique_id = ? AND user_id = ?',
+      whereArgs: [productUniqueId, _currentUserId],
+      orderBy: 'quantity_from ASC, price ASC',
+    );
+    return maps.map((m) => PricingRule.fromMap(m)).toList();
+  }
+
+  Future<int> insertPricingRule(PricingRule rule) async {
+    final db = await database;
+    final map = Map<String, dynamic>.from(rule.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    final result = await db.insert('pricing_rules', map);
+    DataChangeNotifier.notify();
+    return result;
+  }
+
+  Future<int> updatePricingRule(PricingRule rule) async {
+    if (rule.id == null || _currentUserId == null) return 0;
+    final db = await database;
+    final result = await db.update(
+      'pricing_rules',
+      rule.toMap(),
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [rule.id, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+    return result;
+  }
+
+  Future<int> deletePricingRule(int id) async {
+    if (_currentUserId == null) return 0;
+    final db = await database;
+    final result = await db.delete(
+      'pricing_rules',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+    return result;
+  }
+
+  Future<int> deletePricingRulesByProductId(String productUniqueId) async {
+    if (_currentUserId == null) return 0;
+    final db = await database;
+    final result = await db.delete(
+      'pricing_rules',
+      where: 'product_unique_id = ? AND user_id = ?',
+      whereArgs: [productUniqueId, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+    return result;
   }
 
   // Recipes (Receptúry)
@@ -2891,6 +3095,72 @@ class DatabaseService {
     return _r;
   }
 
+  // Project CRUD
+  Future<int> insertProject(Project project) async {
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
+    if (_currentUserId == null) throw Exception('User not logged in – cannot insert project');
+    final db = await database;
+    final map = Map<String, dynamic>.from(project.toMap());
+    map['user_id'] = _currentUserId;
+    final r = await db.insert('projects', map);
+    DataChangeNotifier.notify();
+    return r;
+  }
+
+  Future<List<Project>> getProjects() async {
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
+    if (_currentUserId == null) return [];
+    final db = await database;
+    final maps = await db.query('projects', where: _userWhere, whereArgs: _userArgs, orderBy: 'created_at DESC');
+    return maps.map((m) => Project.fromMap(m)).toList();
+  }
+
+  Future<List<Project>> getActiveProjects() async {
+    if (_currentUserId == null) await DatabaseService.restoreCurrentUser();
+    if (_currentUserId == null) return [];
+    final db = await database;
+    final maps = await db.query('projects', where: 'user_id = ? AND status = ?', whereArgs: [_currentUserId, 'active'], orderBy: 'created_at DESC');
+    return maps.map((m) => Project.fromMap(m)).toList();
+  }
+
+  Future<Project?> getProjectById(int id) async {
+    if (_currentUserId == null) return null;
+    final db = await database;
+    final maps = await db.query('projects', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    if (maps.isEmpty) return null;
+    return Project.fromMap(maps.first);
+  }
+
+  Future<List<Project>> getProjectsByCustomerId(int customerId) async {
+    if (_currentUserId == null) return [];
+    final db = await database;
+    final maps = await db.query('projects', where: 'customer_id = ? AND user_id = ?', whereArgs: [customerId, _currentUserId], orderBy: 'created_at DESC');
+    return maps.map((m) => Project.fromMap(m)).toList();
+  }
+
+  Future<int> updateProject(Project project) async {
+    if (project.id == null || _currentUserId == null) return 0;
+    final db = await database;
+    final r = await db.update('projects', project.toMap(), where: 'id = ? AND user_id = ?', whereArgs: [project.id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return r;
+  }
+
+  Future<int> deleteProject(int id) async {
+    if (_currentUserId == null) return 0;
+    final db = await database;
+    final r = await db.delete('projects', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return r;
+  }
+
+  Future<int> getNextProjectSequence() async {
+    if (_currentUserId == null) return 1;
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as cnt FROM projects WHERE user_id = ?', [_currentUserId]);
+    return ((result.first['cnt'] as int?) ?? 0) + 1;
+  }
+
   /// Nahradí lokálnych zákazníkov zoznamom z backendu. Vkladá s user_id = _currentUserId.
   /// POZOR: deštruktívna operácia – maže všetkých lokálnych zákazníkov. Používaj len pri prvom sync.
   Future<void> replaceCustomersFromBackend(List<Map<String, dynamic>> list) async {
@@ -3090,6 +3360,150 @@ class DatabaseService {
       map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  // ─── Invoice CRUD ────────────────────────────────────────────────────────
+
+  /// Staré záznamy vytvorené pred stĺpcom `user_id` majú NULL – priradí ich aktuálne prihlásenému používateľovi.
+  /// Idempotentné (bezpečné volať opakovane). Volá sa pri nastavení aktuálneho používateľa.
+  Future<void> backfillInvoiceUserIdsForCurrentUser() async {
+    final uid = _currentUserId;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final db = await database;
+      final invCols = await db.rawQuery('PRAGMA table_info(invoices)');
+      if (!invCols.any((c) => c['name'] == 'user_id')) return;
+      final itemCols = await db.rawQuery('PRAGMA table_info(invoice_items)');
+      if (!itemCols.any((c) => c['name'] == 'user_id')) return;
+
+      await db.rawUpdate(
+        'UPDATE invoices SET user_id = ? WHERE user_id IS NULL',
+        [uid],
+      );
+      await db.execute('''
+        UPDATE invoice_items SET user_id = (
+          SELECT user_id FROM invoices WHERE invoices.id = invoice_items.invoice_id
+        ) WHERE user_id IS NULL
+      ''');
+    } catch (e, st) {
+      print('backfillInvoiceUserIdsForCurrentUser: $e\n$st');
+    }
+  }
+
+  /// Generuje ďalšie číslo faktúry pre daný typ (napr. FAK-2026-0001).
+  Future<String> getNextInvoiceNumber(String prefix) async {
+    Database db = await database;
+    if (_currentUserId == null) return '$prefix-${DateTime.now().year}-0001';
+    final year = DateTime.now().year;
+    final fullPrefix = '$prefix-$year-';
+    final result = await db.rawQuery(
+      'SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? AND user_id = ? ORDER BY invoice_number DESC LIMIT 1',
+      ['$fullPrefix%', _currentUserId],
+    );
+    if (result.isEmpty) return '${fullPrefix}0001';
+    final last = result.first['invoice_number'] as String;
+    final numPart = last.replaceFirst(fullPrefix, '');
+    final next = (int.tryParse(numPart) ?? 0) + 1;
+    return '$fullPrefix${next.toString().padLeft(4, '0')}';
+  }
+
+  Future<int> insertInvoice(Invoice invoice) async {
+    Database db = await database;
+    final map = Map<String, dynamic>.from(invoice.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    final _r = await db.insert('invoices', map);
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<Invoice?> getInvoiceById(int id) async {
+    Database db = await database;
+    if (_currentUserId == null) return null;
+    final maps = await db.query('invoices', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    if (maps.isEmpty) return null;
+    return Invoice.fromMap(maps.first);
+  }
+
+  Future<List<Invoice>> getInvoices({String? status, String? type}) async {
+    Database db = await database;
+    if (_currentUserId == null) return [];
+    String where = 'user_id = ?';
+    List<dynamic> args = [_currentUserId];
+    if (status != null) { where += ' AND status = ?'; args.add(status); }
+    if (type   != null) { where += ' AND invoice_type = ?'; args.add(type); }
+    final maps = await db.query('invoices', where: where, whereArgs: args, orderBy: 'issue_date DESC, id DESC');
+    return maps.map((m) => Invoice.fromMap(m)).toList();
+  }
+
+  Future<List<Invoice>> getInvoicesByCustomerId(int customerId) async {
+    Database db = await database;
+    if (_currentUserId == null) return [];
+    final maps = await db.query(
+      'invoices',
+      where: 'user_id = ? AND customer_id = ?',
+      whereArgs: [_currentUserId, customerId],
+      orderBy: 'issue_date DESC',
+    );
+    return maps.map((m) => Invoice.fromMap(m)).toList();
+  }
+
+  Future<int> updateInvoice(Invoice invoice) async {
+    if (invoice.id == null || _currentUserId == null) return 0;
+    Database db = await database;
+    final _r = await db.update(
+      'invoices',
+      invoice.toMap(),
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [invoice.id, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<int> deleteInvoice(int id) async {
+    Database db = await database;
+    if (_currentUserId == null) return 0;
+    final _r = await db.delete('invoices', where: 'id = ? AND user_id = ?', whereArgs: [id, _currentUserId]);
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<List<InvoiceItem>> getInvoiceItems(int invoiceId) async {
+    Database db = await database;
+    if (_currentUserId == null) return [];
+    final maps = await db.query('invoice_items', where: 'invoice_id = ?', whereArgs: [invoiceId], orderBy: 'id ASC');
+    return maps.map((m) => InvoiceItem.fromMap(m)).toList();
+  }
+
+  Future<int> insertInvoiceItem(InvoiceItem item) async {
+    Database db = await database;
+    final map = Map<String, dynamic>.from(item.toMap());
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
+    final _r = await db.insert('invoice_items', map);
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<int> updateInvoiceItem(InvoiceItem item) async {
+    if (item.id == null) return 0;
+    Database db = await database;
+    final _r = await db.update('invoice_items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<int> deleteInvoiceItem(int id) async {
+    Database db = await database;
+    final _r = await db.delete('invoice_items', where: 'id = ?', whereArgs: [id]);
+    DataChangeNotifier.notify();
+    return _r;
+  }
+
+  Future<int> deleteInvoiceItemsByInvoiceId(int invoiceId) async {
+    Database db = await database;
+    final _r = await db.delete('invoice_items', where: 'invoice_id = ?', whereArgs: [invoiceId]);
     DataChangeNotifier.notify();
     return _r;
   }
