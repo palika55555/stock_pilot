@@ -399,16 +399,36 @@ Future<List<Map<String, dynamic>>?> fetchCustomersFromBackend() async {
 
 /// Stiahne zoznam produktov z backendu (EAN priradené na webe sa tým dostanú do apky).
 /// [token] z [fetchBackendToken]. Pri null/chybe vráti null.
+/// Načíta všetky stránky (API má max. 100 položiek na stránku pri ?page=).
 Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? token) async {
   try {
-    final uri = Uri.parse('$_apiBase/products');
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
-    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
-    if (res.statusCode < 200 || res.statusCode >= 300) return null;
-    final list = jsonDecode(res.body) as List<dynamic>?;
-    if (list == null) return null;
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    const pageSize = 100;
+    final all = <Map<String, dynamic>>[];
+    var page = 1;
+    while (true) {
+      final uri = Uri.parse('$_apiBase/products').replace(
+        queryParameters: {'page': '$page', 'limit': '$pageSize'},
+      );
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic> && decoded['items'] is List) {
+        final items = decoded['items'] as List<dynamic>;
+        final total = (decoded['total'] as num?)?.toInt() ?? 0;
+        for (final e in items) {
+          if (e is Map) all.add(Map<String, dynamic>.from(e));
+        }
+        if (all.length >= total || items.isEmpty) break;
+        page++;
+        continue;
+      }
+      final list = decoded as List<dynamic>?;
+      if (list == null) return null;
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return all;
   } catch (_) {
     return null;
   }

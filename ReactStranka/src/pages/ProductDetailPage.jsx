@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './ProductDetailPage.css'
 import { API_BASE_FOR_CALLS } from '../config'
-import { getAuth, getAuthHeaders, clearAuth } from '../utils/auth'
+import { getAuth, getAuthHeaders } from '../utils/auth'
+import ProductPricingRulesList from '../components/products/ProductPricingRulesList'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
@@ -58,11 +59,6 @@ export default function ProductDetailPage() {
     return () => { cancelled = true }
   }, [auth, uniqueId])
 
-  const handleLogout = () => {
-    clearAuth()
-    navigate('/', { replace: true })
-  }
-
   if (!auth) return null
 
   return (
@@ -101,6 +97,10 @@ export default function ProductDetailPage() {
               />
               <DetailRow label="Identifikátor" value={product.unique_id} />
             </dl>
+            <ProductPricingRulesList auth={auth} productUniqueId={product.unique_id} />
+            <p className="product-detail-footnote">
+              Mazanie a archivácia produktov je v mobilnej aplikácii Stock Pilot; na webe ich len upravujete a vytvárate.
+            </p>
           </>
         ) : null}
       </main>

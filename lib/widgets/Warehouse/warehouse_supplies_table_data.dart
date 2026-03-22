@@ -372,4 +372,14 @@ class WarehouseSuppliesTableData {
         return const DataCell(Text(''));
     }
   }
+
+  /// Extrahuje widget z [_cellForColumn] – určené pre vlastný virtualizovaný riadok.
+  static Widget buildCellWidget(
+    String id,
+    Product product,
+    bool lowStock,
+    TextStyle? rowStyle,
+    List<Warehouse> warehouses,
+  ) =>
+      _cellForColumn(id, product, lowStock, rowStyle, warehouses).child;
 }

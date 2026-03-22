@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import './DetailDrawer.css'
 
 /**
@@ -25,14 +25,28 @@ export default function DetailDrawer({
   saving = false,
   children,
 }) {
+  const panelRef = useRef(null)
+  const previouslyFocusedRef = useRef(null)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
+    previouslyFocusedRef.current = document.activeElement
+    requestAnimationFrame(() => {
+      const panel = panelRef.current
+      if (!panel) return
+      const closeBtn = panel.querySelector('.drawer-close')
+      if (closeBtn && typeof closeBtn.focus === 'function') closeBtn.focus()
+    })
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      const prev = previouslyFocusedRef.current
+      if (prev && typeof prev.focus === 'function') {
+        try { prev.focus() } catch (_) {}
+      }
     }
   }, [open, onClose])
 
@@ -41,9 +55,15 @@ export default function DetailDrawer({
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} aria-hidden="true" />
-      <div className="drawer-panel" role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        ref={panelRef}
+        className="drawer-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drawer-panel-title"
+      >
         <div className="drawer-header">
-          <h3 className="drawer-title">{title}</h3>
+          <h3 id="drawer-panel-title" className="drawer-title">{title}</h3>
           <div className="drawer-header-actions">
             {mode === 'view' && onEdit && (
               <button type="button" className="drawer-btn drawer-btn--edit" onClick={onEdit}>

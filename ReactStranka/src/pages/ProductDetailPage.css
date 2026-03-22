@@ -47,3 +47,11 @@
   word-break: break-word;
 }
 
+.product-detail-footnote {
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  max-width: 42rem;
+}
+

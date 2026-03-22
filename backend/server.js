@@ -883,16 +883,54 @@ apiRouter.get('/products', async (req, res) => {
   const search = (req.query.search ?? '').toString().trim().toLowerCase();
   const pageParam = req.query.page;
   const usePagination = pageParam !== undefined && pageParam !== '';
+  const warehouseRaw = req.query.warehouse_id;
+  const lowStock =
+    req.query.low_stock === '1' ||
+    req.query.low_stock === 'true' ||
+    req.query.low_stock === 'yes';
+  const stockOut =
+    req.query.stock_out === '1' ||
+    req.query.stock_out === 'true' ||
+    req.query.stock_out === 'yes';
+  const sortRaw = (req.query.sort ?? 'name_asc').toString().trim().toLowerCase();
+  const sortOrder =
+    sortRaw === 'name_desc'
+      ? 'name DESC'
+      : sortRaw === 'qty_asc'
+        ? 'qty ASC NULLS LAST, name ASC'
+        : sortRaw === 'qty_desc'
+          ? 'qty DESC NULLS LAST, name ASC'
+          : 'name ASC';
   try {
     const dataUserId = req.dataUserId ?? req.userId;
-    const baseSelect = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
-      FROM products WHERE user_id = $1 GROUP BY unique_id, name, plu, ean, unit`;
-    let innerQuery = baseSelect;
+    // Jedna položka na sklad (ako v apke). GROUP BY bez warehouse_id zlieval viac skladov do jedného riadku.
+    let innerQuery = `SELECT unique_id, warehouse_id, name, plu, ean, unit, COALESCE(qty, 0)::int AS qty
+      FROM products WHERE user_id = $1`;
     const params = [dataUserId];
+    let p = 2;
     if (search) {
       params.push(`%${search}%`);
-      innerQuery = `SELECT * FROM (${baseSelect}) AS agg
-        WHERE LOWER(name) LIKE $2 OR plu LIKE $2 OR (ean IS NOT NULL AND LOWER(ean) LIKE $2)`;
+      innerQuery += ` AND (LOWER(name) LIKE $${p} OR plu LIKE $${p} OR (ean IS NOT NULL AND LOWER(ean) LIKE $${p}))`;
+      p += 1;
+    }
+    if (warehouseRaw !== undefined && warehouseRaw !== '') {
+      const wr = String(warehouseRaw).trim().toLowerCase();
+      if (wr === 'none' || wr === 'null') {
+        innerQuery += ' AND warehouse_id IS NULL';
+      } else {
+        const wid = parseInt(String(warehouseRaw), 10);
+        if (!Number.isNaN(wid)) {
+          params.push(wid);
+          innerQuery += ` AND warehouse_id = $${p}`;
+          p += 1;
+        }
+      }
+    }
+    if (lowStock) {
+      innerQuery += ' AND COALESCE(qty, 0) > 0 AND COALESCE(qty, 0) < 5';
+    }
+    if (stockOut) {
+      innerQuery += ' AND COALESCE(qty, 0) = 0';
     }
 
     if (usePagination) {
@@ -908,7 +946,7 @@ apiRouter.get('/products', async (req, res) => {
 
       const limIdx = params.length + 1;
       const offIdx = params.length + 2;
-      const dataSql = `SELECT * FROM (${innerQuery}) AS sub ORDER BY name ASC LIMIT $${limIdx} OFFSET $${offIdx}`;
+      const dataSql = `SELECT * FROM (${innerQuery}) AS sub ORDER BY ${sortOrder} LIMIT $${limIdx} OFFSET $${offIdx}`;
       const dataParams = [...params, limitPerPage, offset];
       const { rows } = await pool.query(dataSql, dataParams);
 
@@ -921,7 +959,8 @@ apiRouter.get('/products', async (req, res) => {
     }
 
     let query = innerQuery;
-    query += ' ORDER BY name ASC LIMIT 200';
+    // Flutter (fetch bez ?page=) potrebuje celý katalóg; starý LIMIT 200 orezával zlúčenie EAN.
+    query += ` ORDER BY ${sortOrder} LIMIT 100000`;
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
@@ -968,6 +1007,15 @@ apiRouter.patch('/products/:uniqueId', async (req, res) => {
   const eanVal = ean != null ? String(ean).trim() || null : null;
   try {
     const dataUserId = req.dataUserId ?? req.userId;
+    if (eanVal) {
+      const dupEan = await pool.query(
+        `SELECT 1 FROM products WHERE user_id = $1 AND ean IS NOT NULL AND TRIM(ean) = $2 AND unique_id != $3 LIMIT 1`,
+        [dataUserId, eanVal, uniqueId]
+      );
+      if (dupEan.rows.length > 0) {
+        return res.status(409).json({ error: 'DUPLICATE_EAN', message: 'Iný produkt už má tento EAN.' });
+      }
+    }
     // Zisti pôvodnú hodnotu EAN (pre activity log)
     const before = await pool.query(
       'SELECT ean, version FROM products WHERE user_id = $1 AND unique_id = $2 LIMIT 1',
@@ -1796,6 +1844,24 @@ apiRouter.put('/products/:uniqueId', async (req, res) => {
   if (!name?.trim() || !plu?.trim()) return res.status(400).json({ error: 'Názov a PLU sú povinné' });
   try {
     const dataUserId = req.dataUserId ?? req.userId;
+    const pluTrim = String(plu).trim();
+    const dupPlu = await pool.query(
+      `SELECT 1 FROM products WHERE user_id = $1 AND TRIM(plu) = $2 AND unique_id != $3 LIMIT 1`,
+      [dataUserId, pluTrim, uniqueId]
+    );
+    if (dupPlu.rows.length > 0) {
+      return res.status(409).json({ error: 'DUPLICATE_PLU', message: 'Iný produkt už má toto PLU.' });
+    }
+    const eanTrim = ean != null ? String(ean).trim() : '';
+    if (eanTrim) {
+      const dupEan = await pool.query(
+        `SELECT 1 FROM products WHERE user_id = $1 AND ean IS NOT NULL AND TRIM(ean) = $2 AND unique_id != $3 LIMIT 1`,
+        [dataUserId, eanTrim, uniqueId]
+      );
+      if (dupEan.rows.length > 0) {
+        return res.status(409).json({ error: 'DUPLICATE_EAN', message: 'Iný produkt už má tento EAN.' });
+      }
+    }
     const { rowCount } = await pool.query(
       `UPDATE products SET name=$1, plu=$2, ean=$3, unit=$4 WHERE user_id=$5 AND unique_id=$6`,
       [name.trim(), plu.trim(), ean?.trim()||null, unit?.trim()||'ks', dataUserId, uniqueId]
@@ -2453,6 +2519,24 @@ apiRouter.post('/products', async (req, res) => {
   if (!unique_id || !name || !plu) return res.status(400).json({ error: 'unique_id, name a plu sú povinné' });
   try {
     const dataUserId = req.dataUserId ?? req.userId;
+    const pluTrim = String(plu).trim();
+    const dupPlu = await pool.query(
+      `SELECT 1 FROM products WHERE user_id = $1 AND TRIM(plu) = $2 AND unique_id != $3 LIMIT 1`,
+      [dataUserId, pluTrim, unique_id]
+    );
+    if (dupPlu.rows.length > 0) {
+      return res.status(409).json({ error: 'DUPLICATE_PLU', message: 'Iný produkt už má toto PLU.' });
+    }
+    const eanTrim = ean != null ? String(ean).trim() : '';
+    if (eanTrim) {
+      const dupEan = await pool.query(
+        `SELECT 1 FROM products WHERE user_id = $1 AND ean IS NOT NULL AND TRIM(ean) = $2 AND unique_id != $3 LIMIT 1`,
+        [dataUserId, eanTrim, unique_id]
+      );
+      if (dupEan.rows.length > 0) {
+        return res.status(409).json({ error: 'DUPLICATE_EAN', message: 'Iný produkt už má tento EAN.' });
+      }
+    }
     const { rows } = await pool.query(
       `INSERT INTO products (unique_id, warehouse_id, name, plu, ean, unit, qty, user_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

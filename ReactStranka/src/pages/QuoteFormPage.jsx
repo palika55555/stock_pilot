@@ -92,7 +92,7 @@ function ItemModal({ item, products, onSave, onClose }) {
                 {showProdList && filteredProds.length > 0 && (
                   <ul className="qf-autocomplete-list">
                     {filteredProds.map((p) => (
-                      <li key={p.unique_id}>
+                      <li key={`${p.unique_id}-${p.warehouse_id ?? ''}`}>
                         <button type="button" onMouseDown={() => selectProduct(p)}>
                           <span>{p.name}</span>
                           <span className="qf-prod-plu">PLU: {p.plu}</span>

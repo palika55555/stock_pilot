@@ -1,20 +1,20 @@
 import 'dart:async';
+import 'dart:math' show max;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/Products/add_product_modal_widget.dart';
 import '../../widgets/Warehouse/warehouse_supplies_column_selector.dart';
 import '../../widgets/Warehouse/warehouse_supplies_constants.dart';
-import '../../widgets/Warehouse/warehouse_supplies_desktop_scroll_behavior.dart';
 import '../../widgets/Warehouse/warehouse_supplies_header_widget.dart';
 import '../../widgets/Warehouse/warehouse_low_stock_modal_widget.dart';
-import '../../widgets/Warehouse/warehouse_supplies_pagination_bar.dart';
 import '../../widgets/Warehouse/warehouse_supplies_card_view_widget.dart';
 import '../../widgets/Warehouse/warehouse_quick_stats_widget.dart';
 import '../../widgets/Warehouse/warehouse_supplies_table_data.dart';
+import '../../widgets/Purchase/purchase_price_history_sheet_widget.dart';
 import '../../services/Product/product_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
-import '../../services/Database/database_service.dart';
+import '../../services/product_cache.dart';
 import '../../services/user_session.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
@@ -39,24 +39,19 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   final WarehouseService _warehouseService = WarehouseService();
   final TextEditingController _searchController = TextEditingController();
 
-  /// Stránkovanie: max. [kWarehouseSuppliesPageSize] záznamov na stránku (1, 2, 3…).
-  List<Product> _loadedProducts = [];
-  int _totalFilteredCount = 0;
+  List<Product> _allProducts = [];
+  List<Product> _filteredProducts = [];
 
-  /// 1-based index aktuálnej stránky.
+  /// 1-based index aktuálnej stránky (zachované kvôli kompatibilite).
   int _currentPage = 1;
   List<Warehouse> _warehouses = [];
   Warehouse? _selectedWarehouse;
   bool _isLoading = true;
-  /// Súhrnné štatistiky a celkový počet ešte nie sú z DB (bežia po načítaní stránky).
-  bool _countAndStatsPending = true;
-  int _loadGeneration = 0;
   bool _isAscending = false;
   bool _isCardView = false;
   String?
   _statusFilter; // null = všetky, 'neaktivne', 'nedostupne', 'cenotvorba', 'nizky_stav'
-  int _sortColumnIndex =
-      4; // stĺpec pre indikátor zoradenia (predvolene Predaj s DPH)
+  int _sortColumnIndex = -1; // -1 = žiadny vizuálny indikátor DataTable (používame vlastný header)
   /// Kľúč zoradenia zhodný s SQL v [DatabaseService.getWarehouseSuppliesPage].
   String _sortKey = 'price';
   double _statsTotalQty = 0;
@@ -64,12 +59,8 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   int _statsLowStock = 0;
   Timer? _searchDebounce;
 
-  int get _totalPages {
-    if (_countAndStatsPending) return 1;
-    if (_totalFilteredCount <= 0) return 1;
-    return (_totalFilteredCount + kWarehouseSuppliesPageSize - 1) ~/
-        kWarehouseSuppliesPageSize;
-  }
+  /// Vybrané produkty pre bulk akcie (admin).
+  final Set<String> _selectedIds = {};
 
   /// Viditeľnosť stĺpcov tabuľky (id -> true = zobrazený). Predvolene všetky true.
   Map<String, bool> _columnVisibility = {
@@ -80,120 +71,112 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchTextChanged);
-    // SQL queries bežia na separátnom vlákne – spúšťame okamžite (nečakáme na frame).
-    _loadProducts();
+    _loadAll();
     _loadWarehouses();
     _loadColumnVisibility();
   }
 
   void _onSearchTextChanged() {
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-      if (mounted) _reloadFilteredList();
+    _searchDebounce = Timer(const Duration(milliseconds: 50), () {
+      if (mounted) _applyFilterAndSort();
     });
   }
 
-  Future<void> _reloadFilteredList() async {
-    final gen = ++_loadGeneration;
-    setState(() {
-      _isLoading = true;
-      _loadedProducts = [];
-      _currentPage = 1;
-      _countAndStatsPending = true;
-      _totalFilteredCount = 0;
-    });
-    if (!mounted || gen != _loadGeneration) return;
-    final wid = _selectedWarehouse?.id;
-    final q = _searchController.text;
-    final sf = _statusFilter;
-    try {
-      // 1) Najprv stránka – tabuľka/karty sa zobrazia hneď (SUM/COUNT sú často pomalšie).
-      final page = await _productService.getWarehouseSuppliesPage(
-        warehouseId: wid,
-        searchQuery: q,
-        statusFilter: sf,
-        sortKey: _sortKey,
-        ascending: _isAscending,
-        limit: kWarehouseSuppliesPageSize,
-        offset: 0,
-      );
-      if (!mounted || gen != _loadGeneration) return;
-      setState(() {
-        _loadedProducts = page;
-        _currentPage = 1;
-        _isLoading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_tableVerticalController.hasClients) _tableVerticalController.jumpTo(0);
-        if (_cardGridScrollController.hasClients) _cardGridScrollController.jumpTo(0);
-      });
-
-      // 2) Súhrn + počet na pozadí (rovnaké filtre ako vyššie).
-      final aggAndCount = await Future.wait([
-        _productService.aggregateWarehouseSuppliesFiltered(
-          warehouseId: wid,
-          searchQuery: q,
-          statusFilter: sf,
-        ),
-        _productService.countWarehouseSuppliesFiltered(
-          warehouseId: wid,
-          searchQuery: q,
-          statusFilter: sf,
-        ),
-      ]);
-      if (!mounted || gen != _loadGeneration) return;
-      final agg = aggAndCount[0]
-          as ({double totalQty, double totalValue, int lowStockCount});
-      final total = aggAndCount[1] as int;
-      setState(() {
-        _statsTotalQty = agg.totalQty;
-        _statsTotalValue = agg.totalValue;
-        _statsLowStock = agg.lowStockCount;
-        _totalFilteredCount = total;
-        _countAndStatsPending = false;
-      });
-    } catch (_) {
-      if (mounted && gen == _loadGeneration) {
-        setState(() {
-          _isLoading = false;
-          _countAndStatsPending = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _goToPage(int page) async {
-    final last = _totalPages;
-    if (page < 1 || page > last) return;
-    if (page == _currentPage && !_isLoading) return;
+  /// Načíta VŠETKY produkty raz z ProductCache (SQLite query iba raz).
+  Future<void> _loadAll() async {
     setState(() => _isLoading = true);
-    if (!mounted) return;
     try {
-      final offset = (page - 1) * kWarehouseSuppliesPageSize;
-      final pageData = await _productService.getWarehouseSuppliesPage(
-        warehouseId: _selectedWarehouse?.id,
-        searchQuery: _searchController.text,
-        statusFilter: _statusFilter,
-        sortKey: _sortKey,
-        ascending: _isAscending,
-        limit: kWarehouseSuppliesPageSize,
-        offset: offset,
-      );
+      final all = await ProductCache.instance.load();
       if (!mounted) return;
-      setState(() {
-        _loadedProducts = pageData;
-        _currentPage = page;
-        _isLoading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_tableVerticalController.hasClients) _tableVerticalController.jumpTo(0);
-        if (_cardGridScrollController.hasClients) _cardGridScrollController.jumpTo(0);
-      });
+      _allProducts = List<Product>.from(all);
+      _applyFilterAndSort();
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Filtruje a triedí _allProducts v pamäti – žiadna DB query.
+  void _applyFilterAndSort() {
+    final q = _searchController.text.trim().toLowerCase();
+    final wid = _selectedWarehouse?.id;
+    final sf = _statusFilter;
+
+    var list = _allProducts.where((p) {
+      if (wid != null && p.warehouseId != wid) return false;
+      if (q.isNotEmpty &&
+          !p.name.toLowerCase().contains(q) &&
+          !p.plu.toLowerCase().contains(q) &&
+          !p.category.toLowerCase().contains(q)) return false;
+      switch (sf) {
+        case 'neaktivne':
+          if (p.isActive) return false;
+        case 'nedostupne':
+          if (!p.temporarilyUnavailable) return false;
+        case 'cenotvorba':
+          if (!p.hasExtendedPricing) return false;
+        case 'nizky_stav':
+          if (!(p.minQuantity > 0 && p.qty < p.minQuantity)) return false;
+      }
+      return true;
+    }).toList();
+
+    // Triedenie v pamäti
+    final asc = _isAscending ? 1 : -1;
+    list.sort((a, b) {
+      switch (_sortKey) {
+        case 'plu':
+          return asc * a.plu.compareTo(b.plu);
+        case 'name':
+          return asc * a.name.compareTo(b.name);
+        case 'price':
+          return asc * a.price.compareTo(b.price);
+        case 'qty':
+          return asc * a.qty.compareTo(b.qty);
+        case 'margin':
+          return asc * (a.marginPercent ?? 0.0).compareTo(b.marginPercent ?? 0.0);
+        case 'last_purchase_price_without_vat':
+          return asc *
+              a.lastPurchasePriceWithoutVat
+                  .compareTo(b.lastPurchasePriceWithoutVat);
+        case 'supplier_name':
+          return asc * (a.supplierName ?? '').compareTo(b.supplierName ?? '');
+        case 'warehouse_id':
+          return asc * (a.warehouseId ?? 0).compareTo(b.warehouseId ?? 0);
+        default:
+          return asc * a.name.compareTo(b.name);
+      }
+    });
+
+    // Štatistiky v pamäti
+    double tq = 0, tv = 0;
+    int ls = 0;
+    for (final p in list) {
+      tq += p.qty;
+      tv += p.price * p.qty;
+      if (p.minQuantity > 0 && p.qty < p.minQuantity) ls++;
+    }
+
+    if (mounted) {
+      setState(() {
+        _filteredProducts = list;
+        _statsTotalQty = tq;
+        _statsTotalValue = tv;
+        _statsLowStock = ls;
+        _isLoading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_tableVerticalController.hasClients) _tableVerticalController.jumpTo(0);
+        if (_cardGridScrollController.hasClients) _cardGridScrollController.jumpTo(0);
+      });
+    }
+  }
+
+  /// Invaliduje cache a obnoví zoznam (po create/edit/delete).
+  Future<void> _loadProducts() async {
+    ProductCache.instance.invalidate();
+    await _loadAll();
   }
 
   Future<void> _loadColumnVisibility() async {
@@ -217,7 +200,6 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
         .toList();
     await prefs.setStringList(kWarehouseSuppliesColumnPrefsKey, list);
   }
-
 
   Future<void> _confirmDeleteProduct(Product product) async {
     final l10n = AppLocalizations.of(context)!;
@@ -269,10 +251,6 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     if (mounted) setState(() => _warehouses = list);
   }
 
-  Future<void> _loadProducts() async {
-    await _reloadFilteredList();
-  }
-
   void _showWarehouseFilter() {
     showModalBottomSheet(
       context: context,
@@ -303,7 +281,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
               title: const Text('Všetky sklady'),
               onTap: () {
                 setState(() => _selectedWarehouse = null);
-                _reloadFilteredList();
+                _applyFilterAndSort();
                 Navigator.pop(context);
               },
             ),
@@ -325,7 +303,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                 ),
                 onTap: () {
                   setState(() => _selectedWarehouse = w);
-                  _reloadFilteredList();
+                  _applyFilterAndSort();
                   Navigator.pop(context);
                 },
               );
@@ -381,7 +359,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       showCheckmark: false,
       onSelected: (_) {
         setState(() => _statusFilter = isSelected ? null : value);
-        _reloadFilteredList();
+        _applyFilterAndSort();
       },
     );
   }
@@ -396,7 +374,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       _sortColumnIndex = columnIndex;
       _isAscending = ascending;
     });
-    _reloadFilteredList();
+    _applyFilterAndSort();
   }
 
   void _openAddProductModal() {
@@ -441,7 +419,6 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   @override
   Widget build(BuildContext context) {
     bool isAdmin = widget.userRole == 'admin';
-    double screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
@@ -477,9 +454,9 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                   totalValue: _statsTotalValue,
                   lowStockCount: _statsLowStock,
                   onLowStockTap: _showLowStockModal,
-                  isLoading: _countAndStatsPending,
+                  isLoading: _isLoading,
                 ),
-                Expanded(child: _buildContentCard(isAdmin, screenWidth)),
+                Expanded(child: _buildContentCard(isAdmin)),
               ],
             ),
           ),
@@ -496,16 +473,9 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   }
 
   Future<void> _showLowStockModal() async {
-    await DatabaseService.restoreCurrentUser();
-    if (UserSession.userId != null) {
-      DatabaseService.setCurrentUser(UserSession.userId!);
-    }
-    final lowStockProducts = await _productService
-        .getWarehouseSuppliesLowStockList(
-          warehouseId: _selectedWarehouse?.id,
-          searchQuery: _searchController.text,
-          statusFilter: _statusFilter,
-        );
+    final lowStockProducts = _filteredProducts
+        .where((p) => p.minQuantity > 0 && p.qty < p.minQuantity)
+        .toList();
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -518,7 +488,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
     );
   }
 
-  Widget _buildContentCard(bool isAdmin, double screenWidth) {
+  Widget _buildContentCard(bool isAdmin) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 5, 20, 0),
       decoration: BoxDecoration(
@@ -655,7 +625,7 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                 ],
               ),
             ),
-            // Obsah: tabuľka alebo karty + stránkovanie
+            // Obsah: tabuľka alebo karty
             Expanded(
               child: _isLoading
                   ? Center(
@@ -663,205 +633,306 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
                         color: AppColors.accentGold,
                       ),
                     )
-                  : Column(
-                      children: [
-                        Expanded(
-                          child: _isCardView
-                              ? WarehouseSuppliesCardView(
-                                  scrollController: _cardGridScrollController,
-                                  products: _loadedProducts,
-                                  onEditProduct: _openEditProductModal,
-                                  onDeleteProduct: isAdmin
-                                      ? _confirmDeleteProduct
-                                      : null,
-                                )
-                              : ScrollConfiguration(
-                                  behavior:
-                                      WarehouseSuppliesDesktopDragScrollBehavior(),
-                                  child: RefreshIndicator(
-                                  onRefresh: _loadProducts,
-                                  color: AppColors.accentGold,
-                                  child: Scrollbar(
-                                    controller: _tableVerticalController,
-                                    thumbVisibility: true,
-                                    child: SingleChildScrollView(
-                                      controller: _tableVerticalController,
-                                      physics: const AlwaysScrollableScrollPhysics(
-                                        parent: ClampingScrollPhysics(),
-                                      ),
-                                      scrollDirection: Axis.vertical,
-                                      child: Scrollbar(
-                                        controller: _horizontalController,
-                                        thumbVisibility: true,
-                                        child: SingleChildScrollView(
-                                          controller: _horizontalController,
-                                          scrollDirection: Axis.horizontal,
-                                          physics: const ClampingScrollPhysics(),
-                                          child: ConstrainedBox(
-                                            constraints: BoxConstraints(
-                                              minWidth: screenWidth >
-                                                      kWarehouseSuppliesMinTableWidth
-                                                  ? screenWidth
-                                                  : kWarehouseSuppliesMinTableWidth,
-                                            ),
-                                            child: (() {
-                                                final tableColumns =
-                                                    WarehouseSuppliesTableData
-                                                        .buildColumns(
-                                                  context,
-                                                  isAdmin: isAdmin,
-                                                  columnVisibility:
-                                                      _columnVisibility,
-                                                  onSort: ({
-                                                    required String sortKey,
-                                                    required int columnIndex,
-                                                    required bool ascending,
-                                                  }) =>
-                                                      _sort(
-                                                        sortKey: sortKey,
-                                                        columnIndex:
-                                                            columnIndex,
-                                                        ascending: ascending,
-                                                      ),
-                                                );
-                                                final sortIndex =
-                                                    _sortColumnIndex >= 0 &&
-                                                        _sortColumnIndex <
-                                                            tableColumns.length
-                                                    ? _sortColumnIndex
-                                                    : null;
-                                                return RepaintBoundary(
-                                                  child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    DataTable(
-                                                      columnSpacing: 20,
-                                                      headingRowColor:
-                                                          WidgetStateProperty.all(
-                                                            AppColors
-                                                                .bgElevated,
-                                                          ),
-                                                      headingTextStyle:
-                                                          TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color: AppColors
-                                                                .textPrimary,
-                                                          ),
-                                                      sortColumnIndex:
-                                                          sortIndex,
-                                                      sortAscending:
-                                                          _isAscending,
-                                                      showCheckboxColumn:
-                                                          isAdmin,
-                                                      columns: tableColumns,
-                                                      rows:
-                                                          _loadedProducts
-                                                              .isEmpty
-                                                          ? [
-                                                              DataRow(
-                                                                cells: [
-                                                                  DataCell(
-                                                                    Text(
-                                                                      'Žiadne produkty. Potiahnite nadol pre obnovenie.',
-                                                                      style: TextStyle(
-                                                                        color: AppColors
-                                                                            .textSecondary,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  ...List.generate(
-                                                                    tableColumns
-                                                                            .length -
-                                                                        1,
-                                                                    (_) =>
-                                                                        const DataCell(
-                                                                          Text(
-                                                                            '',
-                                                                          ),
-                                                                        ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ]
-                                                          : _loadedProducts.asMap().entries.map((
-                                                              entry,
-                                                            ) {
-                                                              final index =
-                                                                  entry.key;
-                                                              final product =
-                                                                  entry.value;
-                                                              final lowStock =
-                                                                  product.minQuantity >
-                                                                      0 &&
-                                                                  product.qty <
-                                                                      product
-                                                                          .minQuantity;
-                                                              return DataRow(
-                                                                color: WidgetStateProperty.resolveWith<Color?>(
-                                                                  (states) =>
-                                                                      index %
-                                                                              2 ==
-                                                                          0
-                                                                      ? AppColors
-                                                                            .bgCard
-                                                                      : AppColors
-                                                                            .bgElevated,
-                                                                ),
-                                                                cells: WarehouseSuppliesTableData
-                                                                    .buildRowCells(
-                                                                  context,
-                                                                  product:
-                                                                      product,
-                                                                  index: (_currentPage -
-                                                                              1) *
-                                                                          kWarehouseSuppliesPageSize +
-                                                                      index,
-                                                                  lowStock:
-                                                                      lowStock,
-                                                                  isAdmin:
-                                                                      isAdmin,
-                                                                  columnVisibility:
-                                                                      _columnVisibility,
-                                                                  warehouses:
-                                                                      _warehouses,
-                                                                  onEdit:
-                                                                      _openEditProductModal,
-                                                                  onDelete:
-                                                                      _confirmDeleteProduct,
-                                                                ),
-                                                              );
-                                                            }).toList(),
-                                                    ),
-                                                  ],
-                                                  ),
-                                                );
-                                              })(),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  ),
-                                ),
-                        WarehouseSuppliesPaginationBar(
-                          currentPage: _currentPage,
-                          totalPages: _totalPages,
-                          totalFilteredCount: _totalFilteredCount,
-                          pageSize: kWarehouseSuppliesPageSize,
-                          loadedOnPageCount: _loadedProducts.length,
-                          isLoading: _isLoading,
-                          countAndStatsPending: _countAndStatsPending,
-                          onGoToPage: _goToPage,
-                        ),
-                      ],
-                    ),
+                  : _isCardView
+                      ? WarehouseSuppliesCardView(
+                          scrollController: _cardGridScrollController,
+                          products: _filteredProducts,
+                          onEditProduct: _openEditProductModal,
+                          onDeleteProduct: isAdmin
+                              ? _confirmDeleteProduct
+                              : null,
+                        )
+                      : _buildVirtualTable(isAdmin),
             ),
           ],
         ),
       ),
     );
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Virtualizovaná tabuľka
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Virtualizovaná tabuľka – ListView.builder + itemExtent + sticky header.
+  /// Renderuje len viditeľné riadky (≈15-20 namiesto všetkých).
+  Widget _buildVirtualTable(bool isAdmin) {
+    const double headerH = 48.0;
+    const double rowH = 52.0;
+
+    // Vypočítaj šírku tabuľky podľa viditeľných stĺpcov
+    double tableW = (isAdmin ? 48.0 : 0.0) +
+        (kWarehouseColumnWidths['#'] ?? 44) +
+        (kWarehouseColumnWidths['plu'] ?? 90) +
+        (kWarehouseColumnWidths['name'] ?? 190) +
+        warehouseSupplyTableColumns
+            .where((c) => _columnVisibility[c.id] == true)
+            .fold(0.0, (s, c) => s + (kWarehouseColumnWidths[c.id] ?? 100)) +
+        (kWarehouseColumnWidths['actions'] ?? 116);
+
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final w = max(tableW, constraints.maxWidth);
+        return Column(
+          children: [
+            // ── Tabuľka ──────────────────────────────────────────
+            Expanded(
+              child: Scrollbar(
+                controller: _horizontalController,
+                thumbVisibility: true,
+                scrollbarOrientation: ScrollbarOrientation.bottom,
+                child: SingleChildScrollView(
+                  controller: _horizontalController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: w,
+                    height: constraints.maxHeight - 36, // miesto pre count bar
+                    child: Column(
+                      children: [
+                        // Sticky header
+                        SizedBox(
+                          height: headerH,
+                          child: _buildTableHeader(isAdmin, w),
+                        ),
+                        // Virtuálne riadky
+                        Expanded(
+                          child: Scrollbar(
+                            controller: _tableVerticalController,
+                            thumbVisibility: true,
+                            child: ListView.builder(
+                              controller: _tableVerticalController,
+                              physics: const ClampingScrollPhysics(),
+                              itemExtent: rowH,
+                              itemCount: _filteredProducts.isEmpty
+                                  ? 1
+                                  : _filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                if (_filteredProducts.isEmpty) {
+                                  return SizedBox(
+                                    width: w,
+                                    child: Center(
+                                      child: Text(
+                                        'Žiadne produkty. Skúste iný filter.',
+                                        style: TextStyle(color: AppColors.textSecondary),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return _buildTableDataRow(context, index, isAdmin);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // ── Počet záznamov (namiesto stránkovania) ──────────
+            Material(
+              color: AppColors.bgElevated,
+              child: SizedBox(
+                height: 36,
+                child: Center(
+                  child: Text(
+                    _isLoading
+                        ? 'Načítavam…'
+                        : '${_filteredProducts.length} produktov'
+                            '${_allProducts.length != _filteredProducts.length ? ' z ${_allProducts.length} celkom' : ''}',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Sticky header s klikateľnými stĺpcami pre triedenie.
+  Widget _buildTableHeader(bool isAdmin, double tableWidth) {
+    final cols = <Widget>[];
+    if (isAdmin) {
+      cols.add(_hCell(w: 48, label: '', sortKey: null));
+    }
+    cols.add(_hCell(w: kWarehouseColumnWidths['#']!, label: '#', sortKey: null));
+    cols.add(_hCell(w: kWarehouseColumnWidths['plu']!, label: 'PLU', sortKey: 'plu'));
+    cols.add(_hCell(w: kWarehouseColumnWidths['name']!, label: 'Názov tovaru', sortKey: 'name'));
+    for (final c in warehouseSupplyTableColumns) {
+      if (_columnVisibility[c.id] != true) continue;
+      final sk = _columnSortKey(c.id);
+      cols.add(_hCell(
+        w: kWarehouseColumnWidths[c.id] ?? 100,
+        label: c.label,
+        sortKey: sk,
+        numeric: WarehouseSuppliesTableData.isNumericColumn(c.id),
+      ));
+    }
+    cols.add(_hCell(w: kWarehouseColumnWidths['actions']!, label: 'Akcie', sortKey: null));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgElevated,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 1)),
+      ),
+      child: Row(children: cols),
+    );
+  }
+
+  String? _columnSortKey(String id) {
+    switch (id) {
+      case 'predaj_s_dph': return 'price';
+      case 'marza': return 'margin';
+      case 'mnozstvo': return 'qty';
+      case 'posl_nakup_bez_dph': return 'last_purchase_price_without_vat';
+      case 'dodavatel': return 'supplier_name';
+      case 'sklad': return 'warehouse_id';
+      default: return null;
+    }
+  }
+
+  Widget _hCell({required double w, required String label, required String? sortKey, bool numeric = false}) {
+    final isSorted = sortKey != null && _sortKey == sortKey;
+    return GestureDetector(
+      onTap: sortKey == null ? null : () {
+        final newAsc = isSorted ? !_isAscending : true;
+        _sort(sortKey: sortKey, columnIndex: -1, ascending: newAsc);
+      },
+      child: SizedBox(
+        width: w,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: numeric ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: isSorted ? AppColors.accentGold : AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isSorted)
+                Icon(
+                  _isAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                  size: 13,
+                  color: AppColors.accentGold,
+                )
+              else if (sortKey != null)
+                Icon(Icons.unfold_more_rounded, size: 13, color: AppColors.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Jeden dátový riadok tabuľky.
+  Widget _buildTableDataRow(BuildContext context, int index, bool isAdmin) {
+    final product = _filteredProducts[index];
+    final lowStock = product.minQuantity > 0 && product.qty < product.minQuantity;
+    final isSelected = _selectedIds.contains(product.uniqueId);
+    final rowStyle = WarehouseSuppliesTableData.rowStyleForProduct(product);
+    final base = (rowStyle ?? WarehouseSuppliesTableData.defaultRowStyle).copyWith(fontSize: 13);
+    final bg = isSelected
+        ? AppColors.accentGold.withValues(alpha: 0.1)
+        : (index % 2 == 0 ? AppColors.bgCard : AppColors.bgElevated);
+
+    return RepaintBoundary(
+      child: Material(
+        color: bg,
+        child: InkWell(
+          onTap: isAdmin && product.uniqueId != null
+              ? () => setState(() {
+                    if (_selectedIds.contains(product.uniqueId)) {
+                      _selectedIds.remove(product.uniqueId);
+                    } else {
+                      _selectedIds.add(product.uniqueId!);
+                    }
+                  })
+              : null,
+          child: Row(
+            children: [
+              if (isAdmin)
+                SizedBox(
+                  width: 48,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: product.uniqueId == null
+                        ? null
+                        : (v) => setState(() {
+                              if (v == true) {
+                                _selectedIds.add(product.uniqueId!);
+                              } else {
+                                _selectedIds.remove(product.uniqueId);
+                              }
+                            }),
+                    activeColor: AppColors.accentGold,
+                  ),
+                ),
+              _dCell(w: kWarehouseColumnWidths['#']!, child: Text('${index + 1}.', style: base)),
+              _dCell(w: kWarehouseColumnWidths['plu']!, child: Text(product.plu, style: base.copyWith(fontWeight: FontWeight.bold))),
+              _dCell(w: kWarehouseColumnWidths['name']!, child: Text(product.name, style: base, overflow: TextOverflow.ellipsis)),
+              for (final c in warehouseSupplyTableColumns)
+                if (_columnVisibility[c.id] == true)
+                  _dCell(
+                    w: kWarehouseColumnWidths[c.id] ?? 100,
+                    child: WarehouseSuppliesTableData.buildCellWidget(c.id, product, lowStock, rowStyle, _warehouses),
+                  ),
+              _dCell(
+                w: kWarehouseColumnWidths['actions']!,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.edit_outlined, size: 20, color: AppColors.textSecondary),
+                      tooltip: 'Upraviť',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () => _openEditProductModal(product),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.history_edu_outlined, size: 20, color: AppColors.textSecondary),
+                      tooltip: 'História nákupných cien',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () => showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => PurchasePriceHistorySheet(product: product),
+                      ),
+                    ),
+                    if (isAdmin)
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, size: 20, color: AppColors.danger),
+                        tooltip: 'Vymazať',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        onPressed: () => _confirmDeleteProduct(product),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _dCell({required double w, required Widget child}) => SizedBox(
+        width: w,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Align(alignment: Alignment.centerLeft, child: child),
+        ),
+      );
 }

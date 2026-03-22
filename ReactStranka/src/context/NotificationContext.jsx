@@ -69,7 +69,7 @@ export function NotificationProvider({ children, auth }) {
           const low = productsRes.filter((p) => (p.qty ?? 0) < 5)
           low.slice(0, 10).forEach((p) => {
             newItems.push({
-              id: `low-${String(p.unique_id)}`,
+              id: `low-${String(p.unique_id)}-${p.warehouse_id ?? ''}`,
               type: 'critical',
               title: `${p.name || p.unique_id} – nízke zásoby`,
               body: `Zostatok: ${p.qty ?? 0} ks (min: 5)`,

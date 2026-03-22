@@ -400,7 +400,23 @@ export default function ScanProductPage() {
                   <p className="scan-product-result-success">EAN bol priradený tomuto produktu.</p>
                 )}
                 <div className="scan-product-result-actions">
-                  <button type="button" className="scan-product-btn-primary" onClick={handleScanAgain}>
+                  <button
+                    type="button"
+                    className="scan-product-btn-primary"
+                    onClick={() => {
+                      const q =
+                        productResult.ean ||
+                        productResult.plu ||
+                        productResult.name ||
+                        lastScanned ||
+                        ''
+                      navigate(`/dashboard/products?search=${encodeURIComponent(String(q).trim())}`)
+                      setShowResult(false)
+                    }}
+                  >
+                    Otvoriť v zozname produktov
+                  </button>
+                  <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
                     Skenovať ďalej
                   </button>
                   <button type="button" className="scan-product-btn-secondary" onClick={handleBack}>
@@ -443,7 +459,7 @@ export default function ScanProductPage() {
                 )}
                 {productsList.map((p) => (
                   <button
-                    key={p.unique_id}
+                    key={`${p.unique_id}-${p.warehouse_id ?? ''}`}
                     type="button"
                     className="scan-product-assign-item"
                     onClick={() => handleAssignToProduct(p)}

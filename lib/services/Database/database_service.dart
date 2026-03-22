@@ -2793,17 +2793,26 @@ class DatabaseService {
     if (backendProducts.isEmpty || _currentUserId == null) return 0;
     Database db = await database;
 
+    int? parseWarehouseId(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    String rowKey(String uniqueId, int? warehouseId) =>
+        '$uniqueId::${warehouseId ?? 'null'}';
+
     // Batch načítaj všetky existujúce produkty naraz – 1 dotaz namiesto N
     final existingRows = await db.query(
       'products',
       where: 'user_id = ?',
       whereArgs: [_currentUserId],
     );
-    final existingByUniqueId = <String, Product>{};
+    final existingByKey = <String, Product>{};
     for (final row in existingRows) {
       final p = Product.fromMap(row);
       if (p.uniqueId != null && p.uniqueId!.isNotEmpty) {
-        existingByUniqueId[p.uniqueId!] = p;
+        existingByKey[rowKey(p.uniqueId!, p.warehouseId)] = p;
       }
     }
 
@@ -2812,6 +2821,7 @@ class DatabaseService {
     for (final map in backendProducts) {
       final uniqueId = map['unique_id'] as String?;
       if (uniqueId == null || uniqueId.isEmpty) continue;
+      final wid = parseWarehouseId(map['warehouse_id']);
       final name = (map['name'] as String?)?.trim() ?? '';
       final plu = (map['plu'] as String?)?.trim() ?? '';
       final unit = (map['unit'] as String?)?.trim() ?? 'ks';
@@ -2822,7 +2832,7 @@ class DatabaseService {
           : (eanRaw != null ? eanRaw.toString().trim() : null);
       final cleanEan = ean?.isEmpty == true ? null : ean;
 
-      final existing = existingByUniqueId[uniqueId];
+      final existing = existingByKey[rowKey(uniqueId, wid)];
       if (existing != null) {
         final changed =
             existing.name != name ||
@@ -2846,6 +2856,7 @@ class DatabaseService {
       } else {
         final fullMap = <String, dynamic>{
           'unique_id': uniqueId,
+          'warehouse_id': wid,
           'name': name,
           'plu': plu,
           'unit': unit,
