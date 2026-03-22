@@ -31,6 +31,15 @@ function parseApiSaveError(data) {
   return 'Uloženie zlyhalo'
 }
 
+/** Porovná query bez ohľadu na poradie kľúčov (predchádza zbytočným setSearchParams). */
+function urlSearchParamsEqual(a, b) {
+  const sorted = (usp) => [...usp.entries()].sort(([x], [y]) => x.localeCompare(y))
+  const ea = sorted(a)
+  const eb = sorted(b)
+  if (ea.length !== eb.length) return false
+  return ea.every(([k, v], i) => k === eb[i][0] && v === eb[i][1])
+}
+
 export default function ProductsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -79,8 +88,8 @@ export default function ProductsPage() {
     else if (stockFilter === 'out') next.set('stock_out', '1')
     if (sort !== 'name_asc') next.set('sort', sort)
     if (page > 1) next.set('page', String(page))
-    setSearchParams(next, { replace: true })
-  }, [auth, search, warehouseId, stockFilter, sort, page, setSearchParams])
+    if (!urlSearchParamsEqual(next, searchParams)) setSearchParams(next, { replace: true })
+  }, [auth, search, warehouseId, stockFilter, sort, page, setSearchParams, searchParams])
 
   const fetchProducts = useCallback(async () => {
     if (!auth) return

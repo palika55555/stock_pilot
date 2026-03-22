@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' show max;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/Products/add_product_modal_widget.dart';
@@ -20,6 +21,101 @@ import '../../l10n/app_localizations.dart';
 import '../../models/product.dart';
 import '../../models/warehouse.dart';
 import '../../theme/app_theme.dart';
+
+/// Vstupné parametre pre background filter/sort isolate.
+class _FilterParams {
+  final List<Product> products;
+  final String query;
+  final int? warehouseId;
+  final String? statusFilter;
+  final String sortKey;
+  final bool ascending;
+
+  const _FilterParams({
+    required this.products,
+    required this.query,
+    required this.warehouseId,
+    required this.statusFilter,
+    required this.sortKey,
+    required this.ascending,
+  });
+}
+
+/// Výstup background filter/sort isolate.
+class _FilterResult {
+  final List<Product> filtered;
+  final double totalQty;
+  final double totalValue;
+  final int lowStock;
+
+  const _FilterResult({
+    required this.filtered,
+    required this.totalQty,
+    required this.totalValue,
+    required this.lowStock,
+  });
+}
+
+/// Top-level funkcia pre compute() – beží v background isolate, UI thread voľný.
+_FilterResult _filterAndSortIsolate(_FilterParams p) {
+  var list = p.products.where((prod) {
+    if (p.warehouseId != null && prod.warehouseId != p.warehouseId) return false;
+    if (p.query.isNotEmpty &&
+        !prod.name.toLowerCase().contains(p.query) &&
+        !prod.plu.toLowerCase().contains(p.query) &&
+        !prod.category.toLowerCase().contains(p.query)) return false;
+    switch (p.statusFilter) {
+      case 'neaktivne':
+        if (prod.isActive) return false;
+      case 'nedostupne':
+        if (!prod.temporarilyUnavailable) return false;
+      case 'cenotvorba':
+        if (!prod.hasExtendedPricing) return false;
+      case 'nizky_stav':
+        if (!(prod.minQuantity > 0 && prod.qty < prod.minQuantity)) return false;
+    }
+    return true;
+  }).toList();
+
+  final asc = p.ascending ? 1 : -1;
+  list.sort((a, b) {
+    switch (p.sortKey) {
+      case 'plu':
+        return asc * a.plu.compareTo(b.plu);
+      case 'name':
+        return asc * a.name.compareTo(b.name);
+      case 'price':
+        return asc * a.price.compareTo(b.price);
+      case 'qty':
+        return asc * a.qty.compareTo(b.qty);
+      case 'margin':
+        return asc * (a.marginPercent ?? 0.0).compareTo(b.marginPercent ?? 0.0);
+      case 'last_purchase_price_without_vat':
+        return asc * a.lastPurchasePriceWithoutVat.compareTo(b.lastPurchasePriceWithoutVat);
+      case 'supplier_name':
+        return asc * (a.supplierName ?? '').compareTo(b.supplierName ?? '');
+      case 'warehouse_id':
+        return asc * (a.warehouseId ?? 0).compareTo(b.warehouseId ?? 0);
+      default:
+        return asc * a.name.compareTo(b.name);
+    }
+  });
+
+  double tq = 0, tv = 0;
+  int ls = 0;
+  for (final prod in list) {
+    tq += prod.qty;
+    tv += prod.price * prod.qty;
+    if (prod.minQuantity > 0 && prod.qty < prod.minQuantity) ls++;
+  }
+
+  return _FilterResult(
+    filtered: list,
+    totalQty: tq,
+    totalValue: tv,
+    lowStock: ls,
+  );
+}
 
 class WarehouseSuppliesScreen extends StatefulWidget {
   final String userRole; // 'admin' alebo 'user'
@@ -59,6 +155,9 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   int _statsLowStock = 0;
   Timer? _searchDebounce;
 
+  /// Generácia filtra – zahodí zastarané výsledky z compute().
+  int _filterGeneration = 0;
+
   /// Vybrané produkty pre bulk akcie (admin).
   final Set<String> _selectedIds = {};
 
@@ -71,9 +170,12 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchTextChanged);
-    _loadAll();
     _loadWarehouses();
     _loadColumnVisibility();
+    // Odlož ťažkú prácu na AFTER prvý frame – nespôsobí spike počas navigation animácie
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadAll();
+    });
   }
 
   void _onSearchTextChanged() {
@@ -90,87 +192,37 @@ class _WarehouseSuppliesScreenState extends State<WarehouseSuppliesScreen> {
       final all = await ProductCache.instance.load();
       if (!mounted) return;
       _allProducts = List<Product>.from(all);
-      _applyFilterAndSort();
+      await _applyFilterAndSort();
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Filtruje a triedí _allProducts v pamäti – žiadna DB query.
-  void _applyFilterAndSort() {
-    final q = _searchController.text.trim().toLowerCase();
-    final wid = _selectedWarehouse?.id;
-    final sf = _statusFilter;
-
-    var list = _allProducts.where((p) {
-      if (wid != null && p.warehouseId != wid) return false;
-      if (q.isNotEmpty &&
-          !p.name.toLowerCase().contains(q) &&
-          !p.plu.toLowerCase().contains(q) &&
-          !p.category.toLowerCase().contains(q)) return false;
-      switch (sf) {
-        case 'neaktivne':
-          if (p.isActive) return false;
-        case 'nedostupne':
-          if (!p.temporarilyUnavailable) return false;
-        case 'cenotvorba':
-          if (!p.hasExtendedPricing) return false;
-        case 'nizky_stav':
-          if (!(p.minQuantity > 0 && p.qty < p.minQuantity)) return false;
-      }
-      return true;
-    }).toList();
-
-    // Triedenie v pamäti
-    final asc = _isAscending ? 1 : -1;
-    list.sort((a, b) {
-      switch (_sortKey) {
-        case 'plu':
-          return asc * a.plu.compareTo(b.plu);
-        case 'name':
-          return asc * a.name.compareTo(b.name);
-        case 'price':
-          return asc * a.price.compareTo(b.price);
-        case 'qty':
-          return asc * a.qty.compareTo(b.qty);
-        case 'margin':
-          return asc * (a.marginPercent ?? 0.0).compareTo(b.marginPercent ?? 0.0);
-        case 'last_purchase_price_without_vat':
-          return asc *
-              a.lastPurchasePriceWithoutVat
-                  .compareTo(b.lastPurchasePriceWithoutVat);
-        case 'supplier_name':
-          return asc * (a.supplierName ?? '').compareTo(b.supplierName ?? '');
-        case 'warehouse_id':
-          return asc * (a.warehouseId ?? 0).compareTo(b.warehouseId ?? 0);
-        default:
-          return asc * a.name.compareTo(b.name);
-      }
+  /// Filtruje a triedí v background isolate – UI thread zostáva voľný.
+  Future<void> _applyFilterAndSort() async {
+    final gen = ++_filterGeneration;
+    final params = _FilterParams(
+      products: _allProducts,
+      query: _searchController.text.trim().toLowerCase(),
+      warehouseId: _selectedWarehouse?.id,
+      statusFilter: _statusFilter,
+      sortKey: _sortKey,
+      ascending: _isAscending,
+    );
+    final result = await compute(_filterAndSortIsolate, params);
+    if (!mounted || gen != _filterGeneration) return; // výsledok zastaraný – zahoď
+    setState(() {
+      _filteredProducts = result.filtered;
+      _statsTotalQty = result.totalQty;
+      _statsTotalValue = result.totalValue;
+      _statsLowStock = result.lowStock;
+      _isLoading = false;
     });
-
-    // Štatistiky v pamäti
-    double tq = 0, tv = 0;
-    int ls = 0;
-    for (final p in list) {
-      tq += p.qty;
-      tv += p.price * p.qty;
-      if (p.minQuantity > 0 && p.qty < p.minQuantity) ls++;
-    }
-
-    if (mounted) {
-      setState(() {
-        _filteredProducts = list;
-        _statsTotalQty = tq;
-        _statsTotalValue = tv;
-        _statsLowStock = ls;
-        _isLoading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_tableVerticalController.hasClients) _tableVerticalController.jumpTo(0);
-        if (_cardGridScrollController.hasClients) _cardGridScrollController.jumpTo(0);
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || gen != _filterGeneration) return;
+      if (_tableVerticalController.hasClients) _tableVerticalController.jumpTo(0);
+      if (_cardGridScrollController.hasClients) _cardGridScrollController.jumpTo(0);
+    });
   }
 
   /// Invaliduje cache a obnoví zoznam (po create/edit/delete).

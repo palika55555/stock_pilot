@@ -377,6 +377,18 @@ export default function ScanProductPage() {
                   >
                     Priradiť k produktu
                   </button>
+                  <button
+                    type="button"
+                    className="scan-product-btn-secondary"
+                    onClick={() => {
+                      const q = lastScanned ? String(lastScanned).trim() : ''
+                      if (q) navigate(`/dashboard/products?search=${encodeURIComponent(q)}`)
+                      else navigate('/dashboard/products')
+                      setShowResult(false)
+                    }}
+                  >
+                    Hľadať v katalógu
+                  </button>
                   <button type="button" className="scan-product-btn-secondary" onClick={handleScanAgain}>
                     Skenovať ďalej
                   </button>
