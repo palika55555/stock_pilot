@@ -313,6 +313,7 @@
 
 /* ── Autocomplete dropdown ────────────────────────────── */
 .tp-autocomplete {
+  /* default: absolute (desktop) – prepisuje sa inline style na mobile (fixed) */
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -328,6 +329,8 @@
   margin: 0;
   box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1);
   backdrop-filter: blur(16px);
+  /* keď je position: fixed (inline style), right: 0 nesmie konfliktovať */
+  box-sizing: border-box;
 }
 .tp-autocomplete__item {
   padding: 0.65rem 0.875rem;

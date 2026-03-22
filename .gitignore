@@ -47,9 +47,18 @@ ReactStranka/*.log
 
 # Node / backend
 backend/node_modules/
+import_tools/node_modules/
 backend/.env
 backend/.env.local
 backend/.vercel/
+
+# Local databases, dumps & user uploads (do not commit)
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+uploads/
 
 # React frontend
 ReactStranka/node_modules/

@@ -42,8 +42,29 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [dropdownStyle, setDropdownStyle] = useState(null)
   const timer = useRef(null)
   const cancelled = useRef(false)
+  const inputRef = useRef(null)
+
+  const calcDropdownStyle = useCallback(() => {
+    if (!inputRef.current) return null
+    const rect = inputRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    const dropH = Math.min(280, window.innerHeight * 0.4)
+    // Otvoriť nahor ak dole nie je dosť miesta (napr. nad bottom nav)
+    const openUp = spaceBelow < dropH + 80 && spaceAbove > spaceBelow
+    return {
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + 4, top: 'auto', maxHeight: Math.min(spaceAbove - 8, 280) }
+        : { top: rect.bottom + 4, bottom: 'auto', maxHeight: Math.min(spaceBelow - 80, 280) }),
+    }
+  }, [])
 
   const search = useCallback(async (q) => {
     if (!q || q.length < 2) { setSuggestions([]); return }
@@ -63,6 +84,7 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
     onChange(v)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => search(v), 300)
+    setDropdownStyle(calcDropdownStyle())
     setOpen(true)
   }
 
@@ -81,18 +103,25 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
       <div className="tp-location-input-wrap">
         <div className={`tp-location-dot ${dotClass}${focused ? ' tp-location-dot--active' : ''}`} />
         <input
+          ref={inputRef}
           type="text"
           className="tp-location-input"
           value={value}
           onChange={handleChange}
           placeholder={placeholder}
-          onFocus={() => { setFocused(true); if (suggestions.length > 0) setOpen(true) }}
+          onFocus={() => {
+            setFocused(true)
+            if (suggestions.length > 0) {
+              setDropdownStyle(calcDropdownStyle())
+              setOpen(true)
+            }
+          }}
           onBlur={() => { setFocused(false); timer.current = setTimeout(() => setOpen(false), 180) }}
           autoComplete="off"
         />
       </div>
       {open && (busy || suggestions.length > 0) && (
-        <ul className="tp-autocomplete">
+        <ul className="tp-autocomplete" style={dropdownStyle || undefined}>
           {busy && suggestions.length === 0 && (
             <li className="tp-autocomplete__loading">
               <div className="tp-autocomplete__spinner" /> Hľadám…
