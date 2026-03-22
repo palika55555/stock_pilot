@@ -40,36 +40,24 @@ class GoodsReceiptList extends StatelessWidget {
     if (receipts.isEmpty) {
       return _GoodsReceiptEmptyState(onAddTap: onAddTap);
     }
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: receipts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) => GoodsReceiptCard(
-                receipt: receipts[index],
-                warehouses: warehouses,
-                movementTypeNames: movementTypeNames,
-                onApprove: onApprove,
-                onEdit: onEdit,
-                onPrintPdf: onPrintPdf,
-                onSubmit: onSubmit,
-                onRecall: onRecall,
-                onReject: onReject,
-                onReverse: onReverse,
-                currentUserUsername: currentUserUsername,
-                currentUserRole: currentUserRole,
-              ),
-            ),
-          ),
-          const SizedBox(height: 80),
-        ],
+    return ListView.separated(
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
+      itemCount: receipts.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => GoodsReceiptCard(
+        receipt: receipts[index],
+        warehouses: warehouses,
+        movementTypeNames: movementTypeNames,
+        onApprove: onApprove,
+        onEdit: onEdit,
+        onPrintPdf: onPrintPdf,
+        onSubmit: onSubmit,
+        onRecall: onRecall,
+        onReject: onReject,
+        onReverse: onReverse,
+        currentUserUsername: currentUserUsername,
+        currentUserRole: currentUserRole,
       ),
     );
   }

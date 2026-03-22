@@ -254,7 +254,7 @@ class _SuppliersPageState extends State<SuppliersPage>
                     ? _buildEmptyState(l10n)
                     : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                          physics: const BouncingScrollPhysics(),
+                          physics: const ClampingScrollPhysics(),
                           itemCount: _filteredSuppliers.length,
                           itemBuilder: (context, index) {
                             final s = _filteredSuppliers[index];

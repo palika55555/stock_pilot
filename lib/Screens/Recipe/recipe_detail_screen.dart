@@ -5,6 +5,7 @@ import '../../models/warehouse.dart';
 import '../../services/Recipe/recipe_service.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
+import '../../services/product_cache.dart';
 import '../ProductionOrder/production_order_create_screen.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
@@ -61,7 +62,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    _products = await _db.getProducts();
+    _products = await ProductCache.instance.load();
     _warehouses = await _warehouseService.getActiveWarehouses();
     if (widget.recipeId != null) {
       final recipe = await _recipeService.getRecipeById(widget.recipeId!);

@@ -106,7 +106,7 @@ class _DashboardStatsState extends State<DashboardStats>
   Widget _buildDesktopLayout(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       child: Row(
         children: [
           _AnimatedStatCard(

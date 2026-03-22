@@ -7,6 +7,7 @@ import 'sync_check_service.dart';
 import 'sync_service.dart';
 import 'auto_push_service.dart';
 import 'sync/sync_manager.dart';
+import 'product_cache.dart';
 import '../screens/Login/login_page.dart';
 
 /// Centralizované odhlásenie: vymaže tokeny a session, zastaví sync, presmeruje na login.
@@ -23,6 +24,7 @@ class LogoutService {
     // Zastav SyncManager – offline fronta sa zachová pre ďalšie prihlásenie
     SyncManager.instance.disposeForLogout();
 
+    ProductCache.instance.clear();
     await clearTokensAndToken();
     await DatabaseService().clearSavedLogin();
     final prefs = await SharedPreferences.getInstance();

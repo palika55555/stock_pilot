@@ -294,7 +294,7 @@ class _CustomersPageState extends State<CustomersPage>
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      physics: const BouncingScrollPhysics(),
+                      physics: const ClampingScrollPhysics(),
                       itemCount: _filteredCustomers.length,
                       itemBuilder: (context, index) {
                         final c = _filteredCustomers[index];

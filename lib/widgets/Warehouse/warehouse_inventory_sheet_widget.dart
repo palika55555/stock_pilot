@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../models/warehouse.dart';
 import '../../models/product.dart';
 import '../../services/Database/database_service.dart';
+import '../../services/user_session.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
@@ -172,8 +173,18 @@ class _WarehouseInventorySheetWidgetState
       }
       return;
     }
+
+    final confirmed = await _showConfirmationDialog(changes);
+    if (confirmed != true || !mounted) return;
+
     setState(() => _saving = true);
-    await _db.updateStockAfterAudit(id, changes);
+    await _db.updateStockAfterAudit(
+      id,
+      changes,
+      warehouseName: widget.warehouse.name,
+      username: UserSession.username ?? '',
+      allProducts: _products,
+    );
     if (mounted) {
       setState(() => _saving = false);
       widget.onSaved?.call();
@@ -186,6 +197,148 @@ class _WarehouseInventorySheetWidgetState
         ),
       );
     }
+  }
+
+  Future<bool?> _showConfirmationDialog(Map<String, int> changes) {
+    final productMap = <String, Product>{};
+    for (final p in _products) {
+      if (p.uniqueId != null) productMap[p.uniqueId!] = p;
+    }
+    int surplus = 0;
+    int deficit = 0;
+    for (final e in changes.entries) {
+      final p = productMap[e.key];
+      if (p == null) continue;
+      final diff = e.value - p.qty.round();
+      if (diff > 0) {
+        surplus += diff;
+      } else {
+        deficit += diff.abs();
+      }
+    }
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.fact_check_rounded, color: AppColors.accentGold),
+            const SizedBox(width: 10),
+            Text(
+              'Potvrdenie inventúry',
+              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sklad: ${widget.warehouse.name}',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            _confirmRow(Icons.edit_note_rounded, 'Zmenené produkty', '${changes.length}', AppColors.accentGold),
+            const SizedBox(height: 8),
+            if (surplus > 0) ...[
+              _confirmRow(Icons.add_circle_outline, 'Prebytok (celkom)', '+$surplus', Colors.green),
+              const SizedBox(height: 8),
+            ],
+            if (deficit > 0) ...[
+              _confirmRow(Icons.remove_circle_outline, 'Manko (celkom)', '-$deficit', Colors.red),
+              const SizedBox(height: 8),
+            ],
+            const Divider(),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.bgInput,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: changes.entries.map((e) {
+                    final p = productMap[e.key];
+                    if (p == null) return const SizedBox.shrink();
+                    final diff = e.value - p.qty.round();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${p.name} (${p.plu})',
+                              style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${p.qty.round()} → ${e.value}',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: diff > 0 ? Colors.green.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${diff > 0 ? "+" : ""}$diff',
+                              style: TextStyle(
+                                color: diff > 0 ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Zrušiť', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentGold,
+              foregroundColor: AppColors.bgPrimary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Uložiť inventúru'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _confirmRow(IconData icon, String label, String value, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label, style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+        ),
+        Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+      ],
+    );
   }
 
   @override

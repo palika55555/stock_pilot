@@ -97,7 +97,7 @@ class _PriceQuotesListScreenState extends State<PriceQuotesListScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
                 physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
+                  parent: ClampingScrollPhysics(),
                 ),
                 itemCount: _quotes.length,
                 itemBuilder: (context, index) {

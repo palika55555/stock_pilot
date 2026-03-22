@@ -6,6 +6,8 @@ class WarehouseQuickStats extends StatelessWidget {
   final double totalValue;
   final int lowStockCount;
   final VoidCallback? onLowStockTap;
+  /// Súhrnné dotazy (SUM/COUNT) ešte bežia – zobrazí sa miesto čísel „…“.
+  final bool isLoading;
 
   const WarehouseQuickStats({
     super.key,
@@ -13,6 +15,7 @@ class WarehouseQuickStats extends StatelessWidget {
     required this.totalValue,
     required this.lowStockCount,
     this.onLowStockTap,
+    this.isLoading = false,
   });
 
   @override
@@ -24,22 +27,25 @@ class WarehouseQuickStats extends StatelessWidget {
         children: [
           _StatCard(
             label: "Celkovo",
-            value: "$totalQty ks",
+            value: isLoading ? '…' : "$totalQty ks",
             icon: Icons.inventory_2,
             color: AppColors.info,
+            valueMuted: isLoading,
           ),
           _StatCard(
             label: "Hodnota",
-            value: "${totalValue.toStringAsFixed(0)} €",
+            value: isLoading ? '…' : "${totalValue.toStringAsFixed(0)} €",
             icon: Icons.euro,
             color: AppColors.accentGold,
+            valueMuted: isLoading,
           ),
           _StatCard(
             label: "Nízky stav",
-            value: "$lowStockCount položiek",
+            value: isLoading ? '…' : "$lowStockCount položiek",
             icon: Icons.warning_amber_rounded,
             color: AppColors.warning,
-            onTap: lowStockCount > 0 ? onLowStockTap : null,
+            onTap: !isLoading && lowStockCount > 0 ? onLowStockTap : null,
+            valueMuted: isLoading,
           ),
         ],
       ),
@@ -53,6 +59,7 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
+  final bool valueMuted;
 
   const _StatCard({
     required this.label,
@@ -60,6 +67,7 @@ class _StatCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.onTap,
+    this.valueMuted = false,
   });
 
   @override
@@ -78,7 +86,7 @@ class _StatCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: valueMuted ? AppColors.textMuted : AppColors.textPrimary,
           ),
         ),
       ],

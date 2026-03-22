@@ -43,54 +43,51 @@ class SyncService {
   }
 
   /// Po prihlásení: stiahne dáta používateľa z backendu a uloží do lokálnej DB.
+  /// Fetche bežia paralelne – zrýchľuje initial sync ~3–5×.
   static Future<bool> initialSync(String userId, String accessToken) async {
     try {
       DatabaseService.setCurrentUser(userId);
       final db = DatabaseService();
 
-      // --- Master dáta ---
-      final customers = await fetchCustomersFromBackendWithToken(accessToken);
+      // Paralelný fetch všetkých entít naraz
+      final results = await Future.wait([
+        fetchCustomersFromBackendWithToken(accessToken),       // 0
+        fetchProductsFromBackendWithToken(accessToken),        // 1
+        fetchBatchesFromBackendWithToken(accessToken),         // 2
+        fetchReceiptsFromBackend(accessToken),                 // 3
+        fetchStockOutsFromBackend(accessToken),                // 4
+        fetchRecipesFromBackend(accessToken),                  // 5
+        fetchProductionOrdersFromBackend(accessToken),         // 6
+        fetchQuotesFromBackend(accessToken),                   // 7
+        fetchTransportsFromBackend(accessToken),               // 8
+        fetchCompanyFromBackend(accessToken),                  // 9
+      ]);
+
+      final customers  = results[0] as List<Map<String, dynamic>>?;
+      final products   = results[1] as List<Map<String, dynamic>>?;
+      final batches    = results[2] as List<Map<String, dynamic>>?;
+      final receipts   = results[3] as Map<String, dynamic>?;
+      final stockOuts  = results[4] as Map<String, dynamic>?;
+      final recipes    = results[5] as Map<String, dynamic>?;
+      final orders     = results[6] as Map<String, dynamic>?;
+      final quotes     = results[7] as Map<String, dynamic>?;
+      final transports = results[8] as Map<String, dynamic>?;
+      final company    = results[9] as Map<String, dynamic>?;
+
       if (customers != null && customers.isNotEmpty) {
         await db.mergeCustomersFromBackend(customers);
       }
-      final products = await fetchProductsFromBackendWithToken(accessToken);
       if (products != null && products.isNotEmpty) {
         await db.mergeProductsFromBackend(products);
       }
-      final batches = await fetchBatchesFromBackendWithToken(accessToken);
-      if (batches != null) {
-        await db.replaceBatchesFromBackend(batches);
-      }
-
-      // --- Transakčné dáta ---
-      final receiptsData = await fetchReceiptsFromBackend(accessToken);
-      if (receiptsData != null) {
-        await db.mergeReceiptsFromBackend(receiptsData);
-      }
-      final stockOutsData = await fetchStockOutsFromBackend(accessToken);
-      if (stockOutsData != null) {
-        await db.mergeStockOutsFromBackend(stockOutsData);
-      }
-      final recipesData = await fetchRecipesFromBackend(accessToken);
-      if (recipesData != null) {
-        await db.mergeRecipesFromBackend(recipesData);
-      }
-      final ordersData = await fetchProductionOrdersFromBackend(accessToken);
-      if (ordersData != null) {
-        await db.mergeProductionOrdersFromBackend(ordersData);
-      }
-      final quotesData = await fetchQuotesFromBackend(accessToken);
-      if (quotesData != null) {
-        await db.mergeQuotesFromBackend(quotesData);
-      }
-      final transportsData = await fetchTransportsFromBackend(accessToken);
-      if (transportsData != null) {
-        await db.mergeTransportsFromBackend(transportsData);
-      }
-      final companyData = await fetchCompanyFromBackend(accessToken);
-      if (companyData != null) {
-        await db.mergeCompanyFromBackend(companyData);
-      }
+      if (batches != null) await db.replaceBatchesFromBackend(batches);
+      if (receipts != null) await db.mergeReceiptsFromBackend(receipts);
+      if (stockOuts != null) await db.mergeStockOutsFromBackend(stockOuts);
+      if (recipes != null) await db.mergeRecipesFromBackend(recipes);
+      if (orders != null) await db.mergeProductionOrdersFromBackend(orders);
+      if (quotes != null) await db.mergeQuotesFromBackend(quotes);
+      if (transports != null) await db.mergeTransportsFromBackend(transports);
+      if (company != null) await db.mergeCompanyFromBackend(company);
 
       return true;
     } catch (_) {

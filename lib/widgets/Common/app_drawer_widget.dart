@@ -13,11 +13,21 @@ import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
 import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Reports/reports_list_screen.dart';
 import '../../Screens/Invoices/invoices_screen.dart';
+import '../../Screens/inventory/inventory_history_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 import 'package:stock_pilot/services/logout_service.dart';
 import '../../theme/app_theme.dart';
+
+/// Čistý fade prechod pre desktop – bez slide, bez trhania.
+PageRoute<T> _drawerFadeRoute<T>(Widget page) => PageRouteBuilder<T>(
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) =>
+          FadeTransition(opacity: animation, child: child),
+      transitionDuration: const Duration(milliseconds: 120),
+      reverseTransitionDuration: const Duration(milliseconds: 100),
+    );
 
 class AppDrawer extends StatelessWidget {
   final String userRole;
@@ -66,7 +76,7 @@ class AppDrawer extends StatelessWidget {
                     title: l10n.scanProduct,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanProductScreen()));
+                      Navigator.push(context, _drawerFadeRoute( const ScanProductScreen()));
                     },
                   ),
                   _WarehousesDrawerSection(userRole: userRole),
@@ -80,7 +90,7 @@ class AppDrawer extends StatelessWidget {
                     title: l10n.suppliers,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersPage()));
+                      Navigator.push(context, _drawerFadeRoute( const SuppliersPage()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -88,7 +98,7 @@ class AppDrawer extends StatelessWidget {
                     title: l10n.customers,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomersPage()));
+                      Navigator.push(context, _drawerFadeRoute( const CustomersPage()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -96,7 +106,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Výroba',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductionListScreen()));
+                      Navigator.push(context, _drawerFadeRoute( const ProductionListScreen()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -104,7 +114,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Receptúry',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeListScreen(userRole: userRole)));
+                      Navigator.push(context, _drawerFadeRoute( RecipeListScreen(userRole: userRole)));
                     },
                   ),
                   _DrawerMenuItem(
@@ -112,7 +122,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Výrobné príkazy',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => ProductionOrderListScreen(userRole: userRole)));
+                      Navigator.push(context, _drawerFadeRoute( ProductionOrderListScreen(userRole: userRole)));
                     },
                   ),
                   _DrawerMenuItem(
@@ -120,7 +130,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Zákazníci / Palety',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomersPalletsScreen()));
+                      Navigator.push(context, _drawerFadeRoute( const CustomersPalletsScreen()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -128,7 +138,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Faktúry',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoicesScreen()));
+                      Navigator.push(context, _drawerFadeRoute( const InvoicesScreen()));
                     },
                   ),
                   _DrawerMenuItem(
@@ -136,7 +146,7 @@ class AppDrawer extends StatelessWidget {
                     title: 'Reporty',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsListScreen()));
+                      Navigator.push(context, _drawerFadeRoute( const ReportsListScreen()));
                     },
                   ),
                   const Padding(
@@ -148,7 +158,7 @@ class AppDrawer extends StatelessWidget {
                     title: l10n.settings,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsPage(userRole: userRole)));
+                      Navigator.push(context, _drawerFadeRoute( SettingsPage(userRole: userRole)));
                     },
                   ),
                 ],
@@ -319,7 +329,7 @@ class _WarehousesDrawerSection extends StatelessWidget {
               title: 'Sklady',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const WarehousesPage()));
+                Navigator.push(context, _drawerFadeRoute( const WarehousesPage()));
               },
             ),
           ),
@@ -330,7 +340,7 @@ class _WarehousesDrawerSection extends StatelessWidget {
               title: 'Pohyby skladu',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseMovementsScreen(userRole: userRole)));
+                Navigator.push(context, _drawerFadeRoute( WarehouseMovementsScreen(userRole: userRole)));
               },
             ),
           ),
@@ -341,7 +351,7 @@ class _WarehousesDrawerSection extends StatelessWidget {
               title: 'Príjemky',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()));
+                Navigator.push(context, _drawerFadeRoute( const GoodsReceiptScreen()));
               },
             ),
           ),
@@ -352,7 +362,18 @@ class _WarehousesDrawerSection extends StatelessWidget {
               title: 'Výdajky',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => StockOutScreen(userRole: userRole)));
+                Navigator.push(context, _drawerFadeRoute( StockOutScreen(userRole: userRole)));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: _DrawerMenuItem(
+              icon: Icons.fact_check_rounded,
+              title: 'Inventúra',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, _drawerFadeRoute( InventoryHistoryScreen(userRole: userRole)));
               },
             ),
           ),
@@ -397,7 +418,7 @@ class _ProductsDrawerSection extends StatelessWidget {
               title: l10nWarehouseSupplies,
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => WarehouseSuppliesScreen(userRole: userRole)));
+                Navigator.push(context, _drawerFadeRoute( WarehouseSuppliesScreen(userRole: userRole)));
               },
             ),
           ),

@@ -1,0 +1,13 @@
+{
+  "name": "pohoda-import",
+  "version": "1.0.0",
+  "description": "Import produktov z Pohoda MDB do Stock Pilot SQLite",
+  "main": "import_products.js",
+  "scripts": {
+    "export": "node export_pohoda.js",
+    "import": "node import_products.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3"
+  }
+}

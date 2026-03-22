@@ -1,10 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/models/production_batch_recipe_item.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/services/api_sync_service.dart';
-import 'package:stock_pilot/screens/production/production_batch_detail_screen.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 
 const List<String> _defaultProductTypes = [
   'Zamková dlažba',
@@ -146,12 +148,12 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
 
       if (!mounted) return;
       syncBatchesToBackend();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProductionBatchDetailScreen(batchId: batchId),
-        ),
-      );
+      // Úprava: späť na detail s výsledkom. Nová šarža: vrátiť ID — zoznam otvorí detail a obnoví sa.
+      if (widget.editBatch?.id != null) {
+        Navigator.pop(context, true);
+      } else {
+        Navigator.pop(context, batchId);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,31 +173,51 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.editBatch != null ? 'Upraviť šaržu' : 'Nová šarža'),
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+      extendBodyBehindAppBar: true,
+      backgroundColor: AppColors.bgPrimary,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: false,
+              title: Text(
+                widget.editBatch != null ? 'Upraviť šaržu' : 'Nová šarža',
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                ),
               ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child: const Text('Uložiť'),
+              actions: [
+                if (_saving)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  TextButton(
+                    onPressed: _save,
+                    child: const Text('Uložiť'),
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 88, 16, 32),
           children: [
-            const Text('Dátum výroby', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('Dátum výroby', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
             const SizedBox(height: 4),
             InkWell(
               onTap: () async {
@@ -238,7 +260,7 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
             ),
             const SizedBox(height: 20),
             const Divider(),
-            const Text('Receptúra (materiály)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            const Text('Receptúra (materiály)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             ..._recipeRows.map((row) => _recipeRowWidget(row)),
             ..._customFractionRows.map((row) => _recipeRowWidget(row, isCustom: true)),
@@ -314,7 +336,7 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
                     decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
                     onChanged: (v) => row.materialName = v,
                   )
-                : Text(row.materialName, style: const TextStyle(fontWeight: FontWeight.w500)),
+                : Text(row.materialName, style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
           ),
           const SizedBox(width: 8),
           Expanded(

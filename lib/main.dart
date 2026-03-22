@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -78,6 +79,27 @@ void main() async {
   ));
 }
 
+/// Optimalizovaný scroll behavior pre Windows/Linux/macOS desktop:
+/// - ClampingScrollPhysics (bez iOS bounce → bez trhania)
+/// - Mouse drag support (ťahanie tabuľky myšou)
+/// - Zachováva pôvodné scrollbary
+class _DesktopScrollBehavior extends MaterialScrollBehavior {
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      return const ClampingScrollPhysics();
+    }
+    return super.getScrollPhysics(context);
+  }
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
+
 class MyApp extends StatelessWidget {
   final bool isFirstRun;
   final ThemeLocaleProvider themeProvider;
@@ -112,6 +134,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'StockPilot',
             debugShowCheckedModeBanner: false,
+            scrollBehavior: _DesktopScrollBehavior(),
             navigatorObservers: [routeObserver],
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),

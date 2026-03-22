@@ -129,7 +129,7 @@ class WarehouseListWidgetState extends State<WarehouseListWidget>
                     ? Center(child: Text('Žiadne sklady neboli nájdené', style: TextStyle(color: AppColors.textSecondary)))
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                        physics: const BouncingScrollPhysics(),
+                        physics: const ClampingScrollPhysics(),
                         itemCount: _filteredWarehouses.length,
                         itemBuilder: (context, index) {
                           final w = _filteredWarehouses[index];

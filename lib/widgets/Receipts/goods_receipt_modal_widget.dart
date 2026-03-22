@@ -1155,6 +1155,7 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildDialogHeader(),
+              if (_isEditMode && _editReceipt != null) _buildReceiptStatusStrip(),
               const Divider(height: 1, thickness: 1, color: AppColors.borderDefault),
               Flexible(
                 child: SizedBox(
@@ -1209,6 +1210,118 @@ class _GoodsReceiptModalState extends State<GoodsReceiptModal> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  String _formatStatusDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+
+  /// Jasná informácia o stave dokladu pri úprave (nad obsahom formulára).
+  Widget _buildReceiptStatusStrip() {
+    final r = _editReceipt!;
+    final Color accent;
+    final Color bg;
+    final IconData icon;
+    final String title;
+    final String subtitle;
+
+    if (r.isDraft) {
+      accent = const Color(0xFF818CF8);
+      bg = const Color(0x1F818CF8);
+      icon = Icons.edit_note_rounded;
+      title = 'Rozpracovaný';
+      subtitle = 'Uložte koncept alebo dokončite vykázanie príjmu.';
+    } else if (r.isPendingApproval) {
+      accent = const Color(0xFFF59E0B);
+      bg = const Color(0x1FF59E0B);
+      icon = Icons.hourglass_top_rounded;
+      title = 'Čaká na schválenie';
+      subtitle = r.submittedAt != null
+          ? 'Odoslané ${_formatStatusDate(r.submittedAt!)}'
+          : 'Čaká na schválenie manažérom.';
+    } else if (r.isApproved) {
+      accent = AppColors.success;
+      bg = AppColors.successSubtle;
+      icon = Icons.verified_rounded;
+      title = 'Schválená';
+      subtitle = r.approvedAt != null
+          ? 'Schválil: ${r.approverUsername ?? '—'} · ${_formatStatusDate(r.approvedAt!)}'
+          : 'Doklad je uzavretý.';
+    } else if (r.isRejected) {
+      accent = AppColors.danger;
+      bg = AppColors.dangerSubtle;
+      icon = Icons.cancel_rounded;
+      title = 'Zamietnutá';
+      subtitle = (r.rejectionReason != null && r.rejectionReason!.trim().isNotEmpty)
+          ? r.rejectionReason!.trim()
+          : 'Upravte doklad a znovu ho odošlite na schválenie.';
+    } else if (r.isReversed) {
+      accent = AppColors.textMuted;
+      bg = AppColors.bgInput;
+      icon = Icons.replay_rounded;
+      title = 'Stornovaná';
+      subtitle = (r.reverseReason != null && r.reverseReason!.trim().isNotEmpty)
+          ? r.reverseReason!.trim()
+          : 'Doklad bol stornovaný.';
+    } else if (r.status == InboundReceiptStatus.cancelled) {
+      accent = AppColors.textMuted;
+      bg = AppColors.bgInput;
+      icon = Icons.block_rounded;
+      title = 'Zrušená';
+      subtitle = 'Príjemka bola zrušená.';
+    } else {
+      accent = AppColors.info;
+      bg = AppColors.infoSubtle;
+      icon = Icons.assignment_turned_in_rounded;
+      title = 'Vykázaná';
+      subtitle = r.stockApplied
+          ? 'Tovar bol pričítaný na sklad.'
+          : 'Doklad je vykázaný; podľa oprávnení ho ešte môžete upraviť pred schválením.';
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(
+            left: BorderSide(color: accent, width: 4),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: accent, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

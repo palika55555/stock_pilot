@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import 'acquisition_costs_report_screen.dart';
+import 'approval_performance_report_screen.dart';
+import 'price_history_report_screen.dart';
 import 'receipt_summary_report_screen.dart';
+import 'supplier_report_screen.dart';
+import 'warehouse_movements_report_screen.dart';
 
 /// Sekcia Reporty – zoznam typov reportov.
 class ReportsListScreen extends StatelessWidget {
@@ -36,35 +41,60 @@ class ReportsListScreen extends StatelessWidget {
             icon: Icons.swap_horiz_rounded,
             title: 'Pohyby skladu',
             subtitle: 'Dátum, sklad, produkt, typ pohybu',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const WarehouseMovementsReportScreen(),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           _ReportTile(
             icon: Icons.local_shipping_rounded,
             title: 'Dodávatelia',
             subtitle: 'Prehľad podľa dodávateľov',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SupplierReportScreen(),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           _ReportTile(
             icon: Icons.how_to_reg_rounded,
             title: 'Výkon schvaľovania',
             subtitle: 'Len pre admin – priemerný čas, % zamietnutých',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ApprovalPerformanceReportScreen(),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           _ReportTile(
             icon: Icons.trending_up_rounded,
             title: 'Vývoj cien',
             subtitle: 'Ceny produktov v čase',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const PriceHistoryReportScreen(),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           _ReportTile(
             icon: Icons.euro_rounded,
             title: 'Obstarávacie náklady',
             subtitle: 'Doprava, clo, balné – rozpis',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AcquisitionCostsReportScreen(),
+              ),
+            ),
           ),
         ],
       ),

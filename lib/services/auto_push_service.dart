@@ -2,6 +2,7 @@ import 'dart:async';
 import 'api_sync_service.dart';
 import 'Database/database_service.dart';
 import 'data_change_notifier.dart';
+import 'product_cache.dart';
 
 /// Automatically pushes local changes to the backend within ~1 second.
 /// Usage: call start() after login and stop() after logout.
@@ -44,7 +45,7 @@ class AutoPushService {
       final db = DatabaseService();
 
       // Master data (need local fetch first)
-      final products = await db.getProducts();
+      final products = await ProductCache.instance.load();
       syncProductsToBackend(products); // fire-and-forget (void)
 
       final customers = await db.getCustomers();

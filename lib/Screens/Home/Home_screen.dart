@@ -17,6 +17,7 @@ import '../../services/auto_push_service.dart';
 import '../../services/sync/sync_manager.dart';
 import '../../services/Notifications/notification_service.dart';
 import '../../services/auto_lock_service.dart';
+import '../../services/product_cache.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 import '../../screens/Search/search_screen.dart';
 import '../../screens/goods_receipt/goods_receipt_screen.dart';
@@ -82,6 +83,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     AutoPushService.instance.start();
     _initSyncManager(userId);
     _ensureInitialDataLoaded(userId);
+    // Preload produktov do pamäte – ďalšie obrazovky ich dostanú okamžite
+    ProductCache.instance.load();
     _syncSubscription = SyncCheckService.instance.syncNeeded.listen((_) {
       if (!mounted) return;
       // Automatická tichá synchronizácia – bez potvrdenia od používateľa
@@ -100,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _ensureInitialDataLoaded(String userId) async {
     try {
       final customers = await _db.getCustomers();
-      final products = await _db.getProducts();
+      final products = await ProductCache.instance.load();
       final hasLocalData = customers.isNotEmpty || products.isNotEmpty;
       if (hasLocalData) return;
 
@@ -161,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await _db.mergeProductsFromBackend(backendProducts);
       }
       if (!mounted) return;
-      final products = await _db.getProducts();
+      final products = await ProductCache.instance.load();
       syncProductsToBackend(products);
     } catch (_) {}
   }
@@ -207,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       // Push lokálnych produktov na server
       if (mounted) {
-        final products = await _db.getProducts();
+        final products = await ProductCache.instance.load();
         syncProductsToBackend(products);
         setState(() => _overviewRefreshKey++);
       }
@@ -247,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
     if (mounted) {
-      final products = await _db.getProducts();
+      final products = await ProductCache.instance.load();
       syncProductsToBackend(products);
     }
     if (mounted && !silent) {
@@ -281,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     try {
-      final products = await _db.getProducts();
+      final products = await ProductCache.instance.load();
       syncProductsToBackend(products);
       final customers = await _db.getCustomers();
       await syncCustomersToBackend(customers);

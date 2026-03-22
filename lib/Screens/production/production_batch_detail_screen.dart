@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,6 +11,7 @@ import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/screens/production/production_batch_form_screen.dart';
 import 'package:stock_pilot/screens/pallet/create_pallets_dialog.dart';
 import 'package:stock_pilot/screens/pallet/pallet_labels_screen.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 
 class ProductionBatchDetailScreen extends StatefulWidget {
   final int batchId;
@@ -85,27 +88,56 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: AppColors.bgPrimary,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
     if (_batch == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Šarža')),
-        body: const Center(child: Text('Šarža nebola nájdená')),
+        backgroundColor: AppColors.bgPrimary,
+        appBar: AppBar(
+          backgroundColor: AppColors.bgPrimary,
+          title: const Text('Šarža'),
+        ),
+        body: const Center(
+          child: Text('Šarža nebola nájdená', style: TextStyle(color: AppColors.textSecondary)),
+        ),
       );
     }
 
     final payload = DatabaseService.productionBatchQrPayload(widget.batchId);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_batch!.productType),
-        actions: [
-          IconButton(icon: const Icon(Icons.edit), onPressed: _edit),
-          IconButton(icon: const Icon(Icons.delete_outline), onPressed: _delete),
-        ],
+      extendBodyBehindAppBar: true,
+      backgroundColor: AppColors.bgPrimary,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: false,
+              title: Text(
+                _batch!.productType,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                ),
+              ),
+              actions: [
+                IconButton(icon: const Icon(Icons.edit, color: AppColors.textPrimary), onPressed: _edit),
+                IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.textPrimary), onPressed: _delete),
+              ],
+            ),
+          ),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 88, 16, 24),
         children: [
           Card(
             child: Padding(
@@ -126,10 +158,14 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   Text('Počet kusov: ${_batch!.quantityProduced}'),
+                  if (_batch!.costTotal != null)
+                    Text('Náklady (zadané): ${_batch!.costTotal!.toStringAsFixed(2)} €'),
+                  if (_batch!.revenueTotal != null)
+                    Text('Výnosy (zadané): ${_batch!.revenueTotal!.toStringAsFixed(2)} €'),
                   if (_batch!.marginPercent != null)
                     Text(
                       'Marža: ${_batch!.marginPercent!.toStringAsFixed(1)} %',
-                      style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green),
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.success),
                     ),
                   if (_batch!.notes != null && _batch!.notes!.isNotEmpty)
                     Padding(
@@ -143,20 +179,21 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
                         context: context,
                         builder: (context) => CreatePalletsDialog(batch: _batch!),
                       );
-                      if (list != null && list.isNotEmpty && mounted) {
-                        _load();
-                        syncBatchesToBackend();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PalletLabelsScreen(
-                              pallets: list,
-                              productName: _batch!.productType,
-                              productionDate: _batch!.productionDate,
-                            ),
+                      if (list == null || list.isEmpty) return;
+                      await _load();
+                      if (!context.mounted) return;
+                      await syncBatchesToBackend();
+                      if (!context.mounted) return;
+                      await Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PalletLabelsScreen(
+                            pallets: list,
+                            productName: _batch!.productType,
+                            productionDate: _batch!.productionDate,
                           ),
-                        );
-                      }
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.local_shipping_rounded),
                     label: const Text('Vytvoriť palety'),
@@ -167,7 +204,7 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
           ),
           if (_pallets.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const Text('Palety z tejto šarže', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            const Text('Palety z tejto šarže', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             Card(
               child: Column(
@@ -199,12 +236,12 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
             ),
             const SizedBox(height: 16),
           ],
-          const Text('Receptúra', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+          const Text('Receptúra', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary)),
           const SizedBox(height: 8),
           if (_recipe.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Žiadne položky receptúry', style: TextStyle(color: Colors.grey)),
+              child: Text('Žiadne položky receptúry', style: TextStyle(color: AppColors.textMuted)),
             )
           else
             Card(
@@ -212,7 +249,7 @@ class _ProductionBatchDetailScreenState extends State<ProductionBatchDetailScree
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _recipe.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final r = _recipe[i];
                   return ListTile(

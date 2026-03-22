@@ -6,6 +6,7 @@ import '../../models/pallet.dart';
 import '../../models/product.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
+import '../../services/product_cache.dart';
 import '../production/production_batch_detail_screen.dart';
 import '../pallet/pallet_expedition_screen.dart';
 
@@ -138,8 +139,7 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
   }
 
   Future<void> _showAssignProductSheet(String code) async {
-    final db = DatabaseService();
-    final products = await db.getProducts();
+    final products = await ProductCache.instance.load();
     if (!mounted) return;
     if (products.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

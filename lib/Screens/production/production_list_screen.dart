@@ -52,13 +52,24 @@ class _ProductionListScreenState extends State<ProductionListScreen> {
   }
 
   Future<void> _addBatch() async {
-    final added = await Navigator.push<bool>(
+    final result = await Navigator.push<Object?>(
       context,
       MaterialPageRoute(
         builder: (context) => ProductionBatchFormScreen(initialDate: _selectedDate),
       ),
     );
-    if (added == true) _loadBatches();
+    if (!mounted) return;
+    await _loadBatches();
+    if (!mounted) return;
+    if (result is int) {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProductionBatchDetailScreen(batchId: result),
+        ),
+      );
+      if (mounted) _loadBatches();
+    }
   }
 
   @override

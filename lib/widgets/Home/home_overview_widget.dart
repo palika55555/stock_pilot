@@ -152,7 +152,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                     backgroundColor: AppColors.bgCard,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
+                        parent: ClampingScrollPhysics(),
                       ),
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(

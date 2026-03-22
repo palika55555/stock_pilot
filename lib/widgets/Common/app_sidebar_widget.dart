@@ -18,6 +18,7 @@ import '../../screens/Recipe/recipe_list_screen.dart';
 import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../screens/pallet/customers_pallets_screen.dart';
 import '../../Screens/Invoices/invoices_screen.dart';
+import '../../Screens/inventory/inventory_history_screen.dart';
 import '../../services/logout_service.dart';
 
 class _NavItem {
@@ -157,25 +158,19 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
       case 15:
         Navigator.push(context, _fadeRoute(const InvoicesScreen()));
         break;
+      case 16:
+        Navigator.push(context, _fadeRoute(InventoryHistoryScreen(userRole: widget.userRole)));
+        break;
     }
   }
 
   PageRoute _fadeRoute(Widget page) {
     return PageRouteBuilder(
       pageBuilder: (context, animation, secondary) => page,
-      transitionsBuilder: (context, animation, secondary, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.03),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-            child: child,
-          ),
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, animation, secondary, child) =>
+          FadeTransition(opacity: animation, child: child),
+      transitionDuration: const Duration(milliseconds: 120),
+      reverseTransitionDuration: const Duration(milliseconds: 100),
     );
   }
 
@@ -224,7 +219,7 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
                         }
                         if (item.index == 10) {
                           return _SidebarWarehousesExpandable(
-                            isActive: widget.activeIndex == 10 || widget.activeIndex == 11 || widget.activeIndex == 5 || widget.activeIndex == 6,
+                            isActive: widget.activeIndex == 10 || widget.activeIndex == 11 || widget.activeIndex == 5 || widget.activeIndex == 6 || widget.activeIndex == 16,
                             labelOpacity: labelOpacity,
                             isExpanded: _warehousesExpanded,
                             isNarrow: isNarrow,
@@ -233,6 +228,7 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
                             onNavigateToMovements: () => _navigate(context, 11),
                             onNavigateToReceipts: () => _navigate(context, 5),
                             onNavigateToStockOut: () => _navigate(context, 6),
+                            onNavigateToInventory: () => _navigate(context, 16),
                             userRole: widget.userRole,
                           );
                         }
@@ -751,6 +747,7 @@ class _SidebarWarehousesExpandable extends StatelessWidget {
   final VoidCallback onNavigateToMovements;
   final VoidCallback onNavigateToReceipts;
   final VoidCallback onNavigateToStockOut;
+  final VoidCallback onNavigateToInventory;
   final String userRole;
 
   const _SidebarWarehousesExpandable({
@@ -763,6 +760,7 @@ class _SidebarWarehousesExpandable extends StatelessWidget {
     required this.onNavigateToMovements,
     required this.onNavigateToReceipts,
     required this.onNavigateToStockOut,
+    required this.onNavigateToInventory,
     required this.userRole,
   });
 
@@ -821,6 +819,15 @@ class _SidebarWarehousesExpandable extends StatelessWidget {
               label: 'Výdajky',
               labelOpacity: labelOpacity,
               onTap: onNavigateToStockOut,
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: isNarrow ? 4 : 12),
+            child: _SidebarSubItem(
+              icon: Icons.fact_check_rounded,
+              label: 'Inventúra',
+              labelOpacity: labelOpacity,
+              onTap: onNavigateToInventory,
             ),
           ),
         ],

@@ -8,6 +8,7 @@ import '../../models/warehouse.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/StockOut/stock_out_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
+import '../../services/product_cache.dart';
 
 // ---------------------------------------------------------------------------
 // Draft data classes (for minimize/restore feature)
@@ -248,7 +249,7 @@ class _StockOutModalState extends State<StockOutModal> {
     final customers = await _db.getCustomers();
     final products = stockOut?.warehouseId != null
         ? await _db.getProductsByWarehouseId(stockOut!.warehouseId!)
-        : await _db.getProducts();
+        : await ProductCache.instance.load();
     if (!mounted) return;
     setState(() {
       _warehouses = warehouses;
@@ -302,7 +303,7 @@ class _StockOutModalState extends State<StockOutModal> {
     final customers = await _db.getCustomers();
     final products = _selectedWarehouseId != null
         ? await _db.getProductsByWarehouseId(_selectedWarehouseId!)
-        : await _db.getProducts();
+        : await ProductCache.instance.load();
     if (mounted) {
       setState(() {
         _warehouses = warehouses;
@@ -425,7 +426,7 @@ class _StockOutModalState extends State<StockOutModal> {
     setState(() => _selectedWarehouseId = warehouseId);
     final products = warehouseId != null
         ? await _db.getProductsByWarehouseId(warehouseId)
-        : await _db.getProducts();
+        : await ProductCache.instance.load();
     if (mounted) setState(() => _products = products);
   }
 

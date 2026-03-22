@@ -31,9 +31,13 @@ class _ReceiptSummaryReportScreenState extends State<ReceiptSummaryReportScreen>
   @override
   void initState() {
     super.initState();
-    _loadWarehouses();
-    _loadUser();
-    _runReport();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _loadWarehouses();
+    await _loadUser();
+    await _runReport();
   }
 
   Future<void> _loadUser() async {

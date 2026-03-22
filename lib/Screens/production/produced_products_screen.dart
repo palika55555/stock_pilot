@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
+import 'package:stock_pilot/theme/app_theme.dart';
 
 /// Zobrazuje súhrn vyrobených produktov podľa typu – súčet kusov za zvolené obdobie.
 class ProducedProductsScreen extends StatefulWidget {
@@ -76,20 +77,20 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.transparent,
               elevation: 0,
               centerTitle: false,
               title: const Text(
                 'Vyrobené produkty',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 26,
                 ),
@@ -102,7 +103,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
         children: [
           const SizedBox(height: 80),
           Material(
-            color: Colors.white,
+            color: AppColors.bgCard,
             elevation: 2,
             child: InkWell(
               onTap: _pickDateRange,
@@ -117,6 +118,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const Spacer(),
@@ -139,7 +141,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                             const SizedBox(height: 16),
                             Text(
                               'V zvolenom období nie sú žiadne šarže',
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -149,7 +151,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         children: [
                           Card(
-                            color: const Color(0xFF3F3D56).withOpacity(0.08),
+                            color: AppColors.bgElevated,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                               child: Row(
@@ -160,6 +162,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 18,
+                                      color: AppColors.textPrimary,
                                     ),
                                   ),
                                   Text(
@@ -167,7 +170,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 20,
-                                      color: Color(0xFF3F3D56),
+                                      color: AppColors.accentGold,
                                     ),
                                   ),
                                 ],
@@ -191,7 +194,7 @@ class _ProducedProductsScreenState extends State<ProducedProductsScreen> {
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 16,
-                                      color: Color(0xFF3F3D56),
+                                      color: AppColors.accentGold,
                                     ),
                                   ),
                                 ),
