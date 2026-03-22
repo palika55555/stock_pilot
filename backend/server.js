@@ -725,6 +725,72 @@ apiRouter.get('/transports/all', async (req, res) => {
   res.status(200).json(data);
 });
 
+// Geocoding proxy – Nominatim (bez autentifikácie, aby sa dalo používať z frontendu)
+apiRouter.get('/geocode/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json([]);
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=7&countrycodes=sk,cz&accept-language=sk`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'StockPilot/1.0 info@stockpilot.sk' } });
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// OSRM proxy – výpočet trasy (vzdialenosť + polyline)
+apiRouter.get('/route/osrm', async (req, res) => {
+  const { fromLon, fromLat, toLon, toLat } = req.query;
+  if (!fromLon || !fromLat || !toLon || !toLat) return res.status(400).json({ error: 'Chýbajú súradnice' });
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'StockPilot/1.0' } });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Vytvorenie transportu z webu
+apiRouter.post('/transports', async (req, res) => {
+  if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+  const userId = req.dataUserId ?? req.userId;
+  const { origin, destination, distance, is_round_trip, price_per_km, fuel_consumption, fuel_price, base_cost, fuel_cost, total_cost, notes } = req.body;
+  if (!origin || !destination) return res.status(400).json({ error: 'Chýba miesto odchodu alebo destinácia' });
+  try {
+    // Web-created transports use negative local_id to avoid conflict with Flutter IDs
+    const maxRes = await pool.query(
+      'SELECT COALESCE(MIN(local_id), 0) AS min_lid FROM transports WHERE user_id = $1 AND local_id < 0',
+      [userId]
+    );
+    const nextLocalId = Math.min(-1, (Number(maxRes.rows[0].min_lid) || 0) - 1);
+    await pool.query(
+      `INSERT INTO transports (user_id, local_id, origin, destination, distance, is_round_trip, price_per_km, fuel_consumption, fuel_price, base_cost, fuel_cost, total_cost, created_at, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        userId, nextLocalId,
+        origin || null, destination || null,
+        distance != null ? parseFloat(distance) : null,
+        is_round_trip ? 1 : 0,
+        price_per_km != null ? parseFloat(price_per_km) : null,
+        fuel_consumption != null ? parseFloat(fuel_consumption) : null,
+        fuel_price != null ? parseFloat(fuel_price) : null,
+        base_cost != null ? parseFloat(base_cost) : null,
+        fuel_cost != null ? parseFloat(fuel_cost) : null,
+        total_cost != null ? parseFloat(total_cost) : null,
+        new Date().toISOString(),
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[POST /transports]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 apiRouter.post('/sync/company', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   const result = await syncCompany(pool, req.body, req.dataUserId ?? req.userId);

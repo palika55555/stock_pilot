@@ -54,7 +54,7 @@ const NOTIF_TABS = [
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { notifications, markAsRead, refresh } = useNotifications()
+  const { notifications, markAsRead } = useNotifications()
   const [auth, setAuth] = useState(null)
   const [stats, setStats] = useState({
     products_count: 0,
@@ -69,7 +69,6 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)
   const [notifTab, setNotifTab] = useState('all')
-  const [syncing, setSyncing] = useState(false)
   const [adminStats, setAdminStats] = useState(null)
   const notificationsRef = useRef(null)
 
@@ -116,13 +115,6 @@ export default function DashboardPage() {
 
   const scrollToNotifications = () => {
     notificationsRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  const handleSync = () => {
-    setSyncing(true)
-    // Refresh notifikácií s force=true (obíde 30s cooldown)
-    refresh({ force: true })
-    setTimeout(() => setSyncing(false), 1500)
   }
 
   const filteredNotifs = notifTab === 'all'
@@ -402,17 +394,6 @@ export default function DashboardPage() {
             >
               <span className="dashboard-quick-action__icon">👥</span>
               <span className="dashboard-quick-action__label">Nový zákazník</span>
-            </button>
-            <button
-              type="button"
-              className="dashboard-quick-action"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              <span className="dashboard-quick-action__icon">
-                {syncing ? <span className="dashboard-quick-action__spinner" /> : '🔄'}
-              </span>
-              <span className="dashboard-quick-action__label">{syncing ? 'Synchronizujem...' : 'Synchronizovať'}</span>
             </button>
           </section>
         </>

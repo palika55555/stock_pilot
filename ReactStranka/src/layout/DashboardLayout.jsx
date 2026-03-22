@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
-import { API_BASE_FOR_CALLS } from '../config'
-import { getAuth, getAuthHeaders, clearAuth } from '../utils/auth'
+import { getAuth, clearAuth } from '../utils/auth'
 import './DashboardLayout.css'
 
 const NAV_ITEMS_USER = [
@@ -28,60 +27,20 @@ const NAV_ITEMS_ADMIN = [
   { path: '/dashboard/system-status', label: 'System Status', icon: '🖥' },
 ]
 
-function formatSyncAgo(ts) {
-  if (!ts) return ''
-  const sec = Math.floor((Date.now() - ts) / 1000)
-  if (sec < 60) return 'pred chvíľou'
-  if (sec < 3600) return `pred ${Math.floor(sec / 60)} min`
-  if (sec < 86400) return `pred ${Math.floor(sec / 3600)} h`
-  return `pred ${Math.floor(sec / 86400)} d`
-}
-
 export default function DashboardLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { unreadCount, last5, markAllAsRead, refresh: refreshNotifications } = useNotifications()
+  const { unreadCount, last5, markAllAsRead } = useNotifications()
   const [auth, setAuth] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarOpenMobile, setSidebarOpenMobile] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [syncStatus, setSyncStatus] = useState({ last_sync_at: 0, loading: false })
   const notifRef = useRef(null)
-  const lastSyncCheckRef = useRef(0)
 
   useEffect(() => {
     const a = getAuth()
     setAuth(a)
   }, [])
-
-  const doSyncCheck = useCallback((authObj, { force = false } = {}) => {
-    if (!authObj?.token) return
-    const now = Date.now()
-    // Cooldown 30s – zabrání duplicitným requestom pri re-renderoch
-    if (!force && now - lastSyncCheckRef.current < 30_000) return
-    lastSyncCheckRef.current = now
-    const headers = getAuthHeaders(authObj)
-    setSyncStatus((s) => ({ ...s, loading: true }))
-    fetch(`${API_BASE_FOR_CALLS}/sync/check`, { headers })
-      .then((r) => {
-        if (r.status === 401) { navigate('/', { replace: true }); return null }
-        return r.ok ? r.json() : null
-      })
-      .then((d) => {
-        if (d && d.last_sync_at !== undefined) {
-          setSyncStatus({ last_sync_at: d.last_sync_at ?? 0, loading: false })
-        } else {
-          // Server returned empty or no useful data – stop loading spinner
-          setSyncStatus((s) => ({ ...s, loading: false }))
-        }
-      })
-      .catch(() => setSyncStatus((s) => ({ ...s, loading: false })))
-  }, [navigate])
-
-  useEffect(() => {
-    if (!auth?.token) return
-    doSyncCheck(auth)
-  }, [auth, doSyncCheck])
 
   useEffect(() => {
     function close(e) {
@@ -93,12 +52,6 @@ export default function DashboardLayout() {
     }
   }, [notifOpen])
 
-  const handleSyncClick = () => {
-    // Force sync/check + obnov notifikácie (products fetch s force=true)
-    doSyncCheck(auth, { force: true })
-    refreshNotifications({ force: true })
-  }
-
   const handleLogout = () => {
     clearAuth()
     navigate('/', { replace: true })
@@ -107,9 +60,6 @@ export default function DashboardLayout() {
   if (!auth) return null
 
   const pathname = location.pathname
-  const syncTs = syncStatus.last_sync_at
-  const syncAgoMin = syncTs ? (Date.now() - syncTs) / 60000 : 999
-  const syncState = syncStatus.loading ? 'syncing' : syncAgoMin < 5 ? 'ok' : syncAgoMin < 30 ? 'warn' : 'error'
 
   const isAdmin = auth.user?.role === 'admin' || auth.user?.role === 'db_owner'
   const isDbOwner = auth.user?.role === 'db_owner'
@@ -184,21 +134,6 @@ export default function DashboardLayout() {
               />
             </div>
             <div className="dashboard-topbar__right">
-              <button
-                type="button"
-                className="dashboard-topbar__sync"
-                onClick={handleSyncClick}
-                disabled={syncStatus.loading}
-                title="Posledná synchronizácia"
-              >
-                <span
-                  className={`dashboard-topbar__sync-dot dashboard-topbar__sync-dot--${syncState === 'ok' ? 'green' : syncState === 'syncing' ? 'yellow dashboard-topbar__sync-dot--spinning' : 'red'}`}
-                />
-                <span>
-                  {syncStatus.loading ? 'Synchronizujem...' : syncState === 'ok' ? 'Synchronizované' : syncState === 'warn' ? 'Synchronizované' : 'Nesynchronizované'}
-                </span>
-                {syncTs && !syncStatus.loading && <span style={{ marginLeft: '0.25rem', opacity: 0.8 }}>{formatSyncAgo(syncTs)}</span>}
-              </button>
               <div className="dashboard-topbar__notif-wrap" ref={notifRef}>
                 <button
                   type="button"

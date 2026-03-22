@@ -63,7 +63,7 @@ export function NotificationProvider({ children, auth }) {
       const headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
       const newItems = []
       try {
-        // Len products – stats a sync/check fetchuje DashboardLayout samostatne
+        // Len products – stats prichádzajú z dashboard API inde
         const productsRes = await fetch(`${API_BASE_FOR_CALLS}/products`, { headers }).then((r) => (r.ok ? r.json() : []))
         if (Array.isArray(productsRes)) {
           const low = productsRes.filter((p) => (p.qty ?? 0) < 5)

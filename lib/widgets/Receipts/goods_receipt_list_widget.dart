@@ -44,7 +44,7 @@ class GoodsReceiptList extends StatelessWidget {
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
       itemCount: receipts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) => GoodsReceiptCard(
         receipt: receipts[index],
         warehouses: warehouses,

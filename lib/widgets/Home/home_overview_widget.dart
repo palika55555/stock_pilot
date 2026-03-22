@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -281,17 +282,19 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                         ),
                     ],
                   ),
-                  const SizedBox(width: 10),
-                  _SyncButton(
-                    onSyncFromWeb: () async {
-                      await widget.onSyncFromBackend?.call();
-                      _loadStats();
-                    },
-                    onSyncToWeb: () async {
-                      await widget.onSyncToBackend?.call();
-                      _loadStats();
-                    },
-                  ),
+                  if (!kIsWeb) ...[
+                    const SizedBox(width: 10),
+                    _SyncButton(
+                      onSyncFromWeb: () async {
+                        await widget.onSyncFromBackend?.call();
+                        _loadStats();
+                      },
+                      onSyncToWeb: () async {
+                        await widget.onSyncToBackend?.call();
+                        _loadStats();
+                      },
+                    ),
+                  ],
                 ],
               ),
             ],
