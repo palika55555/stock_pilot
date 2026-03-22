@@ -8,6 +8,9 @@ import DetailDrawer, { DrawerRow } from '../components/DetailDrawer'
 
 const EMPTY_FORM = { name: '', plu: '', ean: '', unit: 'ks' }
 
+/** Max. počet produktov na stránku (zhodné s limitom na API). */
+const PRODUCTS_PAGE_SIZE = 100
+
 function stockBadge(qty) {
   if (qty == null) return null
   if (qty === 0) return { cls: 'item-card-badge--stock-zero', label: '0 ks' }
@@ -22,6 +25,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
 
   // Drawer state
   const [selected, setSelected] = useState(null)
@@ -36,18 +41,28 @@ export default function ProductsPage() {
     setAuth(a)
   }, [navigate])
 
-  const fetchProducts = useCallback(async (a, q) => {
+  const fetchProducts = useCallback(async (a, q, p) => {
     if (!a) return
     setLoading(true)
     setError('')
     try {
-      const url = q.trim()
-        ? `${API_BASE_FOR_CALLS}/products?search=${encodeURIComponent(q)}`
-        : `${API_BASE_FOR_CALLS}/products`
-      const res = await fetch(url, { headers: getAuthHeaders(a) })
+      const params = new URLSearchParams()
+      params.set('page', String(p))
+      params.set('limit', String(PRODUCTS_PAGE_SIZE))
+      if (q.trim()) params.set('search', q.trim())
+      const res = await fetch(`${API_BASE_FOR_CALLS}/products?${params}`, { headers: getAuthHeaders(a) })
       if (!res.ok) throw new Error('Načítanie zlyhalo')
       const data = await res.json()
-      setProducts(Array.isArray(data) ? data : [])
+      if (data && Array.isArray(data.items)) {
+        setProducts(data.items)
+        setTotal(typeof data.total === 'number' ? data.total : data.items.length)
+      } else if (Array.isArray(data)) {
+        setProducts(data)
+        setTotal(data.length)
+      } else {
+        setProducts([])
+        setTotal(0)
+      }
     } catch (e) {
       setError(e.message || 'Chyba')
     } finally {
@@ -57,9 +72,9 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (!auth) return
-    const t = setTimeout(() => fetchProducts(auth, search), 250)
+    const t = setTimeout(() => fetchProducts(auth, search, page), 250)
     return () => clearTimeout(t)
-  }, [auth, search, fetchProducts])
+  }, [auth, search, page, fetchProducts])
 
   const openItem = (p) => {
     setSelected(p)
@@ -107,7 +122,7 @@ export default function ProductsPage() {
       data = await res.json().catch(() => ({}))
       if (!res.ok) { setSaveError(data.error || 'Uloženie zlyhalo'); return }
 
-      await fetchProducts(auth, search)
+      await fetchProducts(auth, search, page)
       if (mode === 'create') {
         closeDrawer()
       } else {
@@ -123,6 +138,10 @@ export default function ProductsPage() {
 
   const drawerOpen = selected !== null || mode === 'create'
   const drawerTitle = mode === 'create' ? 'Nový produkt' : (selected?.name ?? '')
+
+  const totalPages = total <= 0 ? 1 : Math.ceil(total / PRODUCTS_PAGE_SIZE)
+  const rangeFrom = total === 0 ? 0 : (page - 1) * PRODUCTS_PAGE_SIZE + 1
+  const rangeTo = Math.min(page * PRODUCTS_PAGE_SIZE, total)
 
   if (!auth) return null
 
@@ -141,7 +160,10 @@ export default function ProductsPage() {
               className="items-search"
               placeholder="Hľadať podľa názvu, PLU alebo EAN…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
             />
             <button type="button" className="items-create-btn" onClick={openCreate}>
               + Nový produkt
@@ -158,28 +180,58 @@ export default function ProductsPage() {
           ) : products.length === 0 ? (
             <p className="customers-empty">Žiadne produkty. Synchronizujte z aplikácie alebo vytvorte nový.</p>
           ) : (
-            <div className="items-grid">
-              {products.map((p) => {
-                const badge = stockBadge(p.qty)
-                return (
-                  <button key={p.unique_id} type="button" className="item-card" onClick={() => openItem(p)}>
-                    <div className="item-card-top">
-                      <span className="item-card-name">{p.name}</span>
-                      {badge && (
-                        <span className={`item-card-badge ${badge.cls}`}>
-                          {badge.label} {p.unit || 'ks'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="item-card-meta">
-                      {p.plu && <span className="item-card-tag">PLU {p.plu}</span>}
-                      {p.ean && <span className="item-card-tag">EAN {p.ean}</span>}
-                      {p.unit && p.unit !== 'ks' && <span className="item-card-tag">{p.unit}</span>}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="items-grid">
+                {products.map((p) => {
+                  const badge = stockBadge(p.qty)
+                  return (
+                    <button key={p.unique_id} type="button" className="item-card" onClick={() => openItem(p)}>
+                      <div className="item-card-top">
+                        <span className="item-card-name">{p.name}</span>
+                        {badge && (
+                          <span className={`item-card-badge ${badge.cls}`}>
+                            {badge.label} {p.unit || 'ks'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="item-card-meta">
+                        {p.plu && <span className="item-card-tag">PLU {p.plu}</span>}
+                        {p.ean && <span className="item-card-tag">EAN {p.ean}</span>}
+                        {p.unit && p.unit !== 'ks' && <span className="item-card-tag">{p.unit}</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {total > PRODUCTS_PAGE_SIZE || page > 1 ? (
+                <div className="items-pagination" role="navigation" aria-label="Stránkovanie produktov">
+                  <span className="items-pagination-info">
+                    {total > 0 ? `${rangeFrom}–${rangeTo} z ${total}` : '0'}
+                  </span>
+                  <div className="items-pagination-actions">
+                    <button
+                      type="button"
+                      className="items-pagination-btn"
+                      disabled={page <= 1 || loading}
+                      onClick={() => setPage((x) => Math.max(1, x - 1))}
+                    >
+                      Predchádzajúca
+                    </button>
+                    <span className="items-pagination-page">
+                      Strana {page} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="items-pagination-btn"
+                      disabled={page >= totalPages || loading}
+                      onClick={() => setPage((x) => x + 1)}
+                    >
+                      Ďalšia
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
         </main>
       </div>

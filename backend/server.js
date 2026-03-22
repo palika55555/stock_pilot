@@ -881,16 +881,46 @@ apiRouter.get('/products', async (req, res) => {
     return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
   }
   const search = (req.query.search ?? '').toString().trim().toLowerCase();
+  const pageParam = req.query.page;
+  const usePagination = pageParam !== undefined && pageParam !== '';
   try {
     const dataUserId = req.dataUserId ?? req.userId;
-    let query = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
+    const baseSelect = `SELECT unique_id, name, plu, ean, unit, SUM(qty)::int AS qty
       FROM products WHERE user_id = $1 GROUP BY unique_id, name, plu, ean, unit`;
+    let innerQuery = baseSelect;
     const params = [dataUserId];
     if (search) {
       params.push(`%${search}%`);
-      query = `SELECT * FROM (${query}) AS agg
+      innerQuery = `SELECT * FROM (${baseSelect}) AS agg
         WHERE LOWER(name) LIKE $2 OR plu LIKE $2 OR (ean IS NOT NULL AND LOWER(ean) LIKE $2)`;
     }
+
+    if (usePagination) {
+      const page = Math.max(1, parseInt(String(pageParam), 10) || 1);
+      let limitPerPage = parseInt(String(req.query.limit ?? '100'), 10);
+      if (Number.isNaN(limitPerPage) || limitPerPage < 1) limitPerPage = 100;
+      limitPerPage = Math.min(100, limitPerPage);
+      const offset = (page - 1) * limitPerPage;
+
+      const countSql = `SELECT COUNT(*)::int AS c FROM (${innerQuery}) AS sub`;
+      const { rows: countRows } = await pool.query(countSql, params);
+      const total = countRows[0]?.c ?? 0;
+
+      const limIdx = params.length + 1;
+      const offIdx = params.length + 2;
+      const dataSql = `SELECT * FROM (${innerQuery}) AS sub ORDER BY name ASC LIMIT $${limIdx} OFFSET $${offIdx}`;
+      const dataParams = [...params, limitPerPage, offset];
+      const { rows } = await pool.query(dataSql, dataParams);
+
+      return res.json({
+        items: rows,
+        total,
+        page,
+        pageSize: limitPerPage,
+      });
+    }
+
+    let query = innerQuery;
     query += ' ORDER BY name ASC LIMIT 200';
     const { rows } = await pool.query(query, params);
     res.json(rows);
