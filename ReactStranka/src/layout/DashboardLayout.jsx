@@ -4,28 +4,61 @@ import { useNotifications } from '../context/NotificationContext'
 import { getAuth, clearAuth } from '../utils/auth'
 import './DashboardLayout.css'
 
-const NAV_ITEMS_USER = [
-  { path: '/dashboard', label: 'Prehľad', icon: '◉' },
-  { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
-  { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
-  { path: '/dashboard/warehouses', label: 'Sklady', icon: '🏪' },
-  { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '🚚' },
-  { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '📄' },
-  { path: '/dashboard/prijemky', label: 'Príjemky', icon: '📥' },
-  { path: '/dashboard/vydajky', label: 'Výdajky', icon: '📤' },
-  { path: '/dashboard/receptury', label: 'Receptúry', icon: '📋' },
-  { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
-  { path: '/dashboard/transporty', label: 'Doprava', icon: '🚚' },
-  { path: '/dashboard/production', label: 'Výrobné šarže', icon: '📊' },
-  { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
+const NAV_SECTIONS = [
+  {
+    label: null,
+    items: [
+      { path: '/dashboard', label: 'Prehľad', icon: '⊞' },
+    ],
+  },
+  {
+    label: 'Sklad',
+    items: [
+      { path: '/dashboard/products', label: 'Produkty', icon: '▣' },
+      { path: '/dashboard/warehouses', label: 'Sklady', icon: '⌂' },
+      { path: '/dashboard/prijemky', label: 'Príjemky', icon: '↓' },
+      { path: '/dashboard/vydajky', label: 'Výdajky', icon: '↑' },
+    ],
+  },
+  {
+    label: 'Obchod',
+    items: [
+      { path: '/dashboard/customers', label: 'Zákazníci', icon: '◎' },
+      { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '⬡' },
+      { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '≡' },
+      { path: '/dashboard/transporty', label: 'Doprava', icon: '⇒' },
+    ],
+  },
+  {
+    label: 'Výroba',
+    items: [
+      { path: '/dashboard/receptury', label: 'Receptúry', icon: '✦' },
+      { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '◈' },
+      { path: '/dashboard/production', label: 'Výrobné šarže', icon: '◫' },
+    ],
+  },
+  {
+    label: 'Nástroje',
+    items: [
+      { path: '/dashboard/scan', label: 'Skenovať', icon: '▦' },
+    ],
+  },
 ]
 
-// Admin (a db_owner) vidí všetky moduly + extra sekcie
-const NAV_ITEMS_ADMIN = [
-  ...NAV_ITEMS_USER,
-  { path: '/dashboard/users', label: 'Používatelia', icon: '👤' },
-  { path: '/dashboard/system-status', label: 'System Status', icon: '🖥' },
+const NAV_SECTIONS_ADMIN = [
+  ...NAV_SECTIONS,
+  {
+    label: 'Správa',
+    items: [
+      { path: '/dashboard/users', label: 'Používatelia', icon: '⊙' },
+      { path: '/dashboard/system-status', label: 'System Status', icon: '◐' },
+    ],
+  },
 ]
+
+// flat lists pre spätnú kompatibilitu
+const NAV_ITEMS_USER = NAV_SECTIONS.flatMap(s => s.items)
+const NAV_ITEMS_ADMIN = NAV_SECTIONS_ADMIN.flatMap(s => s.items)
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
@@ -84,20 +117,28 @@ export default function DashboardLayout() {
               </div>
             )}
             <nav className="dashboard-sidebar__nav">
-              {(isDbOwner ? NAV_ITEMS_ADMIN : isAdmin ? NAV_ITEMS_ADMIN.filter(i => i.path !== '/dashboard/system-status') : NAV_ITEMS_USER).map((item) => {
-                const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
-                return (
-                  <button
-                    key={item.path + item.label}
-                    type="button"
-                    className={`dashboard-sidebar__nav-item ${isActive ? 'dashboard-sidebar__nav-item--active' : ''}`}
-                    onClick={() => { if (!isActive) navigate(item.path); setSidebarOpenMobile(false) }}
-                  >
-                    <span className="dashboard-sidebar__nav-icon" aria-hidden="true">{item.icon}</span>
-                    <span className="dashboard-sidebar__nav-text">{item.label}</span>
-                  </button>
-                )
-              })}
+              {(isDbOwner ? NAV_SECTIONS_ADMIN : isAdmin ? NAV_SECTIONS_ADMIN.map(s => s.label === 'Správa' ? { ...s, items: s.items.filter(i => i.path !== '/dashboard/system-status') } : s) : NAV_SECTIONS).map((section, si) => (
+                <div key={si} className="dashboard-sidebar__section">
+                  {section.label && (
+                    <div className="dashboard-sidebar__section-label">{section.label}</div>
+                  )}
+                  {section.items.map((item) => {
+                    const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
+                    return (
+                      <button
+                        key={item.path + item.label}
+                        type="button"
+                        title={item.label}
+                        className={`dashboard-sidebar__nav-item ${isActive ? 'dashboard-sidebar__nav-item--active' : ''}`}
+                        onClick={() => { if (!isActive) navigate(item.path); setSidebarOpenMobile(false) }}
+                      >
+                        <span className="dashboard-sidebar__nav-icon" aria-hidden="true">{item.icon}</span>
+                        <span className="dashboard-sidebar__nav-text">{item.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
             </nav>
             <div className="dashboard-sidebar__user">
               <div className="dashboard-sidebar__user-name">{auth.user?.fullName || auth.user?.username || 'Používateľ'}</div>

@@ -11,6 +11,7 @@ import '../../services/api_sync_service.dart' show syncTransportsToBackend;
 import '../../models/transport.dart';
 import '../../widgets/common/glassmorphism_container.dart';
 import 'address_autocomplete_field.dart';
+import 'transport_calculator_theme.dart';
 
 class TransportCalculatorWidget extends StatefulWidget {
   const TransportCalculatorWidget({super.key});
@@ -190,26 +191,27 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final topPad =
+        MediaQuery.paddingOf(context).top + kToolbarHeight + 12;
+
     return Container(
       constraints: const BoxConstraints.expand(),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          stops: [0.0, 0.5, 1.0],
           colors: [
-            Color(0xFF667EEA),
-            Color(0xFF764BA2),
-            Color(
-              0xFF6B8DD6,
-            ), // Pridaná ďalšia farba pre lepší lom svetla pod sklom
+            TransportCalculatorTheme.bgDeep,
+            TransportCalculatorTheme.bgDeep2,
+            Color(0xFF151A22),
           ],
         ),
       ),
       child: Scaffold(
-        backgroundColor:
-            Colors.transparent, // Dôležité: Scaffold nesmie prekrývať gradient
+        backgroundColor: Colors.transparent,
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+          padding: EdgeInsets.fromLTRB(20, topPad, 20, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -252,22 +254,65 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
     required Widget child,
     EdgeInsetsGeometry? padding,
   }) {
-    return GlassmorphismContainer(padding: padding, child: child);
+    return GlassmorphismContainer(
+      padding: padding,
+      borderRadius: 28,
+      blurSigma: 24,
+      borderWidth: 1,
+      borderColor: Colors.white.withOpacity(0.12),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          TransportCalculatorTheme.surfaceCard.withOpacity(0.72),
+          TransportCalculatorTheme.surfaceCard.withOpacity(0.48),
+          TransportCalculatorTheme.bgDeep2.withOpacity(0.55),
+        ],
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: TransportCalculatorTheme.accentAmber.withOpacity(0.10),
+          blurRadius: 36,
+          offset: const Offset(0, 14),
+          spreadRadius: -8,
+        ),
+        BoxShadow(
+          color: Colors.black.withOpacity(0.45),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+        ),
+      ],
+      child: child,
+    );
   }
 
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: const Icon(
-            Icons.local_shipping_rounded,
-            color: Colors.white,
-            size: 30,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    TransportCalculatorTheme.accentAmber.withOpacity(0.22),
+                    TransportCalculatorTheme.surfaceCard.withOpacity(0.9),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: TransportCalculatorTheme.accentAmber.withOpacity(0.35),
+                ),
+              ),
+              child: const Icon(
+                Icons.local_shipping_rounded,
+                color: TransportCalculatorTheme.accentAmber,
+                size: 30,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 16),
@@ -276,9 +321,10 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
             'Kalkulácia dopravy',
             style: TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
+              color: TransportCalculatorTheme.textPrimary,
+              letterSpacing: 0.4,
+              height: 1.2,
             ),
           ),
         ),
@@ -346,66 +392,70 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
           ],
         ),
         const SizedBox(height: 15),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: Row(
-            children: [
-              Checkbox(
-                value: _isRoundTrip,
-                onChanged: (value) {
-                  setState(() {
-                    _isRoundTrip = value ?? false;
-                  });
-                },
-                activeColor: Colors.white,
-                checkColor: const Color(0xFF764BA2),
-              ),
-              Expanded(
-                child: Text(
-                  'Cesta tam aj späť (zdvojnásobí KM)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
+        _GlassSurface(
+          borderRadius: 14,
+          blurSigma: 14,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: _isRoundTrip,
+                  onChanged: (value) {
+                    setState(() {
+                      _isRoundTrip = value ?? false;
+                    });
+                  },
+                  fillColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return TransportCalculatorTheme.accentAmber;
+                    }
+                    return Colors.transparent;
+                  }),
+                  checkColor: TransportCalculatorTheme.bgDeep,
+                  side: BorderSide(color: Colors.white.withOpacity(0.28)),
+                ),
+                Expanded(
+                  child: Text(
+                    'Cesta tam aj späť (zdvojnásobí KM)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: TransportCalculatorTheme.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 15),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                color: Colors.white.withOpacity(0.8),
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Aplikácia používa OpenStreetMap (bezplatné). Pre ešte lepšie výsledky môžete zadať vlastný Google Maps API kľúč.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.8),
-                    height: 1.4,
+        _GlassSurface(
+          borderRadius: 14,
+          blurSigma: 12,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: TransportCalculatorTheme.accentAmber.withOpacity(0.85),
+                  size: 18,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Aplikácia používa OpenStreetMap (bezplatné). Pre ešte lepšie výsledky môžete zadať vlastný Google Maps API kľúč.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: TransportCalculatorTheme.textMuted,
+                      height: 1.45,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -425,53 +475,63 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+          style: const TextStyle(
+            color: TransportCalculatorTheme.textMuted,
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          onChanged:
-              onChanged ??
-              (value) {
-                if (controller == _apiKeyController) {
-                  setState(() {});
-                }
-              },
-          style: const TextStyle(color: Colors.white),
-          keyboardType: obscureText ? TextInputType.text : TextInputType.number,
-          decoration: InputDecoration(
-            prefixIcon: Icon(
-              icon,
-              color: Colors.white.withOpacity(0.7),
-              size: 20,
-            ),
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.1),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.white.withOpacity(0.4),
-                width: 1.5,
+        _GlassSurface(
+          borderRadius: 14,
+          blurSigma: 16,
+          child: Material(
+            color: Colors.transparent,
+            child: TextField(
+              controller: controller,
+              obscureText: obscureText,
+              onChanged:
+                  onChanged ??
+                  (value) {
+                    if (controller == _apiKeyController) {
+                      setState(() {});
+                    }
+                  },
+              style: const TextStyle(color: TransportCalculatorTheme.textPrimary),
+              keyboardType:
+                  obscureText ? TextInputType.text : TextInputType.number,
+              decoration: InputDecoration(
+                prefixIcon: Icon(
+                  icon,
+                  color: TransportCalculatorTheme.accentAmberSoft,
+                  size: 20,
+                ),
+                filled: true,
+                fillColor: Colors.transparent,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: TransportCalculatorTheme.accentAmber.withOpacity(0.85),
+                    width: 1.5,
+                  ),
+                ),
+                hintStyle: TextStyle(
+                  color: TransportCalculatorTheme.textMuted.withOpacity(0.65),
+                ),
               ),
             ),
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
           ),
         ),
       ],
@@ -481,25 +541,36 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
   Widget _buildCalculateButton() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.4),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
+            color: TransportCalculatorTheme.accentAmber.withOpacity(0.22),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ElevatedButton(
         onPressed: _isCalculating ? null : _calculateTransport,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF764BA2),
+          backgroundColor: TransportCalculatorTheme.actionBlue,
+          foregroundColor: TransportCalculatorTheme.textPrimary,
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: TransportCalculatorTheme.accentAmber.withOpacity(0.45),
+              width: 1,
+            ),
           ),
           elevation: 0,
+          shadowColor: Colors.transparent,
         ),
         child: _isCalculating
             ? const SizedBox(
@@ -507,12 +578,17 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF764BA2)),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    TransportCalculatorTheme.accentAmber,
+                  ),
                 ),
               )
             : const Text(
                 'VYPOČÍTAŤ NÁKLADY',
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
               ),
       ),
     );
@@ -526,9 +602,9 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
           'Výsledky',
           style: TextStyle(
             fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: 0.5,
+            fontWeight: FontWeight.w600,
+            color: TransportCalculatorTheme.textPrimary,
+            letterSpacing: 0.35,
           ),
         ),
         const SizedBox(height: 20),
@@ -538,7 +614,6 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
           'Vzdialenosť',
           '${_calculatedDistance!.toStringAsFixed(2)} km',
           Icons.straighten_rounded,
-          Colors.white,
         ),
         const SizedBox(height: 12),
 
@@ -547,7 +622,6 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
           'Základná cena',
           '${_calculationResult!['baseCost']!.toStringAsFixed(2)} €',
           Icons.euro_rounded,
-          Colors.white,
         ),
         const SizedBox(height: 12),
 
@@ -557,47 +631,37 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
             'Náklady na palivo',
             '${_calculationResult!['fuelCost']!.toStringAsFixed(2)} €',
             Icons.local_gas_station_rounded,
-            Colors.white,
           ),
           const SizedBox(height: 12),
         ],
 
         // Celkové náklady
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.3),
-                Colors.white.withOpacity(0.2),
+        _GlassSurface(
+          borderRadius: 16,
+          blurSigma: 18,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Celkové náklady',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: TransportCalculatorTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  '${_calculationResult!['totalCost']!.toStringAsFixed(2)} €',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: TransportCalculatorTheme.accentAmber,
+                  ),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Celkové náklady',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              Text(
-                '${_calculationResult!['totalCost']!.toStringAsFixed(2)} €',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ],
           ),
         ),
         const SizedBox(height: 20),
@@ -609,6 +673,7 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
                 'ULOŽIŤ',
                 Icons.save_rounded,
                 _saveTransport,
+                glassTint: TransportCalculatorTheme.actionBlue,
               ),
             ),
             const SizedBox(width: 12),
@@ -617,6 +682,7 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
                 'PDF ŠTÍTOK',
                 Icons.picture_as_pdf_rounded,
                 _generatePdfLabel,
+                glassTint: TransportCalculatorTheme.actionBurgundy,
               ),
             ),
           ],
@@ -625,37 +691,40 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
     );
   }
 
-  Widget _buildActionButton(String text, IconData icon, VoidCallback onPressed) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  Widget _buildActionButton(
+    String text,
+    IconData icon,
+    VoidCallback onPressed, {
+    required Color glassTint,
+  }) {
+    return _GlassSurface(
+      borderRadius: 12,
+      blurSigma: 12,
+      glassTint: glassTint,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: TransportCalculatorTheme.accentAmberSoft),
+                const SizedBox(width: 8),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: TransportCalculatorTheme.textPrimary,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(
-          text,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white.withOpacity(0.2),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.white.withOpacity(0.3)),
-          ),
-          elevation: 0,
         ),
       ),
     );
@@ -768,45 +837,56 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
     String title,
     String value,
     IconData icon,
-    Color color,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+    return _GlassSurface(
+      borderRadius: 14,
+      blurSigma: 12,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: TransportCalculatorTheme.surfaceCard,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: TransportCalculatorTheme.accentAmber.withOpacity(0.35),
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: TransportCalculatorTheme.accentAmber,
+                    size: 24,
+                  ),
+                ),
               ),
             ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: TransportCalculatorTheme.textMuted,
+                ),
+              ),
             ),
-          ),
-        ],
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: TransportCalculatorTheme.accentAmber,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -845,9 +925,9 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
             'Trasa na mape',
             style: TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
+              color: TransportCalculatorTheme.textPrimary,
+              letterSpacing: 0.35,
             ),
           ),
         ),
@@ -878,7 +958,7 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
                       Polyline(
                         points: _routePolyline!,
                         strokeWidth: 4.0,
-                        color: const Color(0xFF6366F1),
+                        color: TransportCalculatorTheme.accentAmber,
                       ),
                     ],
                   ),
@@ -939,6 +1019,70 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Jemný sklenený panel (tmavý glass; voliteľný [glassTint] pre akčné tlačidlá).
+class _GlassSurface extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final double blurSigma;
+  final Color? glassTint;
+
+  const _GlassSurface({
+    required this.child,
+    this.borderRadius = 14,
+    this.blurSigma = 14,
+    this.glassTint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = glassTint;
+    final List<Color> gradientColors = tint != null
+        ? [
+            tint.withOpacity(0.62),
+            tint.withOpacity(0.42),
+          ]
+        : [
+            TransportCalculatorTheme.surfaceCard.withOpacity(0.58),
+            TransportCalculatorTheme.bgDeep.withOpacity(0.52),
+          ];
+
+    final Color borderColor = tint != null
+        ? Colors.white.withOpacity(0.14)
+        : TransportCalculatorTheme.accentAmber.withOpacity(0.18);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradientColors,
+            ),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: TransportCalculatorTheme.accentAmber.withOpacity(0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }

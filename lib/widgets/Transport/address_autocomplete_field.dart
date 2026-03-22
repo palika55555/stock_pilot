@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui'; // Potrebné pre ImageFilter
 import '../../services/transport/transport_service.dart';
+import 'transport_calculator_theme.dart';
 
 class AddressAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
@@ -134,12 +135,19 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 250),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      gradient: LinearGradient(
+                        colors: [
+                          TransportCalculatorTheme.surfaceCard.withOpacity(0.92),
+                          TransportCalculatorTheme.bgDeep.withOpacity(0.88),
+                        ],
+                      ),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(
+                        color: TransportCalculatorTheme.accentAmber.withOpacity(0.22),
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withOpacity(0.45),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -172,19 +180,19 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.2),
+              color: TransportCalculatorTheme.accentAmber.withOpacity(0.18),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.location_on_rounded,
-              color: Color(0xFF818CF8),
+              color: TransportCalculatorTheme.accentAmber,
               size: 18,
             ),
           ),
           title: Text(
             suggestion,
             style: const TextStyle(
-              color: Colors.white,
+              color: TransportCalculatorTheme.textPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w400,
             ),
@@ -228,62 +236,91 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
             widget.label,
             style: const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.white70,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
+              color: TransportCalculatorTheme.textMuted,
+              letterSpacing: 0.35,
             ),
           ),
         ),
         CompositedTransformTarget(
           link: _layerLink,
-          child: Container(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focusNode,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: widget.hint,
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                prefixIcon: Icon(widget.icon, color: const Color(0xFF818CF8)),
-                suffixIcon: _buildSuffixIcon(),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.08),
-                enabledBorder: OutlineInputBorder(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      TransportCalculatorTheme.surfaceCard.withOpacity(0.55),
+                      TransportCalculatorTheme.bgDeep.withOpacity(0.5),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(
+                    color: TransportCalculatorTheme.accentAmber.withOpacity(0.22),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: TransportCalculatorTheme.accentAmber.withOpacity(0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                      spreadRadius: -2,
+                    ),
+                  ],
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(
-                    color: Color(0xFF6366F1),
-                    width: 1.5,
+                child: Material(
+                  color: Colors.transparent,
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: _focusNode,
+                    style: const TextStyle(
+                      color: TransportCalculatorTheme.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: widget.hint,
+                      hintStyle: TextStyle(
+                        color: TransportCalculatorTheme.textMuted.withOpacity(0.75),
+                      ),
+                      prefixIcon: Icon(
+                        widget.icon,
+                        color: TransportCalculatorTheme.accentAmberSoft,
+                      ),
+                      suffixIcon: _buildSuffixIcon(),
+                      filled: true,
+                      fillColor: Colors.transparent,
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: TransportCalculatorTheme.accentAmber.withOpacity(0.85),
+                          width: 1.5,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 18,
+                      ),
+                    ),
+                    onTap: () {
+                      if (_suggestions.isNotEmpty && !_isSelecting) {
+                        _showOverlay();
+                      }
+                    },
+                    onChanged: (value) {
+                      if (_isSelecting) {
+                        _isSelecting = false;
+                      }
+                    },
                   ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 18,
-                ),
               ),
-              onTap: () {
-                if (_suggestions.isNotEmpty && !_isSelecting) {
-                  _showOverlay();
-                }
-              },
-              onChanged: (value) {
-                // Resetujeme flag pri zmene textu používateľom (keď používateľ začne písať)
-                if (_isSelecting) {
-                  _isSelecting = false;
-                }
-              },
             ),
           ),
         ),
@@ -301,14 +338,14 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           height: 18,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Color(0xFF818CF8),
+            color: TransportCalculatorTheme.accentAmber,
           ),
         ),
       );
     }
     if (widget.controller.text.isNotEmpty) {
       return IconButton(
-        icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+        icon: const Icon(Icons.close_rounded, color: TransportCalculatorTheme.textMuted, size: 20),
         onPressed: () {
           widget.controller.clear();
           _removeOverlay();
@@ -319,8 +356,9 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   }
 
   Widget _buildFooterInfo() {
-    if (widget.apiKey != null && widget.apiKey!.isNotEmpty)
+    if (widget.apiKey != null && widget.apiKey!.isNotEmpty) {
       return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 8, left: 4),
       child: Row(
@@ -328,14 +366,14 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           Icon(
             Icons.auto_awesome,
             size: 12,
-            color: Colors.white.withOpacity(0.4),
+            color: TransportCalculatorTheme.textMuted.withOpacity(0.65),
           ),
           const SizedBox(width: 6),
           Text(
             'OpenStreetMap engine active',
             style: TextStyle(
               fontSize: 10,
-              color: Colors.white.withOpacity(0.4),
+              color: TransportCalculatorTheme.textMuted.withOpacity(0.65),
               fontStyle: FontStyle.italic,
             ),
           ),

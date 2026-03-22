@@ -18,9 +18,9 @@ class GlassmorphismContainer extends StatelessWidget {
     required this.child,
     this.padding,
     this.borderRadius = 24.0,
-    this.blurSigma = 15.0,
+    this.blurSigma = 20.0,
     this.borderColor,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
     this.boxShadow,
     this.gradient,
   });
@@ -41,21 +41,22 @@ class GlassmorphismContainer extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.white.withOpacity(0.3),
-                    Colors.white.withOpacity(0.1),
+                    Colors.white.withOpacity(0.22),
+                    Colors.white.withOpacity(0.07),
                   ],
                 ),
             border: Border.all(
-              color: borderColor ?? Colors.white.withOpacity(0.4),
+              color: borderColor ?? Colors.white.withOpacity(0.35),
               width: borderWidth,
             ),
             boxShadow:
                 boxShadow ??
                 [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 32,
+                    offset: const Offset(0, 12),
+                    spreadRadius: -2,
                   ),
                 ],
           ),
