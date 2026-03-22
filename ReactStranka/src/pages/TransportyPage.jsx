@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
@@ -42,28 +43,16 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [focused, setFocused] = useState(false)
-  const [dropdownStyle, setDropdownStyle] = useState(null)
+  const [dropdownRect, setDropdownRect] = useState(null)
   const timer = useRef(null)
   const cancelled = useRef(false)
   const inputRef = useRef(null)
 
-  const calcDropdownStyle = useCallback(() => {
-    if (!inputRef.current) return null
-    const rect = inputRef.current.getBoundingClientRect()
-    const spaceBelow = window.innerHeight - rect.bottom
-    const spaceAbove = rect.top
-    const dropH = Math.min(280, window.innerHeight * 0.4)
-    // Otvoriť nahor ak dole nie je dosť miesta (napr. nad bottom nav)
-    const openUp = spaceBelow < dropH + 80 && spaceAbove > spaceBelow
-    return {
-      position: 'fixed',
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-      ...(openUp
-        ? { bottom: window.innerHeight - rect.top + 4, top: 'auto', maxHeight: Math.min(spaceAbove - 8, 280) }
-        : { top: rect.bottom + 4, bottom: 'auto', maxHeight: Math.min(spaceBelow - 80, 280) }),
-    }
+  // Vypočíta pozíciu inputu a uloží ju – dropdown sa renderuje cez portal priamo do body
+  const updateRect = useCallback(() => {
+    if (!inputRef.current) return
+    const r = inputRef.current.getBoundingClientRect()
+    setDropdownRect({ top: r.bottom, left: r.left, width: r.width, inputTop: r.top })
   }, [])
 
   const search = useCallback(async (q) => {
@@ -84,7 +73,7 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
     onChange(v)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => search(v), 300)
-    setDropdownStyle(calcDropdownStyle())
+    updateRect()
     setOpen(true)
   }
 
@@ -97,6 +86,29 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
   }
 
   useEffect(() => () => { cancelled.current = true; clearTimeout(timer.current) }, [])
+
+  // Dropdown štýl – position: fixed, vždy tesne pod inputom
+  // Ak pod inputom nie je dostatok miesta (napr. mobilná klávesnica / bottom nav),
+  // otvorí sa NAHOR
+  const getDropStyle = () => {
+    if (!dropdownRect) return {}
+    const BOTTOM_CLEARANCE = 80 // priestor pre bottom nav + padding
+    const spaceBelow = window.innerHeight - dropdownRect.top - BOTTOM_CLEARANCE
+    const spaceAbove = dropdownRect.inputTop - 8
+    const openUp = spaceBelow < 120 && spaceAbove > spaceBelow
+    return {
+      position: 'fixed',
+      left: dropdownRect.left,
+      width: dropdownRect.width,
+      zIndex: 9999,
+      right: 'auto',
+      ...(openUp
+        ? { bottom: window.innerHeight - dropdownRect.inputTop + 4, top: 'auto', maxHeight: Math.min(spaceAbove, 280) }
+        : { top: dropdownRect.top + 4, bottom: 'auto', maxHeight: Math.min(spaceBelow, 280) }),
+    }
+  }
+
+  const showDropdown = open && (busy || suggestions.length > 0) && dropdownRect
 
   return (
     <div className="tp-location-field">
@@ -111,17 +123,14 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
           placeholder={placeholder}
           onFocus={() => {
             setFocused(true)
-            if (suggestions.length > 0) {
-              setDropdownStyle(calcDropdownStyle())
-              setOpen(true)
-            }
+            if (suggestions.length > 0) { updateRect(); setOpen(true) }
           }}
           onBlur={() => { setFocused(false); timer.current = setTimeout(() => setOpen(false), 180) }}
           autoComplete="off"
         />
       </div>
-      {open && (busy || suggestions.length > 0) && (
-        <ul className="tp-autocomplete" style={dropdownStyle || undefined}>
+      {showDropdown && createPortal(
+        <ul className="tp-autocomplete" style={getDropStyle()}>
           {busy && suggestions.length === 0 && (
             <li className="tp-autocomplete__loading">
               <div className="tp-autocomplete__spinner" /> Hľadám…
@@ -136,7 +145,8 @@ function AddressField({ value, onChange, onSelect, placeholder, dotClass, auth }
               </li>
             )
           })}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )

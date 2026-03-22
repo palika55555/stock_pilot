@@ -313,23 +313,16 @@
 
 /* ── Autocomplete dropdown ────────────────────────────── */
 .tp-autocomplete {
-  /* default: absolute (desktop) – prepisuje sa inline style na mobile (fixed) */
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  /* Pozícia sa nastavuje výhradne cez inline style (position: fixed + súradnice z getBoundingClientRect) */
   background: rgba(18, 20, 32, 0.97);
   border: 1px solid rgba(99,102,241,0.25);
   border-radius: 12px;
-  max-height: 280px;
   overflow-y: auto;
-  z-index: 300;
   list-style: none;
   padding: 0.4rem;
   margin: 0;
   box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1);
   backdrop-filter: blur(16px);
-  /* keď je position: fixed (inline style), right: 0 nesmie konfliktovať */
   box-sizing: border-box;
 }
 .tp-autocomplete__item {
