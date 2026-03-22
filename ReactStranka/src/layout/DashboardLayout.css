@@ -630,40 +630,173 @@
   }
 }
 
+/* ─── Bottom nav (hidden on desktop) ─── */
+.dashboard-bottom-nav {
+  display: none;
+}
+
+/* ─── Mobile sidebar header / close ─── */
+.dashboard-sidebar__mobile-header {
+  display: none;
+}
+
+.dashboard-sidebar__logo--desktop {
+  display: flex;
+}
+
+/* ─── Mobile backdrop ─── */
+.dashboard-sidebar-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  /* Sidebar becomes a full-height overlay panel */
   .dashboard-sidebar-wrap {
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
-    z-index: 50;
+    z-index: 200;
     transform: translateX(-100%);
-    transition: transform 0.2s ease;
+    transition: transform 0.25s ease;
   }
   .dashboard-layout--sidebar-open .dashboard-sidebar-wrap {
     transform: translateX(0);
   }
-  .dashboard-layout--sidebar-open .dashboard-sidebar-wrap::after {
-    content: '';
+
+  /* Backdrop */
+  .dashboard-sidebar-backdrop {
+    display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: -1;
+    background: rgba(0,0,0,0.55);
+    z-index: 199;
+    animation: fadeInBackdrop 0.2s ease;
   }
+  @keyframes fadeInBackdrop {
+    from { opacity: 0 }
+    to   { opacity: 1 }
+  }
+
+  /* Mobile-only header inside sidebar (close btn) */
+  .dashboard-sidebar__mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .dashboard-sidebar__mobile-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .dashboard-sidebar__mobile-close:hover {
+    background: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  /* Hide the desktop logo in mobile sidebar (header has its own) */
+  .dashboard-sidebar__logo--desktop {
+    display: none;
+  }
+
+  /* Bigger touch targets in mobile sidebar */
+  .dashboard-sidebar__nav-item {
+    padding: 0.85rem 0.75rem;
+    font-size: 1rem;
+    margin: 2px 0.625rem;
+  }
+  .dashboard-sidebar__section-label {
+    font-size: 0.75rem;
+    padding: 0.75rem 1.25rem 0.35rem;
+    opacity: 0.6;
+  }
+  .dashboard-sidebar__nav-icon {
+    font-size: 1.2rem;
+  }
+
+  /* Collapse btn hidden on mobile */
+  .dashboard-sidebar__collapse-btn {
+    display: none;
+  }
+
+  /* Topbar on mobile: no search, show user avatar + notif only */
   .dashboard-topbar__search-wrap {
     display: none;
   }
-  .dashboard-topbar__menu-mobile {
-    display: flex !important;
+  .dashboard-topbar__logout {
+    display: none;
+  }
+
+  /* Extra bottom padding for content so it clears the bottom nav */
+  .dashboard-layout__content {
+    padding-bottom: calc(1.5rem + 64px);
+  }
+
+  /* ─── Bottom navigation bar ─── */
+  .dashboard-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding: 0 0.25rem;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .dashboard-bottom-nav__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    gap: 0.2rem;
     border: none;
-    background: var(--bg-elevated);
-    color: var(--text-primary);
-    border-radius: var(--radius-btn);
+    background: none;
+    color: var(--text-secondary);
+    font-family: var(--font);
     cursor: pointer;
-    font-size: 1.25rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: 10px;
+    transition: color 0.15s, background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dashboard-bottom-nav__item:active {
+    background: var(--bg-elevated);
+  }
+
+  .dashboard-bottom-nav__item--active {
+    color: var(--accent-gold);
+  }
+
+  .dashboard-bottom-nav__icon {
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .dashboard-bottom-nav__label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 2px;
   }
 }
