@@ -8,39 +8,39 @@ const NAV_SECTIONS = [
   {
     label: null,
     items: [
-      { path: '/dashboard', label: 'Prehľad', icon: '⊞' },
+      { path: '/dashboard', label: 'Prehľad', icon: '🏠' },
     ],
   },
   {
     label: 'Sklad',
     items: [
-      { path: '/dashboard/products', label: 'Produkty', icon: '▣' },
-      { path: '/dashboard/warehouses', label: 'Sklady', icon: '⌂' },
-      { path: '/dashboard/prijemky', label: 'Príjemky', icon: '↓' },
-      { path: '/dashboard/vydajky', label: 'Výdajky', icon: '↑' },
+      { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
+      { path: '/dashboard/warehouses', label: 'Sklady', icon: '🏗️' },
+      { path: '/dashboard/prijemky', label: 'Príjemky', icon: '📥' },
+      { path: '/dashboard/vydajky', label: 'Výdajky', icon: '📤' },
     ],
   },
   {
     label: 'Obchod',
     items: [
-      { path: '/dashboard/customers', label: 'Zákazníci', icon: '◎' },
-      { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '⬡' },
-      { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '≡' },
-      { path: '/dashboard/transporty', label: 'Doprava', icon: '⇒' },
+      { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
+      { path: '/dashboard/suppliers', label: 'Dodávatelia', icon: '🚚' },
+      { path: '/dashboard/quotes', label: 'Cenové ponuky', icon: '📄' },
+      { path: '/dashboard/transporty', label: 'Doprava', icon: '🗺️' },
     ],
   },
   {
     label: 'Výroba',
     items: [
-      { path: '/dashboard/receptury', label: 'Receptúry', icon: '✦' },
-      { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '◈' },
-      { path: '/dashboard/production', label: 'Výrobné šarže', icon: '◫' },
+      { path: '/dashboard/receptury', label: 'Receptúry', icon: '📋' },
+      { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
+      { path: '/dashboard/production', label: 'Výrobné šarže', icon: '🔢' },
     ],
   },
   {
     label: 'Nástroje',
     items: [
-      { path: '/dashboard/scan', label: 'Skenovať', icon: '▦' },
+      { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
     ],
   },
 ]
@@ -50,8 +50,8 @@ const NAV_SECTIONS_ADMIN = [
   {
     label: 'Správa',
     items: [
-      { path: '/dashboard/users', label: 'Používatelia', icon: '⊙' },
-      { path: '/dashboard/system-status', label: 'System Status', icon: '◐' },
+      { path: '/dashboard/users', label: 'Používatelia', icon: '👤' },
+      { path: '/dashboard/system-status', label: 'System Status', icon: '🖥️' },
     ],
   },
 ]
@@ -67,6 +67,7 @@ export default function DashboardLayout() {
   const [auth, setAuth] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarOpenMobile, setSidebarOpenMobile] = useState(false)
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef(null)
 
@@ -104,10 +105,10 @@ export default function DashboardLayout() {
       : NAV_SECTIONS
 
   const BOTTOM_NAV = [
-    { path: '/dashboard', label: 'Prehľad', icon: '⊞' },
-    { path: '/dashboard/products', label: 'Produkty', icon: '▣' },
-    { path: '/dashboard/customers', label: 'Zákazníci', icon: '◎' },
-    { path: '/dashboard/warehouses', label: 'Sklady', icon: '⌂' },
+    { path: '/dashboard', label: 'Prehľad', icon: '🏠' },
+    { path: '/dashboard/products', label: 'Produkty', icon: '📦' },
+    { path: '/dashboard/customers', label: 'Zákazníci', icon: '👥' },
+    { path: '/dashboard/warehouses', label: 'Sklady', icon: '🏗️' },
   ]
 
   return (
@@ -270,7 +271,7 @@ export default function DashboardLayout() {
               key={item.path}
               type="button"
               className={`dashboard-bottom-nav__item ${isActive ? 'dashboard-bottom-nav__item--active' : ''}`}
-              onClick={() => { if (!isActive) navigate(item.path) }}
+              onClick={() => { if (!isActive) navigate(item.path); setMoreSheetOpen(false) }}
             >
               <span className="dashboard-bottom-nav__icon">{item.icon}</span>
               <span className="dashboard-bottom-nav__label">{item.label}</span>
@@ -279,13 +280,51 @@ export default function DashboardLayout() {
         })}
         <button
           type="button"
-          className={`dashboard-bottom-nav__item ${sidebarOpenMobile ? 'dashboard-bottom-nav__item--active' : ''}`}
-          onClick={() => setSidebarOpenMobile((o) => !o)}
+          className={`dashboard-bottom-nav__item ${moreSheetOpen ? 'dashboard-bottom-nav__item--active' : ''}`}
+          onClick={() => setMoreSheetOpen((o) => !o)}
         >
-          <span className="dashboard-bottom-nav__icon">≡</span>
+          <span className="dashboard-bottom-nav__icon">☰</span>
           <span className="dashboard-bottom-nav__label">Viac</span>
         </button>
       </nav>
+
+      {/* ─── Mobile "Viac" bottom sheet ─── */}
+      {moreSheetOpen && (
+        <div className="more-sheet-backdrop" onClick={() => setMoreSheetOpen(false)} aria-hidden="true" />
+      )}
+      <div className={`more-sheet ${moreSheetOpen ? 'more-sheet--open' : ''}`}>
+        <div className="more-sheet__handle" onClick={() => setMoreSheetOpen(false)} />
+        <div className="more-sheet__header">
+          <span className="more-sheet__title">Navigácia</span>
+          <button type="button" className="more-sheet__close" onClick={() => setMoreSheetOpen(false)} aria-label="Zavrieť">✕</button>
+        </div>
+        <div className="more-sheet__body">
+          {activeSections.map((section, si) => (
+            <div key={si} className="more-sheet__section">
+              {section.label && <div className="more-sheet__section-label">{section.label}</div>}
+              <div className="more-sheet__grid">
+                {section.items.map((item) => {
+                  const isActive = item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
+                  return (
+                    <button
+                      key={item.path}
+                      type="button"
+                      className={`more-sheet__item ${isActive ? 'more-sheet__item--active' : ''}`}
+                      onClick={() => { if (!isActive) navigate(item.path); setMoreSheetOpen(false) }}
+                    >
+                      <span className="more-sheet__item-icon">{item.icon}</span>
+                      <span className="more-sheet__item-label">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          <button type="button" className="more-sheet__logout" onClick={handleLogout}>
+            🚪 Odhlásiť sa
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
