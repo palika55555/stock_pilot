@@ -19,6 +19,7 @@ import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../screens/pallet/customers_pallets_screen.dart';
 import '../../Screens/Invoices/invoices_screen.dart';
 import '../../Screens/inventory/inventory_history_screen.dart';
+import '../../Screens/Transport/transport_calculator_screen.dart';
 import '../../services/logout_service.dart';
 
 class _NavItem {
@@ -38,6 +39,7 @@ const _warehouseItems = [
   _NavItem(icon: Icons.request_quote_rounded, label: 'Cenové ponuky', index: 7),
   _NavItem(icon: Icons.local_shipping_outlined, label: 'Zákazníci / Palety', index: 14),
   _NavItem(icon: Icons.receipt_long_rounded, label: 'Faktúry', index: 15),
+  _NavItem(icon: Icons.directions_car_rounded, label: 'Doprava', index: 17),
   _NavItem(icon: Icons.bar_chart_rounded, label: 'Štatistiky', index: 8),
 ];
 
@@ -160,6 +162,9 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
         break;
       case 16:
         Navigator.push(context, _fadeRoute(InventoryHistoryScreen(userRole: widget.userRole)));
+        break;
+      case 17:
+        Navigator.push(context, _fadeRoute(const TransportCalculatorScreen()));
         break;
     }
   }

@@ -235,7 +235,7 @@ class DatabaseService {
     print('DATABASE PATH: $path');
     final db = await openDatabase(
       path,
-      version: 37,
+      version: 38,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -2061,6 +2061,25 @@ class DatabaseService {
       );
     }
 
+    if (oldVersion < 38) {
+      // Pridať Oberon typy príjemiek ak ešte neexistujú
+      final existingTypes = await db.rawQuery(
+        "SELECT code FROM receipt_movement_types WHERE code IN ('DOMESTIC','FOREIGN','INTERNAL','TRANSFER_RECEIPT')",
+      );
+      final existingCodes = existingTypes.map((r) => r['code'] as String).toSet();
+      const oberonTypes = [
+        {'code': 'DOMESTIC', 'name': 'Tuzemsko'},
+        {'code': 'FOREIGN', 'name': 'Zahraničie'},
+        {'code': 'INTERNAL', 'name': 'Interný príjem'},
+        {'code': 'TRANSFER_RECEIPT', 'name': 'Príjem prevodka'},
+      ];
+      for (final t in oberonTypes) {
+        if (!existingCodes.contains(t['code'])) {
+          await db.insert('receipt_movement_types', t);
+        }
+      }
+    }
+
     if (oldVersion < 37) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS inventory_audits (
@@ -2318,6 +2337,22 @@ class DatabaseService {
     await db.insert('receipt_movement_types', {
       'code': 'WITH_COSTS',
       'name': 'Príjemka s obstarávacími nákladmi',
+    });
+    await db.insert('receipt_movement_types', {
+      'code': 'DOMESTIC',
+      'name': 'Tuzemsko',
+    });
+    await db.insert('receipt_movement_types', {
+      'code': 'FOREIGN',
+      'name': 'Zahraničie',
+    });
+    await db.insert('receipt_movement_types', {
+      'code': 'INTERNAL',
+      'name': 'Interný príjem',
+    });
+    await db.insert('receipt_movement_types', {
+      'code': 'TRANSFER_RECEIPT',
+      'name': 'Príjem prevodka',
     });
     await db.execute('''
       CREATE TABLE IF NOT EXISTS inbound_receipts (

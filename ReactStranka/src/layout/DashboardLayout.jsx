@@ -15,7 +15,7 @@ const NAV_ITEMS_USER = [
   { path: '/dashboard/vydajky', label: 'Výdajky', icon: '📤' },
   { path: '/dashboard/receptury', label: 'Receptúry', icon: '📋' },
   { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
-  { path: '/dashboard/transporty', label: 'Transporty', icon: '🚗' },
+  { path: '/dashboard/transporty', label: 'Doprava', icon: '🚚' },
   { path: '/dashboard/production', label: 'Výrobné šarže', icon: '📊' },
   { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
 ]

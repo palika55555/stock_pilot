@@ -13,6 +13,7 @@ import 'package:stock_pilot/screens/warehouse/warehouse_movements_screen.dart';
 import 'package:stock_pilot/screens/stock_out/stock_out_screen.dart';
 import 'package:stock_pilot/screens/Reports/reports_list_screen.dart';
 import '../../Screens/Invoices/invoices_screen.dart';
+import '../../Screens/Transport/transport_calculator_screen.dart';
 import '../../Screens/inventory/inventory_history_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
@@ -131,6 +132,14 @@ class AppDrawer extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, _drawerFadeRoute( const CustomersPalletsScreen()));
+                    },
+                  ),
+                  _DrawerMenuItem(
+                    icon: Icons.directions_car_rounded,
+                    title: 'Doprava',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, _drawerFadeRoute( const TransportCalculatorScreen()));
                     },
                   ),
                   _DrawerMenuItem(
