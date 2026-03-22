@@ -88,7 +88,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// Predvolený limit express.json() je ~100 kB – veľký import produktov z Flutteru by inak zlyhal (413 / parse error).
+app.use(express.json({ limit: '15mb' }));
 app.use(morgan('dev')); // prehľadné request logy v Coolify
 
 // Tajný path prefix pre API – bez znalosti tejto cesty sa nikto nedostane k endpointom (obfuskovácia).

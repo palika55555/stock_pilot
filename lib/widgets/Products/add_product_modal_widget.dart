@@ -680,7 +680,7 @@ class _AddProductModalState extends State<AddProductModal> {
       }
       // Synchronizácia všetkých produktov na web – nový/upravený produkt bude na webe na priradenie EAN
       final allProducts = await _productService.getAllProducts();
-      syncProductsToBackend(allProducts);
+      await syncProductsToBackend(allProducts);
       if (mounted) {
         Navigator.pop(context, product);
         ScaffoldMessenger.of(context).showSnackBar(

@@ -228,32 +228,45 @@ Future<List<Map<String, dynamic>>?> fetchProjectsFromBackend() async {
   }
 }
 
+int _qtyIntForSync(double q) {
+  if (!q.isFinite) return 0;
+  return q.round();
+}
+
 /// Pošle zoznam produktov do backendu – webové skenovanie potom zobrazí názov a množstvo.
 /// Vyžaduje token (backend vracia 401 bez neho). Volaj po prihlásení alebo pri „Odoslať“ na Domove.
-void syncProductsToBackend(List<Product> products) {
+Future<void> syncProductsToBackend(List<Product> products) async {
   if (products.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
   final uri = Uri.parse('$_apiBase/sync/products');
-  final body = jsonEncode({
-    'products': products.map((p) => {
-          'uniqueId': p.uniqueId,
-          'name': p.name,
-          'plu': p.plu,
-          'ean': p.ean,
-          'unit': p.unit,
-          'warehouseId': p.warehouseId,
-          'qty': p.qty,
-        }).toList(),
-  });
-  http
+  final payload = <Map<String, dynamic>>[];
+  for (final p in products) {
+    final uid = p.uniqueId?.trim();
+    if (uid == null || uid.isEmpty) continue;
+    payload.add({
+      'uniqueId': uid,
+      'name': p.name,
+      'plu': p.plu,
+      'ean': p.ean,
+      'unit': p.unit,
+      'warehouseId': p.warehouseId,
+      'qty': _qtyIntForSync(p.qty),
+    });
+  }
+  if (payload.isEmpty) return;
+  final body = jsonEncode({'products': payload});
+  final timeout = Duration(seconds: payload.length > 800 ? 120 : 15);
+  final res = await http
       .post(
         uri,
         headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)},
         body: body,
       )
-      .timeout(const Duration(seconds: 15))
-      .ignore();
+      .timeout(timeout);
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('sync products failed: ${res.statusCode} ${res.body}');
+  }
 }
 
 /// Pošle zoznam skladov do backendu – web zobrazí sklady.

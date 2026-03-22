@@ -165,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       if (!mounted) return;
       final products = await ProductCache.instance.load();
-      syncProductsToBackend(products);
+      await syncProductsToBackend(products);
     } catch (_) {}
   }
 
@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Push lokálnych produktov na server
       if (mounted) {
         final products = await ProductCache.instance.load();
-        syncProductsToBackend(products);
+        await syncProductsToBackend(products);
         setState(() => _overviewRefreshKey++);
       }
       // Aktualizuj timestamp aby sa notifikácia nezobrazila znova
@@ -251,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     if (mounted) {
       final products = await ProductCache.instance.load();
-      syncProductsToBackend(products);
+      await syncProductsToBackend(products);
     }
     if (mounted && !silent) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -285,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     try {
       final products = await ProductCache.instance.load();
-      syncProductsToBackend(products);
+      await syncProductsToBackend(products);
       final customers = await _db.getCustomers();
       await syncCustomersToBackend(customers);
       final warehouses = await _db.getWarehouses();

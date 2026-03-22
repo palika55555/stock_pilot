@@ -46,7 +46,7 @@ class AutoPushService {
 
       // Master data (need local fetch first)
       final products = await ProductCache.instance.load();
-      syncProductsToBackend(products); // fire-and-forget (void)
+      await syncProductsToBackend(products);
 
       final customers = await db.getCustomers();
       await syncCustomersToBackend(customers);
