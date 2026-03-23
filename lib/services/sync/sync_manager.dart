@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../api_sync_service.dart';
 import '../Database/database_service.dart';
+import '../../config/app_config.dart';
 import 'sync_event.dart';
 import 'offline_queue_service.dart';
 
@@ -430,7 +431,7 @@ class SyncManager {
   // Helpers
   // -----------------------------------------------------------------------
 
-  String get _apiBase => '$kBackendApiBase$kApiPrefix';
+  String get _apiBase => AppConfig.apiBase;
 
   Map<String, String> _headers(String token) => {
         'Authorization': 'Bearer $token',

@@ -9,15 +9,13 @@ import '../models/supplier.dart';
 import '../models/company.dart';
 import 'Database/database_service.dart';
 import 'auth_storage_service.dart';
+import '../config/app_config.dart';
 
 /// Backend API pre sync do PostgreSQL (zákazníci, produkty, login).
 /// JWT: access token v pamäti + secure storage, refresh token len v secure storage.
 ///
 /// Všetky requesty musia ísť na baseUrl + apiPrefix (napr. /api/sp-9f2a4e1b).
 /// Backend montuje router na /api/:API_PATH_PREFIX/ – bez tohto prefixu 404.
-const String kBackendApiBase = 'https://backend.stockpilot.sk';
-const String kApiPrefix = '/api/sp-9f2a4e1b';
-String get _apiBase => '$kBackendApiBase$kApiPrefix';
 
 String? _backendToken;
 
@@ -109,7 +107,7 @@ Future<String?> refreshAccessToken() async {
   final refresh = await AuthStorageService.instance.getRefreshToken();
   if (refresh == null || refresh.isEmpty) return null;
   try {
-    final uri = Uri.parse('$_apiBase/auth/refresh');
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/refresh');
     final res = await http
         .post(
           uri,
@@ -134,7 +132,7 @@ Future<String?> refreshAccessToken() async {
 /// takže kolega sa zobrazí v "Moji kolegovia" na webe.
 Future<void> syncUserToBackend(User user) async {
   try {
-    final uri = Uri.parse('$_apiBase/auth/sync-user');
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/sync-user');
     final body = jsonEncode({
       'username': user.username,
       'password': user.password,
@@ -166,7 +164,7 @@ Future<void> syncCustomersToBackend(List<Customer> customers) async {
   if (customers.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
-  final uri = Uri.parse('$_apiBase/sync/customers');
+  final uri = Uri.parse('${AppConfig.apiBase}/sync/customers');
   final body = jsonEncode({
     'customers': customers.map((c) => c.toMap()).toList(),
   });
@@ -186,7 +184,7 @@ Future<void> syncCustomersToBackend(List<Customer> customers) async {
 Future<void> syncProjectsToBackend(List<Project> projects) async {
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
-  final uri = Uri.parse('$_apiBase/sync/projects');
+  final uri = Uri.parse('${AppConfig.apiBase}/sync/projects');
   final body = jsonEncode({'projects': projects.map((p) => p.toMap()).toList()});
   final res = await http
       .post(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)}, body: body)
@@ -201,7 +199,7 @@ Future<List<Map<String, dynamic>>?> fetchProjectsFromBackend() async {
   final token = getBackendToken();
   if (token == null || token.isEmpty) return null;
   try {
-    final uri = Uri.parse('$_apiBase/projects');
+    final uri = Uri.parse('${AppConfig.apiBase}/projects');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 10));
@@ -225,7 +223,7 @@ Future<void> syncProductsToBackend(List<Product> products) async {
   if (products.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
-  final uri = Uri.parse('$_apiBase/sync/products');
+  final uri = Uri.parse('${AppConfig.apiBase}/sync/products');
   final payload = <Map<String, dynamic>>[];
   for (final p in products) {
     final uid = p.uniqueId?.trim();
@@ -260,7 +258,7 @@ Future<void> syncWarehousesToBackend(List<Warehouse> warehouses) async {
   if (warehouses.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
-  final uri = Uri.parse('$_apiBase/sync/warehouses');
+  final uri = Uri.parse('${AppConfig.apiBase}/sync/warehouses');
   final body = jsonEncode({
     'warehouses': warehouses.map((w) => w.toMap()).toList(),
   });
@@ -281,7 +279,7 @@ Future<void> syncSuppliersToBackend(List<Supplier> suppliers) async {
   if (suppliers.isEmpty) return;
   final token = getBackendToken();
   if (token == null || token.isEmpty) return;
-  final uri = Uri.parse('$_apiBase/sync/suppliers');
+  final uri = Uri.parse('${AppConfig.apiBase}/sync/suppliers');
   final body = jsonEncode({
     'suppliers': suppliers.map((s) => s.toMap()).toList(),
   });
@@ -305,7 +303,7 @@ Future<BackendLoginResult?> fetchBackendToken(
   bool rememberMe = false,
 }) async {
   try {
-    final uri = Uri.parse('$_apiBase/auth/login');
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/login');
     final res = await http
         .post(
           uri,
@@ -374,7 +372,7 @@ Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? to
     final seenKeys = <String>{};
     var page = 1;
     while (true) {
-      final uri = Uri.parse('$_apiBase/products').replace(
+      final uri = Uri.parse('${AppConfig.apiBase}/products').replace(
         queryParameters: {'page': '$page', 'limit': '$pageSize'},
       );
       final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 60));
@@ -437,7 +435,7 @@ Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? to
 /// Pri null/chybe vráti null. Nikdy nenahradzujte lokálnu DB prázdnym zoznamom.
 Future<List<Map<String, dynamic>>?> fetchCustomersFromBackendWithToken(String? token) async {
   try {
-    final uri = Uri.parse('$_apiBase/customers');
+    final uri = Uri.parse('${AppConfig.apiBase}/customers');
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
     final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
@@ -493,7 +491,7 @@ Future<void> syncBatchesToBackend() async {
         });
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/batches');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/batches');
     final res = await http
         .post(
           uri,
@@ -514,7 +512,7 @@ Future<void> syncBatchesToBackend() async {
 Future<List<Map<String, dynamic>>?> fetchBatchesFromBackendWithToken(String? token) async {
   if (token == null || token.isEmpty) return null;
   try {
-    final uri = Uri.parse('$_apiBase/batches/sync?from=2020-01-01&to=2099-12-31');
+    final uri = Uri.parse('${AppConfig.apiBase}/batches/sync?from=2020-01-01&to=2099-12-31');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
@@ -531,7 +529,7 @@ Future<List<Map<String, dynamic>>?> fetchBatchesFromBackendWithToken(String? tok
 /// Kontrola či boli na webe zmeny (GET /api/sync/check). Vyžaduje [token] – bez neho backend vracia 401.
 Future<Map<String, dynamic>?> fetchSyncCheck({String? token}) async {
   try {
-    final uri = Uri.parse('$_apiBase/sync/check');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/check');
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
     final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 8));
@@ -586,7 +584,7 @@ Future<void> syncReceiptsToBackend() async {
         costPayloads.add(cm);
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/receipts');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/receipts');
     final res = await http
         .post(
           uri,
@@ -605,7 +603,7 @@ Future<void> syncReceiptsToBackend() async {
 /// Stiahne všetky prijemky z backendu.
 Future<Map<String, dynamic>?> fetchReceiptsFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/receipts/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/receipts/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 20));
@@ -658,7 +656,7 @@ Future<void> syncStockOutsToBackend() async {
         movementPayloads.add(mm);
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/stock-outs');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/stock-outs');
     final res = await http
         .post(
           uri,
@@ -677,7 +675,7 @@ Future<void> syncStockOutsToBackend() async {
 /// Stiahne všetky výdajky z backendu.
 Future<Map<String, dynamic>?> fetchStockOutsFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/stock-outs/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/stock-outs/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 20));
@@ -718,7 +716,7 @@ Future<void> syncRecipesToBackend() async {
         ingredientPayloads.add(im);
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/recipes');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/recipes');
     final res = await http
         .post(
           uri,
@@ -737,7 +735,7 @@ Future<void> syncRecipesToBackend() async {
 /// Stiahne všetky receptúry z backendu.
 Future<Map<String, dynamic>?> fetchRecipesFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/recipes/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/recipes/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
@@ -770,7 +768,7 @@ Future<void> syncProductionOrdersToBackend() async {
       map['finished_goods_receipt_local_id'] = map.remove('finished_goods_receipt_id');
       payloads.add(map);
     }
-    final uri = Uri.parse('$_apiBase/sync/production-orders');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/production-orders');
     final res = await http
         .post(
           uri,
@@ -789,7 +787,7 @@ Future<void> syncProductionOrdersToBackend() async {
 /// Stiahne všetky výrobné príkazy z backendu.
 Future<Map<String, dynamic>?> fetchProductionOrdersFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/production-orders/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/production-orders/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
@@ -830,7 +828,7 @@ Future<void> syncQuotesToBackend() async {
         itemPayloads.add(im);
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/quotes-full');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/quotes-full');
     final res = await http
         .post(
           uri,
@@ -849,7 +847,7 @@ Future<void> syncQuotesToBackend() async {
 /// Stiahne všetky cenové ponuky z backendu.
 Future<Map<String, dynamic>?> fetchQuotesFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/quotes/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/quotes/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
@@ -877,7 +875,7 @@ Future<void> syncTransportsToBackend() async {
       map.remove('id');
       return map;
     }).toList();
-    final uri = Uri.parse('$_apiBase/sync/transports');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/transports');
     final res = await http
         .post(
           uri,
@@ -896,7 +894,7 @@ Future<void> syncTransportsToBackend() async {
 /// Stiahne všetky transporty z backendu.
 Future<Map<String, dynamic>?> fetchTransportsFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/transports/all');
+    final uri = Uri.parse('${AppConfig.apiBase}/transports/all');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 15));
@@ -922,7 +920,7 @@ Future<void> syncCompanyToBackend() async {
     final map = company.toMap();
     map.remove('id');
     map.remove('logo_path');
-    final uri = Uri.parse('$_apiBase/sync/company');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/company');
     final res = await http
         .post(
           uri,
@@ -941,7 +939,7 @@ Future<void> syncCompanyToBackend() async {
 /// Stiahne firemné údaje z backendu.
 Future<Map<String, dynamic>?> fetchCompanyFromBackend(String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/company/info');
+    final uri = Uri.parse('${AppConfig.apiBase}/company/info');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 10));
@@ -982,7 +980,7 @@ Future<void> syncInvoicesToBackend() async {
         itemPayloads.add(im);
       }
     }
-    final uri = Uri.parse('$_apiBase/sync/invoices-full');
+    final uri = Uri.parse('${AppConfig.apiBase}/sync/invoices-full');
     final res = await http
         .post(
           uri,
@@ -1001,7 +999,7 @@ Future<void> syncInvoicesToBackend() async {
 /// Stiahne Pay by Square QR string pre faktúru z backendu.
 Future<String?> fetchInvoiceQrString(int invoiceId, String token) async {
   try {
-    final uri = Uri.parse('$_apiBase/invoices/$invoiceId/qr');
+    final uri = Uri.parse('${AppConfig.apiBase}/invoices/$invoiceId/qr');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 10));
@@ -1015,11 +1013,11 @@ Future<String?> fetchInvoiceQrString(int invoiceId, String token) async {
 
 /// Stiahne URL na export faktúry ako Pohoda XML.
 String getInvoicePohodaExportUrl(int invoiceId) =>
-    '$_apiBase/invoices/$invoiceId/export/pohoda';
+    '${AppConfig.apiBase}/invoices/$invoiceId/export/pohoda';
 
 /// Stiahne URL na export faktúry ako ISDOC XML.
 String getInvoiceIsdocExportUrl(int invoiceId) =>
-    '$_apiBase/invoices/$invoiceId/export/isdoc';
+    '${AppConfig.apiBase}/invoices/$invoiceId/export/isdoc';
 
 // --- Rozšírená cenotvorba – pricing_rules ---
 
@@ -1029,7 +1027,7 @@ Future<List<Map<String, dynamic>>?> fetchPricingRulesFromBackend(
   String token,
 ) async {
   try {
-    final uri = Uri.parse('$_apiBase/products/${Uri.encodeComponent(productId)}/pricing-rules');
+    final uri = Uri.parse('${AppConfig.apiBase}/products/${Uri.encodeComponent(productId)}/pricing-rules');
     final res = await http
         .get(uri, headers: {'Content-Type': 'application/json', 'Authorization': _bearer(token)})
         .timeout(const Duration(seconds: 10));
@@ -1050,7 +1048,7 @@ Future<bool> syncPricingRulesToBackend(
   String token,
 ) async {
   try {
-    final uri = Uri.parse('$_apiBase/products/${Uri.encodeComponent(productId)}/pricing-rules/bulk');
+    final uri = Uri.parse('${AppConfig.apiBase}/products/${Uri.encodeComponent(productId)}/pricing-rules/bulk');
     final body = jsonEncode({'rules': rules});
     final res = await http
         .put(uri,
