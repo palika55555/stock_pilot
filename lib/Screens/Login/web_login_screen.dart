@@ -59,13 +59,24 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       });
       return;
     }
+    BackendLoginResult? resolvedBackendResult = backendResult;
+    if (backendResult.requires2fa || backendResult.requires2faSetup) {
+      resolvedBackendResult = await _resolve2faFlow(backendResult);
+    }
+    if (resolvedBackendResult == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = '2FA overenie zlyhalo alebo bolo zrušené.';
+      });
+      return;
+    }
 
     final fromBackend = userFromBackendProfile(
       username,
       password,
-      backendResult.userProfile,
+      resolvedBackendResult.userProfile,
     );
-    final backendUserId = backendResult.userId ?? 'user_$username';
+    final backendUserId = resolvedBackendResult.userId ?? 'user_$username';
 
     try {
       final accountPath = await _dbService.getAccountDatabasePath(backendUserId);
@@ -93,8 +104,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         userId: backendUserId,
         username: createdUser.username,
         role: createdUser.role,
-        ownerFullName: backendResult.ownerFullName,
-        ownerUsername: backendResult.ownerUsername,
+        ownerFullName: resolvedBackendResult.ownerFullName,
+        ownerUsername: resolvedBackendResult.ownerUsername,
       );
 
       final token = getBackendToken();
@@ -134,6 +145,64 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         });
       }
     }
+  }
+
+  Future<String?> _showCodeDialog({
+    required String title,
+    required String hint,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: hint),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zrušiť')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Potvrdiť'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<BackendLoginResult?> _resolve2faFlow(BackendLoginResult initial) async {
+    if (initial.loginChallengeToken == null || initial.loginChallengeToken!.isEmpty) return null;
+    final challenge = initial.loginChallengeToken!;
+    if (initial.requires2faSetup) {
+      final setupPayload = await setup2faWithChallenge(challenge);
+      if (setupPayload == null) return null;
+      final otpUri = setupPayload['otpauthUri']?.toString() ?? '';
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Nastavenie 2FA'),
+            content: SelectableText('Naskenujte v autentifikátore:\n$otpUri'),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+          ),
+        );
+      }
+      final setupCode = await _showCodeDialog(title: 'Prvý 2FA kód', hint: '123456');
+      if (setupCode == null || setupCode.isEmpty) return null;
+      return confirm2faSetup(loginChallengeToken: challenge, totpCode: setupCode);
+    }
+    final code = await _showCodeDialog(title: '2FA overenie', hint: '123456 alebo XXXX-XXXX');
+    if (code == null || code.isEmpty) return null;
+    return verify2faLogin(
+      loginChallengeToken: challenge,
+      totpCode: code.contains('-') ? null : code,
+      backupCode: code.contains('-') ? code : null,
+    );
   }
 
   @override

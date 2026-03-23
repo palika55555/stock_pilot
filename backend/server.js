@@ -21,6 +21,17 @@ const { syncInvoicesFull, fetchInvoicesFull } = require('./DBsync/sync/invoiceSy
 const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
 const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
 const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
+const {
+  generateTotpSecret,
+  verifyTotpCode,
+  encryptSecret,
+  decryptSecret,
+  generateBackupCodes,
+  hashBackupCodes,
+  consumeBackupCode,
+  signLoginChallenge,
+  verifyLoginChallenge,
+} = require('./auth/twofa');
 const { registerSyncRoutes } = require('./sync/syncRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +55,14 @@ let lastSyncAt = 0;
 
 // Po migrácii 009: true ak sú dáta priradené používateľom; false ak treba manuálnu migráciu (viac používateľov)
 let dataIsolationMigrated = true;
+const TWOFA_ENFORCE_ALL = String(process.env.TWOFA_ENFORCE_ALL || 'false').toLowerCase() === 'true';
+const authMetrics = {
+  login_requires_2fa: 0,
+  login_requires_2fa_setup: 0,
+  twofa_verify_success: 0,
+  twofa_verify_fail: 0,
+  backup_code_used: 0,
+};
 
 function getDbHostname() {
   if (!databaseUrl) return null;
@@ -104,6 +123,17 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+const authLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { success: false, error: 'Príliš veľa pokusov o prihlásenie. Skúste to neskôr.' },
+});
+const auth2faLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: { success: false, error: 'Príliš veľa pokusov 2FA. Skúste to neskôr.' },
+});
+
 // Middleware: verify JWT (Bearer <accessToken>) and set req.userId, req.userEmail, req.userRole
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -125,16 +155,53 @@ const authenticateToken = (req, res, next) => {
   return res.status(401).json({ error: 'Neplatný alebo expirovaný token.' });
 };
 
+function issueAuthResponse(res, user, ownerInfo, rememberMe, extra = {}) {
+  const tokens = signTokens(
+    { userId: user.id, email: user.email || '', role: user.role || 'user' },
+    !!rememberMe
+  );
+  return res.status(200).json({
+    success: true,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: tokens.accessExpiresIn,
+    ...extra,
+    user: {
+      id: user.id,
+      username: user.username,
+      fullName: user.full_name || user.username,
+      role: user.role || 'user',
+      email: user.email || '',
+      ownerId: ownerInfo ? ownerInfo.id : null,
+      ownerUsername: ownerInfo ? ownerInfo.username : null,
+      ownerFullName: ownerInfo ? ownerInfo.fullName : null,
+    },
+  });
+}
+
 // API router – všetky endpointy sú pod /api/:API_PATH_PREFIX/ (napr. /api/sp-9f2a4e1b/auth/login)
 const apiRouter = express.Router();
 
 // Preflight (OPTIONS) neposiela Authorization – musí prejsť, aby prehliadač potom poslal skutočný request
 apiRouter.options('*', (req, res) => res.sendStatus(204));
+apiRouter.use('/auth/login', authLoginLimiter);
+apiRouter.use('/auth/2fa/verify', auth2faLimiter);
+apiRouter.use('/auth/2fa/confirm', auth2faLimiter);
+apiRouter.use('/auth/2fa/setup', auth2faLimiter);
 
 // Všetko okrem /auth/login, /auth/refresh, /auth/sync-user vyžaduje JWT
 apiRouter.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
-  if (req.path === '/auth/login' || req.path === '/auth/refresh' || req.path === '/auth/sync-user') return next();
+  if (
+    req.path === '/auth/login' ||
+    req.path === '/auth/refresh' ||
+    req.path === '/auth/sync-user' ||
+    req.path === '/auth/2fa/verify' ||
+    req.path === '/auth/2fa/setup' ||
+    req.path === '/auth/2fa/confirm'
+  ) {
+    return next();
+  }
   if (req.path.startsWith('/auth')) return next();
   authenticateToken(req, res, next);
 });
@@ -193,6 +260,10 @@ app.get('/health', async (req, res) => {
     uptimeFormatted: formatUptime(getUptimeSeconds()),
     database,
     internal_hostname: getDbHostname(),
+    twofa: {
+      enforced: TWOFA_ENFORCE_ALL,
+      metrics: authMetrics,
+    },
   });
 });
 
@@ -237,66 +308,43 @@ app.get('/health/db-tables', async (req, res) => {
   }
 });
 
-// --- API: Auth – JWT (access 24h, refresh 30d; rememberMe => access 7d) ---
+// --- API: Auth – JWT + TOTP 2FA ---
 apiRouter.post('/auth/login', async (req, res) => {
   const { username, password, rememberMe } = req.body || {};
   if (!username || !password) {
-    return res.status(401).json({
-      success: false,
-      error: 'Username a heslo sú povinné',
-    });
+    return res.status(401).json({ success: false, error: 'Username a heslo sú povinné' });
   }
   if (!pool || !poolReady) {
-    return res.status(503).json({
-      success: false,
-      error: 'Databáza nie je k dispozícii',
-    });
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
   try {
     let ownerInfo = null;
     const {
       rows: [user],
     } = await pool.query(
-      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access, owner_id, tier_valid_until FROM users WHERE username = $1',
+      'SELECT id, username, password, full_name, role, email, phone, department, avatar_url, join_date, COALESCE(is_blocked, false) AS is_blocked, COALESCE(web_access, false) AS web_access, owner_id, tier_valid_until, COALESCE(twofa_enabled, false) AS twofa_enabled FROM users WHERE username = $1',
       [username.toString().trim()]
     );
     if (!user || user.password !== password) {
       console.warn('[auth] Failed login attempt for username:', username);
-      return res.status(401).json({
-        success: false,
-        error: 'Nesprávny login alebo heslo',
-      });
+      return res.status(401).json({ success: false, error: 'Nesprávny login alebo heslo' });
     }
     if (user.is_blocked) {
       console.warn('[auth] Blocked user tried to login:', username);
-      return res.status(403).json({
-        success: false,
-        error: 'Účet je zablokovaný. Kontaktujte administrátora.',
-      });
+      return res.status(403).json({ success: false, error: 'Účet je zablokovaný. Kontaktujte administrátora.' });
     }
-    // db_owner má vždy prístup
     if (user.role !== 'db_owner') {
-      // Sub-user (kolega) nemusí mať web_access – potrebuje token na sync v apke (dáta nadriadeného).
-      // Admin a standalone user potrebujú web_access na prihlásenie na web.
       if (!user.owner_id && !user.web_access) {
         console.warn('[auth] User without web_access tried to login:', username);
-        return res.status(403).json({
-          success: false,
-          error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
-        });
+        return res.status(403).json({ success: false, error: 'Prístup na web nie je povolený. Kontaktujte administrátora.' });
       }
-      // Admin: platnosť tiera – ak je tier_valid_until v minulosti, prístup zamietnutý
       if (user.role === 'admin' && user.tier_valid_until) {
         const today = new Date().toISOString().slice(0, 10);
         if (user.tier_valid_until < today) {
           console.warn('[auth] Admin login blocked – tier expired:', username);
-          return res.status(403).json({
-            success: false,
-            error: 'Platnosť vášho plánu vypršala. Kontaktujte administrátora.',
-          });
+          return res.status(403).json({ success: false, error: 'Platnosť vášho plánu vypršala. Kontaktujte administrátora.' });
         }
       }
-      // Sub-user: skontroluj web_access a tier_valid_until jeho admina (owner)
       if (user.owner_id) {
         const { rows: [owner] } = await pool.query(
           'SELECT id, username, full_name, web_access, tier_valid_until FROM users WHERE id = $1',
@@ -304,56 +352,271 @@ apiRouter.post('/auth/login', async (req, res) => {
         );
         if (!owner || !owner.web_access) {
           console.warn('[auth] Sub-user login blocked – owner has no web_access:', username);
-          return res.status(403).json({
-            success: false,
-            error: 'Prístup na web nie je povolený. Kontaktujte administrátora.',
-          });
+          return res.status(403).json({ success: false, error: 'Prístup na web nie je povolený. Kontaktujte administrátora.' });
         }
         if (owner.tier_valid_until) {
           const today = new Date().toISOString().slice(0, 10);
           if (owner.tier_valid_until < today) {
             console.warn('[auth] Sub-user login blocked – owner tier expired:', username);
-            return res.status(403).json({
-              success: false,
-              error: 'Platnosť plánu vášho administrátora vypršala. Kontaktujte ho.',
-            });
+            return res.status(403).json({ success: false, error: 'Platnosť plánu vášho administrátora vypršala. Kontaktujte ho.' });
           }
         }
-        // Informácie o nadriadenom – použijeme v odpovedi /auth/login pre zobrazenie v apke.
-        ownerInfo = {
-          id: owner.id,
-          username: owner.username,
-          fullName: owner.full_name || owner.username,
-        };
+        ownerInfo = { id: owner.id, username: owner.username, fullName: owner.full_name || owner.username };
       }
     }
-    const tokens = signTokens(
-      { userId: user.id, email: user.email || '', role: user.role || 'user' },
-      !!rememberMe
-    );
-    console.log('[auth] Login OK:', user.username);
-    res.status(200).json({
-      success: true,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresIn: tokens.accessExpiresIn,
-      user: {
-        id: user.id,
-        username: user.username,
-        fullName: user.full_name || user.username,
-        role: user.role || 'user',
-        email: user.email || '',
-        ownerId: ownerInfo ? ownerInfo.id : null,
-        ownerUsername: ownerInfo ? ownerInfo.username : null,
-        ownerFullName: ownerInfo ? ownerInfo.fullName : null,
-      },
+
+    const challenge = signLoginChallenge({
+      userId: user.id,
+      rememberMe: !!rememberMe,
+      ownerInfo,
     });
+    if (user.twofa_enabled) {
+      authMetrics.login_requires_2fa += 1;
+      return res.status(200).json({ success: true, requires2fa: true, loginChallengeToken: challenge });
+    }
+    if (TWOFA_ENFORCE_ALL) {
+      authMetrics.login_requires_2fa_setup += 1;
+      return res.status(200).json({ success: true, requires2faSetup: true, loginChallengeToken: challenge });
+    }
+    console.log('[auth] Login OK (no 2FA enforced):', user.username);
+    return issueAuthResponse(res, user, ownerInfo, rememberMe);
   } catch (err) {
     console.error('[auth] Login error:', err.message);
-    res.status(500).json({
-      success: false,
-      error: 'Chyba servera',
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/auth/2fa/setup', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const challengePayload = verifyLoginChallenge(req.body?.loginChallengeToken);
+  if (!challengePayload?.userId) {
+    return res.status(401).json({ success: false, error: 'Neplatný alebo expirovaný setup token.' });
+  }
+  try {
+    const { rows: [user] } = await pool.query(
+      'SELECT id, username, full_name FROM users WHERE id = $1',
+      [challengePayload.userId]
+    );
+    if (!user) return res.status(401).json({ success: false, error: 'Používateľ neexistuje.' });
+    const { secret, otpauthUri } = generateTotpSecret(user.username);
+    const encrypted = encryptSecret(secret);
+    await pool.query(
+      'UPDATE users SET twofa_enabled = false, twofa_secret_enc = $1, twofa_secret_iv = $2, twofa_confirmed_at = NULL, twofa_last_used_step = NULL, twofa_backup_codes_hash = NULL WHERE id = $3',
+      [encrypted.encrypted, encrypted.iv, user.id]
+    );
+    return res.status(200).json({
+      success: true,
+      secret,
+      otpauthUri,
+      accountName: user.username,
+      issuer: process.env.TWOFA_ISSUER || 'StockPilot',
     });
+  } catch (err) {
+    console.error('[auth] 2fa setup error:', err.message);
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/auth/2fa/confirm', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const { loginChallengeToken, totpCode } = req.body || {};
+  const challengePayload = verifyLoginChallenge(loginChallengeToken);
+  if (!challengePayload?.userId || !totpCode) {
+    return res.status(401).json({ success: false, error: 'Neplatný setup token alebo TOTP kód.' });
+  }
+  try {
+    const {
+      rows: [user],
+    } = await pool.query(
+      'SELECT id, username, full_name, email, role, twofa_secret_enc, twofa_secret_iv, twofa_last_used_step FROM users WHERE id = $1',
+      [challengePayload.userId]
+    );
+    if (!user || !user.twofa_secret_enc || !user.twofa_secret_iv) {
+      return res.status(400).json({ success: false, error: '2FA setup nebol inicializovaný.' });
+    }
+    const secret = decryptSecret(user.twofa_secret_enc, user.twofa_secret_iv);
+    const check = verifyTotpCode(secret, totpCode);
+    if (!check.ok) {
+      authMetrics.twofa_verify_fail += 1;
+      return res.status(401).json({ success: false, error: 'Neplatný 2FA kód.' });
+    }
+    const lastUsed = user.twofa_last_used_step != null ? Number(user.twofa_last_used_step) : null;
+    if (lastUsed != null && check.step <= lastUsed) {
+      authMetrics.twofa_verify_fail += 1;
+      return res.status(401).json({ success: false, error: '2FA kód už bol použitý.' });
+    }
+    const backupCodes = generateBackupCodes();
+    const backupHashMap = hashBackupCodes(backupCodes);
+    await pool.query(
+      'UPDATE users SET twofa_enabled = true, twofa_confirmed_at = NOW(), twofa_backup_codes_hash = $1::jsonb, twofa_last_used_step = $2 WHERE id = $3',
+      [JSON.stringify(backupHashMap), check.step, user.id]
+    );
+    authMetrics.twofa_verify_success += 1;
+    return issueAuthResponse(res, user, challengePayload.ownerInfo || null, !!challengePayload.rememberMe, {
+      backupCodes,
+    });
+  } catch (err) {
+    console.error('[auth] 2fa confirm error:', err.message);
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/auth/2fa/verify', async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const { loginChallengeToken, totpCode, backupCode } = req.body || {};
+  const challengePayload = verifyLoginChallenge(loginChallengeToken);
+  if (!challengePayload?.userId || (!totpCode && !backupCode)) {
+    return res.status(401).json({ success: false, error: 'Neplatný login challenge alebo 2FA kód.' });
+  }
+  try {
+    const {
+      rows: [user],
+    } = await pool.query(
+      'SELECT id, username, full_name, email, role, COALESCE(twofa_enabled, false) AS twofa_enabled, twofa_secret_enc, twofa_secret_iv, twofa_backup_codes_hash, twofa_last_used_step FROM users WHERE id = $1',
+      [challengePayload.userId]
+    );
+    if (!user || !user.twofa_enabled) {
+      return res.status(401).json({ success: false, error: '2FA nie je aktívne.' });
+    }
+
+    if (totpCode) {
+      const secret = decryptSecret(user.twofa_secret_enc, user.twofa_secret_iv);
+      const check = verifyTotpCode(secret, totpCode);
+      if (!check.ok) {
+        authMetrics.twofa_verify_fail += 1;
+        return res.status(401).json({ success: false, error: 'Neplatný 2FA kód.' });
+      }
+      const lastUsed = user.twofa_last_used_step != null ? Number(user.twofa_last_used_step) : null;
+      if (lastUsed != null && check.step <= lastUsed) {
+        authMetrics.twofa_verify_fail += 1;
+        return res.status(401).json({ success: false, error: '2FA kód už bol použitý.' });
+      }
+      await pool.query('UPDATE users SET twofa_last_used_step = $1 WHERE id = $2', [check.step, user.id]);
+    } else {
+      const consumed = consumeBackupCode(user.twofa_backup_codes_hash || {}, backupCode);
+      if (!consumed.ok) {
+        authMetrics.twofa_verify_fail += 1;
+        return res.status(401).json({ success: false, error: 'Neplatný backup kód.' });
+      }
+      authMetrics.backup_code_used += 1;
+      await pool.query('UPDATE users SET twofa_backup_codes_hash = $1::jsonb WHERE id = $2', [JSON.stringify(consumed.map), user.id]);
+    }
+
+    authMetrics.twofa_verify_success += 1;
+    return issueAuthResponse(res, user, challengePayload.ownerInfo || null, !!challengePayload.rememberMe);
+  } catch (err) {
+    console.error('[auth] 2fa verify error:', err.message);
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.get('/auth/2fa/status', authenticateToken, async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  try {
+    const { rows: [user] } = await pool.query(
+      'SELECT COALESCE(twofa_enabled, false) AS twofa_enabled, twofa_confirmed_at FROM users WHERE id = $1',
+      [req.userId]
+    );
+    return res.status(200).json({
+      success: true,
+      enabled: !!user?.twofa_enabled,
+      confirmedAt: user?.twofa_confirmed_at || null,
+      enforced: TWOFA_ENFORCE_ALL,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/auth/2fa/backup-codes/regenerate', authenticateToken, async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const { totpCode, backupCode } = req.body || {};
+  if (!totpCode && !backupCode) {
+    return res.status(400).json({ success: false, error: 'Zadajte TOTP alebo backup kód.' });
+  }
+  try {
+    const {
+      rows: [user],
+    } = await pool.query(
+      'SELECT id, COALESCE(twofa_enabled, false) AS twofa_enabled, twofa_secret_enc, twofa_secret_iv, twofa_backup_codes_hash, twofa_last_used_step FROM users WHERE id = $1',
+      [req.userId]
+    );
+    if (!user || !user.twofa_enabled) {
+      return res.status(400).json({ success: false, error: '2FA nie je aktívne.' });
+    }
+    if (totpCode) {
+      const secret = decryptSecret(user.twofa_secret_enc, user.twofa_secret_iv);
+      const check = verifyTotpCode(secret, totpCode);
+      if (!check.ok) return res.status(401).json({ success: false, error: 'Neplatný 2FA kód.' });
+      const lastUsed = user.twofa_last_used_step != null ? Number(user.twofa_last_used_step) : null;
+      if (lastUsed != null && check.step <= lastUsed) {
+        return res.status(401).json({ success: false, error: '2FA kód už bol použitý.' });
+      }
+      await pool.query('UPDATE users SET twofa_last_used_step = $1 WHERE id = $2', [check.step, user.id]);
+    } else {
+      const consumed = consumeBackupCode(user.twofa_backup_codes_hash || {}, backupCode);
+      if (!consumed.ok) return res.status(401).json({ success: false, error: 'Neplatný backup kód.' });
+      await pool.query('UPDATE users SET twofa_backup_codes_hash = $1::jsonb WHERE id = $2', [JSON.stringify(consumed.map), user.id]);
+    }
+    const codes = generateBackupCodes();
+    const map = hashBackupCodes(codes);
+    await pool.query('UPDATE users SET twofa_backup_codes_hash = $1::jsonb WHERE id = $2', [JSON.stringify(map), user.id]);
+    return res.status(200).json({ success: true, backupCodes: codes });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
+  }
+});
+
+apiRouter.post('/auth/2fa/disable', authenticateToken, async (req, res) => {
+  if (!pool || !poolReady) {
+    return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
+  }
+  const { password, totpCode, backupCode } = req.body || {};
+  if (!password || (!totpCode && !backupCode)) {
+    return res.status(400).json({ success: false, error: 'Vyžaduje sa heslo a 2FA kód.' });
+  }
+  try {
+    const {
+      rows: [user],
+    } = await pool.query(
+      'SELECT id, password, COALESCE(twofa_enabled, false) AS twofa_enabled, twofa_secret_enc, twofa_secret_iv, twofa_backup_codes_hash, twofa_last_used_step FROM users WHERE id = $1',
+      [req.userId]
+    );
+    if (!user || user.password !== String(password)) {
+      return res.status(401).json({ success: false, error: 'Neplatné heslo.' });
+    }
+    if (!user.twofa_enabled) {
+      return res.status(400).json({ success: false, error: '2FA nie je aktívne.' });
+    }
+    if (totpCode) {
+      const secret = decryptSecret(user.twofa_secret_enc, user.twofa_secret_iv);
+      const check = verifyTotpCode(secret, totpCode);
+      if (!check.ok) return res.status(401).json({ success: false, error: 'Neplatný 2FA kód.' });
+      const lastUsed = user.twofa_last_used_step != null ? Number(user.twofa_last_used_step) : null;
+      if (lastUsed != null && check.step <= lastUsed) {
+        return res.status(401).json({ success: false, error: '2FA kód už bol použitý.' });
+      }
+    } else {
+      const consumed = consumeBackupCode(user.twofa_backup_codes_hash || {}, backupCode);
+      if (!consumed.ok) return res.status(401).json({ success: false, error: 'Neplatný backup kód.' });
+    }
+    await pool.query(
+      'UPDATE users SET twofa_enabled = false, twofa_secret_enc = NULL, twofa_secret_iv = NULL, twofa_confirmed_at = NULL, twofa_backup_codes_hash = NULL, twofa_last_used_step = NULL WHERE id = $1',
+      [user.id]
+    );
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Chyba servera' });
   }
 });
 

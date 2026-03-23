@@ -41,6 +41,7 @@ const NAV_SECTIONS = [
     label: 'Nástroje',
     items: [
       { path: '/dashboard/scan', label: 'Skenovať', icon: '📷' },
+      { path: '/dashboard/security-2fa', label: 'Security / 2FA', icon: '🔐' },
     ],
   },
 ]

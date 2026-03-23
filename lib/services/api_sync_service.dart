@@ -6,7 +6,6 @@ import '../models/project.dart';
 import '../models/product.dart';
 import '../models/warehouse.dart';
 import '../models/supplier.dart';
-import '../models/company.dart';
 import 'Database/database_service.dart';
 import 'Auth/hash_service.dart';
 import 'auth_storage_service.dart';
@@ -26,16 +25,19 @@ void setBackendToken(String? token) {
 
 String? getBackendToken() => _backendToken;
 
-/// Authorization header value for API: "Bearer <jwt>"
+/// Authorization header value for API: "Bearer token"
 String _bearer(String? token) =>
     (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
 
 /// Výsledok backend loginu – prístupový token, refresh token, userId a voliteľný profil z backendu (pre vytvorenie/aktualizáciu lokálneho používateľa).
 class BackendLoginResult {
-  final String accessToken;
-  final String refreshToken;
+  final String? accessToken;
+  final String? refreshToken;
   final String? userId;
   final Map<String, dynamic>? userProfile;
+  final bool requires2fa;
+  final bool requires2faSetup;
+  final String? loginChallengeToken;
 
   /// Nadriadený (owner) – ak je prihlásený sub-user.
   final String? ownerId;
@@ -43,10 +45,13 @@ class BackendLoginResult {
   final String? ownerFullName;
 
   BackendLoginResult({
-    required this.accessToken,
-    required this.refreshToken,
+    this.accessToken,
+    this.refreshToken,
     this.userId,
     this.userProfile,
+    this.requires2fa = false,
+    this.requires2faSetup = false,
+    this.loginChallengeToken,
     this.ownerId,
     this.ownerUsername,
     this.ownerFullName,
@@ -324,6 +329,9 @@ Future<BackendLoginResult?> fetchBackendToken(
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
     final access = map?['accessToken'] as String?;
     final refresh = map?['refreshToken'] as String?;
+    final requires2fa = map?['requires2fa'] == true;
+    final requires2faSetup = map?['requires2faSetup'] == true;
+    final loginChallengeToken = map?['loginChallengeToken'] as String?;
     String? userId;
     String? ownerId;
     String? ownerUsername;
@@ -341,6 +349,13 @@ Future<BackendLoginResult?> fetchBackendToken(
       ownerUsername = user['ownerUsername']?.toString();
       ownerFullName = user['ownerFullName']?.toString();
     }
+    if ((requires2fa || requires2faSetup) && loginChallengeToken != null && loginChallengeToken.isNotEmpty) {
+      return BackendLoginResult(
+        requires2fa: requires2fa,
+        requires2faSetup: requires2faSetup,
+        loginChallengeToken: loginChallengeToken,
+      );
+    }
     if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
       await saveTokensAndSet(access, refresh, userId: userId);
       return BackendLoginResult(
@@ -354,6 +369,120 @@ Future<BackendLoginResult?> fetchBackendToken(
       );
     }
     return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<BackendLoginResult?> verify2faLogin({
+  required String loginChallengeToken,
+  String? totpCode,
+  String? backupCode,
+}) async {
+  try {
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/2fa/verify');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'loginChallengeToken': loginChallengeToken,
+            if (totpCode != null && totpCode.isNotEmpty) 'totpCode': totpCode,
+            if (backupCode != null && backupCode.isNotEmpty) 'backupCode': backupCode,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    final access = map?['accessToken'] as String?;
+    final refresh = map?['refreshToken'] as String?;
+    final user = map?['user'];
+    String? userId;
+    String? ownerId;
+    String? ownerUsername;
+    String? ownerFullName;
+    if (user is Map<String, dynamic>) {
+      final rawId = user['id'];
+      if (rawId != null) userId = rawId.toString();
+      final rawOwnerId = user['ownerId'];
+      if (rawOwnerId != null) ownerId = rawOwnerId.toString();
+      ownerUsername = user['ownerUsername']?.toString();
+      ownerFullName = user['ownerFullName']?.toString();
+    }
+    if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) return null;
+    await saveTokensAndSet(access, refresh, userId: userId);
+    return BackendLoginResult(
+      accessToken: access,
+      refreshToken: refresh,
+      userId: userId,
+      userProfile: user is Map<String, dynamic> ? Map<String, dynamic>.from(user) : null,
+      ownerId: ownerId,
+      ownerUsername: ownerUsername,
+      ownerFullName: ownerFullName,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> setup2faWithChallenge(String loginChallengeToken) async {
+  try {
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/2fa/setup');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'loginChallengeToken': loginChallengeToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    if (map?['success'] == true) return map;
+  } catch (_) {}
+  return null;
+}
+
+Future<BackendLoginResult?> confirm2faSetup({
+  required String loginChallengeToken,
+  required String totpCode,
+}) async {
+  try {
+    final uri = Uri.parse('${AppConfig.apiBase}/auth/2fa/confirm');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'loginChallengeToken': loginChallengeToken, 'totpCode': totpCode}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final map = jsonDecode(res.body) as Map<String, dynamic>?;
+    final access = map?['accessToken'] as String?;
+    final refresh = map?['refreshToken'] as String?;
+    final user = map?['user'];
+    String? userId;
+    String? ownerId;
+    String? ownerUsername;
+    String? ownerFullName;
+    if (user is Map<String, dynamic>) {
+      final rawId = user['id'];
+      if (rawId != null) userId = rawId.toString();
+      final rawOwnerId = user['ownerId'];
+      if (rawOwnerId != null) ownerId = rawOwnerId.toString();
+      ownerUsername = user['ownerUsername']?.toString();
+      ownerFullName = user['ownerFullName']?.toString();
+    }
+    if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) return null;
+    await saveTokensAndSet(access, refresh, userId: userId);
+    return BackendLoginResult(
+      accessToken: access,
+      refreshToken: refresh,
+      userId: userId,
+      userProfile: user is Map<String, dynamic> ? Map<String, dynamic>.from(user) : null,
+      ownerId: ownerId,
+      ownerUsername: ownerUsername,
+      ownerFullName: ownerFullName,
+    );
   } catch (_) {
     return null;
   }

@@ -1,13 +1,17 @@
 import 'dart:io' show File;
 import 'dart:ui';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../Providers/theme_locale_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/auto_lock_service.dart';
+import '../../services/api_sync_service.dart';
+import '../../config/app_config.dart';
 import '../../l10n/app_localizations.dart';
 import 'company_edit_screen.dart';
 import 'receipt_pdf_style_screen.dart';
@@ -76,6 +80,106 @@ class _SettingsPageState extends State<SettingsPage> {
     await AutoLockService.saveTimeout(selected);
     AutoLockService.instance.updateTimeout(selected);
     setState(() => _autoLockMinutes = selected);
+  }
+
+  Future<String?> _showCodePrompt({
+    required String title,
+    required String hint,
+    bool obscure = false,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          obscureText: obscure,
+          decoration: InputDecoration(hintText: hint),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zrušiť')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Potvrdiť')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _show2faDialog() async {
+    final token = await getBackendTokenAsync();
+    if (token == null || token.isEmpty || !mounted) return;
+    final statusRes = await http.get(
+      Uri.parse('${AppConfig.apiBase}/auth/2fa/status'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+    final statusData = jsonDecode(statusRes.body) as Map<String, dynamic>;
+    final enabled = statusRes.statusCode == 200 && statusData['enabled'] == true;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('2FA status'),
+        content: Text(enabled ? '2FA je aktívne.' : '2FA aktivujete pri ďalšom prihlásení.'),
+        actions: [
+          if (enabled)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final code = await _showCodePrompt(title: 'TOTP kód', hint: '123456 alebo XXXX-XXXX');
+                if (code == null || code.isEmpty || !mounted) return;
+                final regenRes = await http.post(
+                  Uri.parse('${AppConfig.apiBase}/auth/2fa/backup-codes/regenerate'),
+                  headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+                  body: jsonEncode({
+                    if (code.contains('-')) 'backupCode': code else 'totpCode': code,
+                  }),
+                );
+                final regenData = jsonDecode(regenRes.body) as Map<String, dynamic>;
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(regenRes.statusCode == 200
+                        ? 'Backup kódy regenerované: ${(regenData['backupCodes'] as List?)?.join(', ') ?? ''}'
+                        : (regenData['error']?.toString() ?? 'Operácia zlyhala')),
+                  ),
+                );
+              },
+              child: const Text('Regenerovať backup kódy'),
+            ),
+          if (enabled)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final password = await _showCodePrompt(title: 'Heslo', hint: '••••••', obscure: true);
+                if (password == null || password.isEmpty || !mounted) return;
+                final code = await _showCodePrompt(title: 'TOTP/backup kód', hint: '123456 alebo XXXX-XXXX');
+                if (code == null || code.isEmpty || !mounted) return;
+                final disableRes = await http.post(
+                  Uri.parse('${AppConfig.apiBase}/auth/2fa/disable'),
+                  headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+                  body: jsonEncode({
+                    'password': password,
+                    if (code.contains('-')) 'backupCode': code else 'totpCode': code,
+                  }),
+                );
+                final disableData = jsonDecode(disableRes.body) as Map<String, dynamic>;
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(disableRes.statusCode == 200
+                        ? '2FA bolo vypnuté.'
+                        : (disableData['error']?.toString() ?? 'Vypnutie zlyhalo')),
+                  ),
+                );
+              },
+              child: const Text('Vypnúť 2FA'),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zavrieť')),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveNotifications(bool value) async {
@@ -360,6 +464,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: 'Auto-odhlásenie',
                   trailing: _autoLockLabel(_autoLockMinutes),
                   onTap: _showAutoLockDialog,
+                ),
+                _buildListTile(
+                  icon: Icons.phonelink_lock_rounded,
+                  title: 'TOTP dvojfaktorové overenie',
+                  trailing: 'Stav, backup kódy',
+                  onTap: _show2faDialog,
                 ),
               ],
             ),

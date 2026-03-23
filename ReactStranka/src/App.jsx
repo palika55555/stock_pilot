@@ -21,6 +21,7 @@ import RecepturyPage from './pages/RecepturyPage'
 import VyrobneProkazaPage from './pages/VyrobneProkazaPage'
 import TransportyPage from './pages/TransportyPage'
 import SystemStatusPage from './pages/SystemStatusPage'
+import Security2FAPage from './pages/Security2FAPage'
 import { NotificationProvider } from './context/NotificationContext'
 import DashboardLayout from './layout/DashboardLayout'
 import { getAuth } from './utils/auth'
@@ -61,6 +62,7 @@ function App() {
           <Route path="vyroba-prikazy" element={<VyrobneProkazaPage />} />
           <Route path="transporty" element={<TransportyPage />} />
           <Route path="system-status" element={<SystemStatusPage />} />
+          <Route path="security-2fa" element={<Security2FAPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
