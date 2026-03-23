@@ -31,20 +31,6 @@ String? getBackendToken() => _backendToken;
 String _bearer(String? token) =>
     (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
 
-/// Decode JWT payload (middle part) for debug. Returns map or null.
-dynamic _decodeJwt(String? token) {
-  if (token == null || token.isEmpty) return null;
-  final parts = token.split('.');
-  if (parts.length < 2) return null;
-  try {
-    var payload = parts[1];
-    while (payload.length % 4 != 0) payload += '=';
-    return jsonDecode(utf8.decode(base64Url.decode(payload)));
-  } catch (_) {
-    return null;
-  }
-}
-
 /// Výsledok backend loginu – prístupový token, refresh token, userId a voliteľný profil z backendu (pre vytvorenie/aktualizáciu lokálneho používateľa).
 class BackendLoginResult {
   final String accessToken;
@@ -320,7 +306,6 @@ Future<BackendLoginResult?> fetchBackendToken(
 }) async {
   try {
     final uri = Uri.parse('$_apiBase/auth/login');
-    print('DEBUG backend login request: url=$uri username=$username rememberMe=$rememberMe');
     final res = await http
         .post(
           uri,
@@ -329,11 +314,8 @@ Future<BackendLoginResult?> fetchBackendToken(
           body: jsonEncode({'username': username, 'password': password, 'rememberMe': rememberMe}),
         )
         .timeout(const Duration(seconds: 10));
-    print('DEBUG backend login status: ${res.statusCode}');
-    print('DEBUG login response: ${res.body}');
 
     if (res.statusCode != 200) {
-      print('DEBUG backend login failed with status ${res.statusCode}');
       return null;
     }
     final map = jsonDecode(res.body) as Map<String, dynamic>?;
@@ -356,21 +338,6 @@ Future<BackendLoginResult?> fetchBackendToken(
       ownerUsername = user['ownerUsername']?.toString();
       ownerFullName = user['ownerFullName']?.toString();
     }
-    print('DEBUG login userId: ${map?['user']?['id']}');
-    print('DEBUG login accessToken decoded: ${_decodeJwt(access)}');
-    final token = access;
-    if (token != null && token.isNotEmpty) {
-      try {
-        final parts = token.split('.');
-        if (parts.length >= 2) {
-          var payloadPart = parts[1];
-          while (payloadPart.length % 4 != 0) payloadPart += '=';
-          final payload = utf8.decode(base64Url.decode(payloadPart));
-          print('DEBUG JWT payload: $payload');
-        }
-      } catch (_) {}
-    }
-    print('DEBUG backend login parsed userId=$userId accessPresent=${access != null && access.isNotEmpty} refreshPresent=${refresh != null && refresh.isNotEmpty}');
     if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
       await saveTokensAndSet(access, refresh, userId: userId);
       return BackendLoginResult(
@@ -383,11 +350,8 @@ Future<BackendLoginResult?> fetchBackendToken(
         ownerFullName: ownerFullName,
       );
     }
-    print('DEBUG backend login: missing access/refresh token in response');
     return null;
-  } catch (e, st) {
-    print('DEBUG backend login error: $e');
-    print(st);
+  } catch (_) {
     return null;
   }
 }
@@ -405,7 +369,9 @@ Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? to
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null && token.isNotEmpty) headers['Authorization'] = _bearer(token);
     const pageSize = 100;
+    const maxPages = 500;
     final all = <Map<String, dynamic>>[];
+    final seenKeys = <String>{};
     var page = 1;
     while (true) {
       final uri = Uri.parse('$_apiBase/products').replace(
@@ -418,15 +384,47 @@ Future<List<Map<String, dynamic>>?> fetchProductsFromBackendWithToken(String? to
         final items = decoded['items'] as List<dynamic>;
         final total = (decoded['total'] as num?)?.toInt() ?? 0;
         for (final e in items) {
-          if (e is Map) all.add(Map<String, dynamic>.from(e));
+          if (e is! Map) continue;
+          final map = Map<String, dynamic>.from(e);
+          final key = (map['unique_id'] ?? map['id'])?.toString();
+          if (key != null && key.isNotEmpty) {
+            if (seenKeys.add(key)) all.add(map);
+          } else {
+            all.add(map);
+          }
         }
         if (all.length >= total || items.isEmpty) break;
         page++;
+        if (page > maxPages) break;
         continue;
       }
-      final list = decoded as List<dynamic>?;
-      if (list == null) return null;
-      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      // Fallback: niektoré deploye vracajú priamo List bez total/items.
+      // V takom prípade iterujeme cez page, kým pribúdajú nové položky.
+      if (decoded is List<dynamic>) {
+        if (decoded.isEmpty) break;
+        var addedThisPage = 0;
+        for (final e in decoded) {
+          if (e is! Map) continue;
+          final map = Map<String, dynamic>.from(e);
+          final key = (map['unique_id'] ?? map['id'])?.toString();
+          if (key != null && key.isNotEmpty) {
+            if (seenKeys.add(key)) {
+              all.add(map);
+              addedThisPage++;
+            }
+          } else {
+            all.add(map);
+            addedThisPage++;
+          }
+        }
+        // Ak backend ignoruje page a posiela stále tú istú prvú stránku,
+        // zastavíme sa, aby sme sa necyklili do nekonečna.
+        if (addedThisPage == 0 || decoded.length < pageSize) break;
+        page++;
+        if (page > maxPages) break;
+        continue;
+      }
+      return null;
     }
     return all;
   } catch (_) {
@@ -504,11 +502,10 @@ Future<void> syncBatchesToBackend() async {
         )
         .timeout(const Duration(seconds: 15));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncBatchesToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e, st) {
-    print('syncBatchesToBackend error: $e');
-    print(st);
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -598,10 +595,10 @@ Future<void> syncReceiptsToBackend() async {
         )
         .timeout(const Duration(seconds: 30));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncReceiptsToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncReceiptsToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -670,10 +667,10 @@ Future<void> syncStockOutsToBackend() async {
         )
         .timeout(const Duration(seconds: 30));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncStockOutsToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncStockOutsToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -730,10 +727,10 @@ Future<void> syncRecipesToBackend() async {
         )
         .timeout(const Duration(seconds: 20));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncRecipesToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncRecipesToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -782,10 +779,10 @@ Future<void> syncProductionOrdersToBackend() async {
         )
         .timeout(const Duration(seconds: 20));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncProductionOrdersToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncProductionOrdersToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -842,10 +839,10 @@ Future<void> syncQuotesToBackend() async {
         )
         .timeout(const Duration(seconds: 20));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncQuotesToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncQuotesToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -889,10 +886,10 @@ Future<void> syncTransportsToBackend() async {
         )
         .timeout(const Duration(seconds: 15));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncTransportsToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncTransportsToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -934,10 +931,10 @@ Future<void> syncCompanyToBackend() async {
         )
         .timeout(const Duration(seconds: 10));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      print('syncCompanyToBackend failed: ${res.statusCode} ${res.body}');
+      // sync failed silently
     }
-  } catch (e) {
-    print('syncCompanyToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
@@ -994,17 +991,10 @@ Future<void> syncInvoicesToBackend() async {
         )
         .timeout(const Duration(seconds: 20));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      if (res.statusCode == 404) {
-        // Produkčný backend často ešte nemá tento endpoint – app použije lokálny SEPA/EPC QR.
-        print(
-          'syncInvoicesToBackend: 404 (endpoint /sync/invoices-full na serveri chýba alebo je starý deploy).',
-        );
-      } else {
-        print('syncInvoicesToBackend failed: ${res.statusCode} ${res.body}');
-      }
+      // sync failed silently (404 = endpoint chýba na serveri, app použije lokálny SEPA/EPC QR)
     }
-  } catch (e) {
-    print('syncInvoicesToBackend error: $e');
+  } catch (_) {
+    // ignore errors
   }
 }
 
