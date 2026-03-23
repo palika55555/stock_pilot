@@ -127,7 +127,7 @@ class SyncManager {
     final token = _accessToken ?? getBackendToken();
     if (token == null) return [];
     try {
-      final uri  = Uri.parse('$_apiBase/sync/conflicts');
+      final uri  = Uri.parse('${AppConfig.apiBase}/sync/conflicts');
       final resp = await http.get(uri, headers: _headers(token))
           .timeout(const Duration(seconds: 15));
       if (resp.statusCode == 200) {
@@ -147,7 +147,7 @@ class SyncManager {
     final token = _accessToken ?? getBackendToken();
     if (token == null) return false;
     try {
-      final uri  = Uri.parse('$_apiBase/sync/resolve');
+      final uri  = Uri.parse('${AppConfig.apiBase}/sync/resolve');
       final resp = await http.post(
         uri,
         headers: {..._headers(token), 'Content-Type': 'application/json'},
@@ -250,7 +250,7 @@ class SyncManager {
     final rowIds = rows.map((r) => r.id).toList();
 
     try {
-      final uri  = Uri.parse('$_apiBase/sync/push');
+      final uri  = Uri.parse('${AppConfig.apiBase}/sync/push');
       final resp = await http.post(
         uri,
         headers: {..._headers(token), 'Content-Type': 'application/json'},
@@ -318,7 +318,7 @@ class SyncManager {
 
     try {
       final uri = Uri.parse(
-        '$_apiBase/sync/pull'
+        '${AppConfig.apiBase}/sync/pull'
         '?since=${Uri.encodeComponent(since)}'
         '&deviceId=${Uri.encodeComponent(_deviceId ?? '')}',
       );
@@ -430,8 +430,6 @@ class SyncManager {
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
-
-  String get _apiBase => AppConfig.apiBase;
 
   Map<String, String> _headers(String token) => {
         'Authorization': 'Bearer $token',

@@ -11,5 +11,5 @@ class AppConfig {
   static const String apiPrefix = '/api/sp-9f2a4e1b';
 
   /// Plná base URL pre API volania.
-  static String get apiBase => '$backendApiBase$apiPrefix';
+  static const String apiBase = '$backendApiBase$apiPrefix';
 }
