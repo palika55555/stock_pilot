@@ -5,7 +5,7 @@ import 'package:stock_pilot/screens/price_quote/price_quote_screen.dart';
 import 'package:stock_pilot/services/customer/customer_service.dart';
 import 'package:stock_pilot/services/api_sync_service.dart';
 import 'package:stock_pilot/services/sync_check_service.dart';
-import 'package:stock_pilot/services/Database/database_service.dart';
+
 import 'package:stock_pilot/theme/app_theme.dart';
 import 'package:stock_pilot/widgets/customers/add_customer_modal_widget.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
@@ -73,9 +73,9 @@ class _CustomersPageState extends State<CustomersPage>
 
   Future<void> _loadCustomers() async {
     setState(() => _loading = true);
-    print('CustomersPage: currentUserId = ${DatabaseService.currentUserId}');
+
     final list = await _customerService.getAllCustomers();
-    print('CustomersPage: loaded customers count = ${list.length}');
+
     if (mounted) {
       setState(() {
         _customers = list;

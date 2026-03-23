@@ -22,7 +22,7 @@ class UserSession {
     _ownerFullName = ownerFullName;
     _ownerUsername = ownerUsername;
     DatabaseService.setCurrentUser(userId);
-    print('DEBUG UserSession.setUser: userId=$userId owner=$_ownerFullName');
+
   }
 
   /// Nastaví meno nadriadeného (napr. po obnovení z SharedPreferences).

@@ -20,14 +20,14 @@ class _CustomersPalletsScreenState extends State<CustomersPalletsScreen> {
   @override
   void initState() {
     super.initState();
-    print('CustomersPalletsScreen: currentUserId = ${DatabaseService.currentUserId}');
+
     _load();
   }
 
   Future<void> _load() async {
-    print('CustomersPalletsScreen._load: currentUserId = ${DatabaseService.currentUserId}');
+
     final list = await _db.getCustomers();
-    print('CustomersPalletsScreen._load: loaded customers count = ${list.length}');
+
     if (mounted) {
       setState(() {
         _customers = list;

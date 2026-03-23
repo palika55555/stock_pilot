@@ -232,7 +232,7 @@ class DatabaseService {
     }
     basePath ??= await getDatabasesPath();
     final path = join(basePath, 'stock_pilot.db');
-    print('DATABASE PATH: $path');
+
     final db = await openDatabase(
       path,
       version: 38,
@@ -1155,9 +1155,7 @@ class DatabaseService {
         await File(path).delete();
       }
     } catch (e) {
-      print(
-        "Warning: Could not delete old DB file (maybe locked), clearing tables instead: $e",
-      );
+
     }
 
     Database db = await database;
@@ -3750,18 +3748,13 @@ class DatabaseService {
       await DatabaseService.restoreCurrentUser();
     }
     if (_currentUserId == null) {
-      print(
-        'ERROR insertCustomer: currentUserId still null after restore, refusing to insert customer ${customer.name} | instance: ${_instance.hashCode}',
-      );
+
       throw Exception('User not logged in – cannot insert customer');
     }
     final db = await database;
     final map = Map<String, dynamic>.from(customer.toMap());
     map['user_id'] = _currentUserId;
-    print(
-      'DEBUG insertCustomer: user_id = $_currentUserId | instance: ${_instance.hashCode}',
-    );
-    print('DEBUG insertCustomer map: $map');
+
     final _r = await db.insert('customers', map);
     DataChangeNotifier.notify();
     return _r;
@@ -3772,14 +3765,10 @@ class DatabaseService {
       await DatabaseService.restoreCurrentUser();
     }
     if (_currentUserId == null) {
-      print(
-        'ERROR getCustomers: currentUserId still null after restore – returning empty list | instance: ${_instance.hashCode}',
-      );
+
       return [];
     }
-    print(
-      'DEBUG getCustomers: user=$_currentUserId | instance: ${_instance.hashCode}',
-    );
+
     final db = await database;
     final maps = await db.query(
       'customers',
@@ -3787,7 +3776,7 @@ class DatabaseService {
       whereArgs: _userArgs,
       orderBy: 'name ASC',
     );
-    print('DEBUG getCustomers result count: ${maps.length}');
+
     return maps.map((m) => Customer.fromMap(m)).toList();
   }
 
@@ -4201,7 +4190,7 @@ class DatabaseService {
         ) WHERE user_id IS NULL
       ''');
     } catch (e, st) {
-      print('backfillInvoiceUserIdsForCurrentUser: $e\n$st');
+
     }
   }
 
@@ -4818,10 +4807,10 @@ class DatabaseService {
     if (uid == null) await DatabaseService.restoreCurrentUser();
     uid = _currentUserId;
     if (uid == null) {
-      print('DEBUG getDashboardStats: userId=null, returning empty stats');
+
       return _emptyDashboardStats();
     }
-    print('DEBUG getDashboardStats: userId=$uid');
+
 
     Database db = await database;
 
@@ -4831,7 +4820,7 @@ class DatabaseService {
       [uid],
     );
     int productCount = Sqflite.firstIntValue(productCountResult) ?? 0;
-    print('DEBUG getDashboardStats: products count=$productCount');
+
 
     // Počet zákazníkov
     final customerCountResult = await db.rawQuery(

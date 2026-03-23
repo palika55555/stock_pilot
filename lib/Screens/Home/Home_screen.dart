@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
       });
     }
-    print('DEBUG HomeScreen.initState: userId=$userId (session=${UserSession.userId})');
+
     _persistCurrentUser();
     _refreshNotificationCount();
     WidgetsBinding.instance.addObserver(this);

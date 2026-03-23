@@ -28,7 +28,7 @@ class FinstatService {
         return await _fetchFromAlternativeAPI(ico);
       }
     } catch (e) {
-      print('Error fetching supplier data: $e');
+
       return null;
     }
   }
