@@ -22,9 +22,7 @@ class HomeOverview extends StatefulWidget {
   final User? user;
   final int notificationUnreadCount;
   final VoidCallback? onNotificationTap;
-  /// Voliteľné: stiahnuť dáta z webu (zákazníci, produkty).
   final Future<void> Function()? onSyncFromBackend;
-  /// Voliteľné: nahrať lokálne dáta na web (produkty, zákazníci).
   final Future<void> Function()? onSyncToBackend;
 
   const HomeOverview({
@@ -68,7 +66,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
     super.initState();
     _staggerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
     _loadStats();
     _loadNotesAndTasks();
@@ -113,6 +111,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
   }
 
   Future<void> _loadStats() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final stats = await _dashboardService.getOverviewStats();
     if (mounted) {
@@ -142,7 +141,6 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       color: AppColors.bgPrimary,
       child: Column(
         children: [
-          // Desktop header (sidebar screens don't have app bar)
           if (isDesktop) _buildDesktopHeader(l10n),
           Expanded(
             child: _isLoading
@@ -165,16 +163,12 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Main KPI cards row
                             _buildMainKpiSection(l10n),
-                            const SizedBox(height: 24),
-                            // Secondary KPI row (receipts + production)
+                            const SizedBox(height: 28),
                             _buildSecondaryKpiSection(),
-                            const SizedBox(height: 24),
-                            // Recent activity
+                            const SizedBox(height: 28),
                             _buildRecentActivitySection(l10n),
-                            const SizedBox(height: 24),
-                            // Notes + Tasks
+                            const SizedBox(height: 28),
                             _buildNotesTasksSection(l10n),
                           ],
                         ),
@@ -189,117 +183,170 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
 
   Widget _buildDesktopHeader(AppLocalizations l10n) {
     final now = DateTime.now();
-    final dateStr = DateFormat('EEEE, d MMMM yyyy', 'sk').format(now);
+    final dateStr = DateFormat('EEEE, d. MMMM yyyy', 'sk').format(now);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       decoration: const BoxDecoration(
         color: AppColors.bgPrimary,
         border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 1)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
         children: [
-              Expanded(
-                child: Column(
+          // Status micro-bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0D0F18),
+              border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 1)),
+            ),
+            child: Row(
+              children: [
+                _LivePulse(color: AppColors.success),
+                const SizedBox(width: 8),
+                Text(
+                  'SYSTÉM ONLINE',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.success,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Container(width: 1, height: 12, color: AppColors.borderDefault),
+                const SizedBox(width: 20),
+                Text(
+                  'STOCK PILOT',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textMuted,
+                    letterSpacing: 2.0,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.schedule_rounded, size: 12, color: AppColors.textMuted),
+                const SizedBox(width: 5),
+                Text(
+                  dateStr,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Main header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Prehľad',
+                      'PREHĽAD',
                       style: GoogleFonts.outfit(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
                         color: AppColors.textPrimary,
+                        letterSpacing: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      dateStr,
+                      'Sklad v reálnom čase',
                       style: GoogleFonts.dmSans(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ],
                 ),
-              ),
-              Row(
-                children: [
-                  _HeaderQuickButton(
-                    icon: Icons.arrow_downward_rounded,
-                    label: 'Nová príjemka',
-                    color: const Color(0xFF6366F1),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
-                    ).then((_) => _loadStats()),
-                  ),
-                  const SizedBox(width: 8),
-                  _HeaderQuickButton(
-                    icon: Icons.arrow_upward_rounded,
-                    label: 'Nová výdajka',
-                    color: const Color(0xFFDC2626),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => StockOutScreen(userRole: widget.userRole)),
-                    ).then((_) => _loadStats()),
-                  ),
-                  const SizedBox(width: 16),
-                  _HeaderActionButton(
-                    icon: Icons.search_rounded,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SearchScreen()),
+                const Spacer(),
+                Row(
+                  children: [
+                    _HeaderQuickButton(
+                      icon: Icons.arrow_downward_rounded,
+                      label: 'Nová príjemka',
+                      color: const Color(0xFF6366F1),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GoodsReceiptScreen()),
+                      ).then((_) => _loadStats()),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _HeaderActionButton(
-                        icon: Icons.notifications_outlined,
-                        onTap: () => widget.onNotificationTap?.call(),
+                    const SizedBox(width: 8),
+                    _HeaderQuickButton(
+                      icon: Icons.arrow_upward_rounded,
+                      label: 'Nová výdajka',
+                      color: const Color(0xFFDC2626),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => StockOutScreen(userRole: widget.userRole)),
+                      ).then((_) => _loadStats()),
+                    ),
+                    const SizedBox(width: 16),
+                    _HeaderActionButton(
+                      icon: Icons.search_rounded,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
                       ),
-                      if (widget.notificationUnreadCount > 0)
-                        Positioned(
-                          top: -2,
-                          right: -2,
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: AppColors.danger,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.bgPrimary, width: 1.5),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${widget.notificationUnreadCount}',
-                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _HeaderActionButton(
+                          icon: Icons.notifications_outlined,
+                          onTap: () => widget.onNotificationTap?.call(),
+                        ),
+                        if (widget.notificationUnreadCount > 0)
+                          Positioned(
+                            top: -2,
+                            right: -2,
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: AppColors.danger,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.bgPrimary, width: 1.5),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${widget.notificationUnreadCount}',
+                                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  if (!kIsWeb) ...[
-                    const SizedBox(width: 10),
-                    _SyncButton(
-                      onSyncFromWeb: () async {
-                        await widget.onSyncFromBackend?.call();
-                        _loadStats();
-                      },
-                      onSyncToWeb: () async {
-                        await widget.onSyncToBackend?.call();
-                        _loadStats();
-                      },
+                      ],
                     ),
+                    if (!kIsWeb) ...[
+                      const SizedBox(width: 10),
+                      _SyncButton(
+                        onSyncFromWeb: () async {
+                          await widget.onSyncFromBackend?.call();
+                          _loadStats();
+                        },
+                        onSyncToWeb: () async {
+                          await widget.onSyncToBackend?.call();
+                          _loadStats();
+                        },
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-        );
+        ],
+      ),
+    );
   }
 
   Widget _buildLoadingState() {
@@ -308,17 +355,22 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SizedBox(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             child: CircularProgressIndicator(
               color: AppColors.accentGold,
-              strokeWidth: 2.5,
+              strokeWidth: 2,
             ),
           ),
           SizedBox(height: 16),
           Text(
-            'Načítavam...',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            'NAČÍTAVAM DÁTA...',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -332,7 +384,6 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
         _SectionLabel(label: 'Rýchle akcie', icon: Icons.bolt_rounded),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 400;
           return Row(
             children: [
               Expanded(
@@ -370,7 +421,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionLabel(label: 'Kľúčové ukazatele', icon: Icons.trending_up_rounded),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         LayoutBuilder(builder: (context, constraints) {
           final crossCount = constraints.maxWidth > 700
               ? 4
@@ -379,11 +430,11 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   : 2;
           return GridView.count(
             crossAxisCount: crossCount,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: constraints.maxWidth > 700 ? 1.5 : 1.4,
+            childAspectRatio: constraints.maxWidth > 700 ? 1.55 : 1.4,
             children: [
               _FadeInWidget(
                 animation: _staggerAnim(0),
@@ -391,6 +442,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   icon: Icons.inventory_2_rounded,
                   label: 'Produkty',
                   value: _stats['products'].toString(),
+                  accentColor: AppColors.accentGold,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => WarehouseSuppliesScreen(userRole: widget.userRole),
                   )).then((_) => _loadStats()),
@@ -402,6 +454,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   icon: Icons.people_rounded,
                   label: 'Zákazníci',
                   value: _stats['customers'].toString(),
+                  accentColor: const Color(0xFF6366F1),
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => const CustomersPage(),
                   )).then((_) => _loadStats()),
@@ -413,6 +466,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   icon: Icons.euro_rounded,
                   label: 'Tržby',
                   value: _formatCurrencyShort(_stats['revenue']),
+                  accentColor: AppColors.success,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => const PriceQuotesListScreen(),
                   )).then((_) => _loadStats()),
@@ -424,6 +478,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   icon: Icons.request_quote_rounded,
                   label: 'Cenové ponuky',
                   value: (_stats['quotesCount'] ?? _stats['orders'] ?? 0).toString(),
+                  accentColor: const Color(0xFF8B5CF6),
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => const PriceQuotesListScreen(),
                   )).then((_) => _loadStats()),
@@ -435,6 +490,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   icon: Icons.construction_rounded,
                   label: 'Zákazky',
                   value: '',
+                  accentColor: AppColors.warning,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => const ProjectsPage(),
                   )).then((_) => _loadStats()),
@@ -460,7 +516,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionLabel(label: 'Operačný prehľad', icon: Icons.speed_rounded),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         LayoutBuilder(builder: (context, constraints) {
           final crossCount = constraints.maxWidth > 700
               ? 5
@@ -469,11 +525,11 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                   : 2;
           return GridView.count(
             crossAxisCount: crossCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: constraints.maxWidth > 600 ? 1.5 : 1.3,
+            childAspectRatio: constraints.maxWidth > 600 ? 1.6 : 1.3,
             children: [
               _FadeInWidget(
                 animation: _staggerAnim(4),
@@ -548,7 +604,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionLabel(label: 'Posledná aktivita', icon: Icons.swap_vert_rounded),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           LayoutBuilder(builder: (context, constraints) {
             if (constraints.maxWidth > 550) {
               return IntrinsicHeight(
@@ -565,7 +621,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                         )).then((_) => _loadStats()),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _ActivityColumn(
                         title: 'Posledné výdajky',
@@ -590,7 +646,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
                     builder: (_) => const GoodsReceiptScreen(),
                   )).then((_) => _loadStats()),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 _ActivityColumn(
                   title: 'Posledné výdajky',
                   items: outboundList,
@@ -617,7 +673,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(child: _buildNotesCard(l10n, matchHeight: true)),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(child: _buildTasksCard(l10n, matchHeight: true)),
               ],
             ),
@@ -626,7 +682,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
         return Column(
           children: [
             _buildNotesCard(l10n, matchHeight: false),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             _buildTasksCard(l10n, matchHeight: false),
           ],
         );
@@ -663,12 +719,12 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       onChanged: _saveNotes,
     );
 
-    return _PremiumCard(
+    return _CommandCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardHeader(icon: Icons.notes_rounded, title: l10n.overviewNotesTitle),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           if (matchHeight) Expanded(child: notesField) else notesField,
         ],
       ),
@@ -774,7 +830,7 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
               color: AppColors.accentGold,
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
-                BoxShadow(color: AppColors.accentGold.withOpacity(0.3), blurRadius: 8),
+                BoxShadow(color: AppColors.accentGold.withOpacity(0.3), blurRadius: 10, spreadRadius: 0),
               ],
             ),
             child: const Icon(Icons.add_rounded, color: AppColors.bgPrimary, size: 20),
@@ -783,12 +839,12 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
       ],
     );
 
-    return _PremiumCard(
+    return _CommandCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardHeader(icon: Icons.checklist_rounded, title: l10n.overviewTasksTitle),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           if (matchHeight)
             Expanded(
               child: Column(
@@ -828,9 +884,58 @@ class _HomeOverviewState extends State<HomeOverview> with TickerProviderStateMix
 
 // ─── Reusable components ──────────────────────────────────────────────────────
 
-class _PremiumCard extends StatelessWidget {
+/// Animated pulsing live indicator dot
+class _LivePulse extends StatefulWidget {
+  final Color color;
+  const _LivePulse({required this.color});
+
+  @override
+  State<_LivePulse> createState() => _LivePulseState();
+}
+
+class _LivePulseState extends State<_LivePulse> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.color.withOpacity(_anim.value),
+          boxShadow: [
+            BoxShadow(
+              color: widget.color.withOpacity(_anim.value * 0.6),
+              blurRadius: 6,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommandCard extends StatelessWidget {
   final Widget child;
-  const _PremiumCard({required this.child});
+  const _CommandCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -839,10 +944,10 @@ class _PremiumCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSubtle, width: 1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderDefault, width: 1),
         boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 24, offset: Offset(0, 8)),
+          BoxShadow(color: Color(0x33000000), blurRadius: 20, offset: Offset(0, 6)),
         ],
       ),
       child: child,
@@ -863,19 +968,24 @@ class _CardHeader extends StatelessWidget {
           width: 3,
           height: 16,
           decoration: BoxDecoration(
-            color: AppColors.accentGold,
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.accentGold, Color(0xFFF5A62380)],
+            ),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
         const SizedBox(width: 8),
-        Icon(icon, size: 15, color: AppColors.accentGold),
+        Icon(icon, size: 14, color: AppColors.accentGold),
         const SizedBox(width: 6),
         Text(
           title,
           style: GoogleFonts.dmSans(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
+            letterSpacing: 0.3,
           ),
         ),
       ],
@@ -892,15 +1002,26 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 13, color: AppColors.accentGold),
-        const SizedBox(width: 6),
+        Icon(icon, size: 12, color: AppColors.accentGold),
+        const SizedBox(width: 7),
         Text(
           label.toUpperCase(),
           style: GoogleFonts.dmSans(
             fontSize: 10,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: AppColors.textSecondary,
-            letterSpacing: 1.0,
+            letterSpacing: 1.4,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.borderDefault, AppColors.borderSubtle.withOpacity(0)],
+              ),
+            ),
           ),
         ),
       ],
@@ -912,12 +1033,14 @@ class _KpiCard extends StatefulWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Color accentColor;
   final VoidCallback? onTap;
 
   const _KpiCard({
     required this.icon,
     required this.label,
     required this.value,
+    required this.accentColor,
     this.onTap,
   });
 
@@ -936,71 +1059,107 @@ class _KpiCardState extends State<_KpiCard> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 200),
           transform: _hovered
-              ? (Matrix4.identity()..translateByDouble(0.0, -2.0, 0.0, 1.0))
+              ? (Matrix4.identity()..translateByDouble(0.0, -3.0, 0.0, 1.0))
               : Matrix4.identity(),
           clipBehavior: Clip.hardEdge,
-          constraints: const BoxConstraints(minHeight: 120, maxHeight: 140),
+          constraints: const BoxConstraints(minHeight: 115, maxHeight: 145),
           decoration: BoxDecoration(
             color: AppColors.bgCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: _hovered ? AppColors.accentGold.withOpacity(0.35) : AppColors.borderSubtle,
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.borderDefault, width: 1),
             boxShadow: [
               BoxShadow(
                 color: _hovered
-                    ? AppColors.accentGold.withOpacity(0.1)
-                    : Colors.black45,
-                blurRadius: _hovered ? 20 : 24,
-                offset: const Offset(0, 8),
+                    ? widget.accentColor.withOpacity(0.12)
+                    : Colors.black.withOpacity(0.3),
+                blurRadius: _hovered ? 24 : 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentGoldSubtle,
-                      borderRadius: BorderRadius.circular(12),
+              // Left accent strip kept separate so rounded border works on all Flutter backends.
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: _hovered ? widget.accentColor : widget.accentColor.withOpacity(0.7),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      bottomLeft: Radius.circular(14),
                     ),
-                    child: Icon(widget.icon, color: AppColors.accentGold, size: 20),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: _AnimatedNumber(
-                  value: widget.value,
-                  style: GoogleFonts.outfit(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accentGold,
-                    height: 1.1,
                   ),
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                widget.label,
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
+              // Subtle background gradient
+              Positioned(
+                right: -20,
+                top: -20,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.accentColor.withOpacity(_hovered ? 0.07 : 0.04),
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.label.toUpperCase(),
+                            style: GoogleFonts.dmSans(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textMuted,
+                              letterSpacing: 1.0,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: widget.accentColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(widget.icon, color: widget.accentColor, size: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: _AnimatedNumber(
+                        value: widget.value,
+                        style: GoogleFonts.outfit(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          height: 1.0,
+                          letterSpacing: -1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1049,9 +1208,9 @@ class _SmallKpiCardState extends State<_SmallKpiCard> {
           decoration: BoxDecoration(
             color: AppColors.bgCard,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.borderSubtle, width: 1),
+            border: Border.all(color: AppColors.borderDefault, width: 1),
             boxShadow: const [
-              BoxShadow(color: Colors.black38, blurRadius: 12, offset: Offset(0, 4)),
+              BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 3)),
             ],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1060,8 +1219,19 @@ class _SmallKpiCardState extends State<_SmallKpiCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color,
+                      boxShadow: [
+                        BoxShadow(color: color.withOpacity(0.5), blurRadius: 4, spreadRadius: 1),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       widget.label,
@@ -1075,8 +1245,7 @@ class _SmallKpiCardState extends State<_SmallKpiCard> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(widget.icon, size: 14, color: color.withOpacity(0.7)),
+                  Icon(widget.icon, size: 13, color: color.withOpacity(0.5)),
                 ],
               ),
               FittedBox(
@@ -1085,10 +1254,11 @@ class _SmallKpiCardState extends State<_SmallKpiCard> {
                 child: _AnimatedNumber(
                   value: widget.value,
                   style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                     color: color,
                     letterSpacing: -0.5,
+                    height: 1.1,
                   ),
                 ),
               ),
@@ -1116,18 +1286,17 @@ class _ActivityColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accentColor = isInbound ? AppColors.success : AppColors.danger;
-    final accentSubtle = isInbound ? AppColors.successSubtle : AppColors.dangerSubtle;
-    final arrow = isInbound ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+    final arrow = isInbound ? Icons.south_rounded : Icons.north_rounded;
     final dateFormat = DateFormat('dd.MM.yy');
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSubtle, width: 1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderDefault, width: 1),
         boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 24, offset: Offset(0, 8)),
+          BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -1136,28 +1305,35 @@ class _ActivityColumn extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: accentSubtle,
-                  borderRadius: BorderRadius.circular(8),
+                  color: accentColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: accentColor.withOpacity(0.25), width: 1),
                 ),
-                child: Icon(arrow, size: 16, color: accentColor),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(arrow, size: 12, color: accentColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      isInbound ? 'PRÍJEMKY' : 'VÝDAJKY',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: accentColor,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              const Spacer(),
+              if (items.isNotEmpty)
+                _LivePulse(color: accentColor),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           if (items.isEmpty)
             _EmptyState(
               icon: isInbound ? Icons.inbox_rounded : Icons.outbox_rounded,
@@ -1172,20 +1348,21 @@ class _ActivityColumn extends StatelessWidget {
               final total = (e['total'] as num?)?.toDouble() ?? 0.0;
               final dateStr = dt != null ? dateFormat.format(dt) : '—';
               final timeAgo = dt != null ? _timeAgo(dt) : '';
-              final prefix = isInbound ? '+ ' : '- ';
+              final prefix = isInbound ? '+' : '-';
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.bgElevated,
-                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFF0D0F18),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(color: accentColor.withOpacity(0.5), width: 2),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(arrow, size: 14, color: accentColor),
-                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1210,11 +1387,12 @@ class _ActivityColumn extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '$prefix${NumberFormat.decimalPattern('sk_SK').format(total)} €',
+                        '$prefix ${NumberFormat.decimalPattern('sk_SK').format(total)} €',
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: accentColor,
+                          letterSpacing: -0.3,
                         ),
                       ),
                     ],
@@ -1222,7 +1400,7 @@ class _ActivityColumn extends StatelessWidget {
                 ),
               );
             }),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           GestureDetector(
             onTap: onViewAll,
             child: Row(
@@ -1231,13 +1409,13 @@ class _ActivityColumn extends StatelessWidget {
                 Text(
                   'Zobraziť všetky',
                   style: GoogleFonts.dmSans(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppColors.accentGold,
                   ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.accentGold),
+                const SizedBox(width: 3),
+                const Icon(Icons.arrow_forward_rounded, size: 13, color: AppColors.accentGold),
               ],
             ),
           ),
@@ -1263,17 +1441,14 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
-          Icon(icon, size: 36, color: AppColors.textMuted),
+          Icon(icon, size: 32, color: AppColors.textMuted),
           const SizedBox(height: 8),
           Text(
             message,
-            style: GoogleFonts.dmSans(
-              fontSize: 13,
-              color: AppColors.textMuted,
-            ),
+            style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -1293,7 +1468,7 @@ class _FadeInWidget extends StatelessWidget {
       builder: (context, _) => Opacity(
         opacity: animation.value,
         child: Transform.translate(
-          offset: Offset(0, 12 * (1 - animation.value)),
+          offset: Offset(0, 16 * (1 - animation.value)),
           child: child,
         ),
       ),
@@ -1301,7 +1476,7 @@ class _FadeInWidget extends StatelessWidget {
   }
 }
 
-/// Animates numeric values (count-up)
+/// Count-up animated number
 class _AnimatedNumber extends StatelessWidget {
   final String value;
   final TextStyle style;
@@ -1309,17 +1484,16 @@ class _AnimatedNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Try to extract numeric part for animation
     final numericStr = value.replaceAll(RegExp(r'[^\d]'), '');
     final numericVal = int.tryParse(numericStr);
 
     if (numericVal == null || numericVal == 0) {
-      return Text(value, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+      return Text(value.isEmpty ? '—' : value, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
     }
 
     return TweenAnimationBuilder<int>(
       tween: IntTween(begin: 0, end: numericVal),
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1100),
       curve: Curves.easeOutCubic,
       builder: (context, animVal, _) {
         String display = value.contains('€')
@@ -1331,24 +1505,39 @@ class _AnimatedNumber extends StatelessWidget {
   }
 }
 
-class _HeaderActionButton extends StatelessWidget {
+class _HeaderActionButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   const _HeaderActionButton({required this.icon, required this.onTap});
 
   @override
+  State<_HeaderActionButton> createState() => _HeaderActionButtonState();
+}
+
+class _HeaderActionButtonState extends State<_HeaderActionButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: AppColors.bgElevated,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.borderDefault, width: 1),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: _hovered ? AppColors.bgElevated : AppColors.bgCard,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hovered ? AppColors.borderDefault : AppColors.borderSubtle,
+              width: 1,
+            ),
+          ),
+          child: Icon(widget.icon, color: _hovered ? AppColors.textPrimary : AppColors.textSecondary, size: 19),
         ),
-        child: Icon(icon, color: AppColors.textPrimary, size: 20),
       ),
     );
   }
@@ -1371,8 +1560,7 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))
-      ..repeat();
+    _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat();
     _spin.stop();
   }
 
@@ -1402,7 +1590,6 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
 
     return PopupMenuButton<String>(
       enabled: showMenu,
-      onOpened: () {},
       onSelected: (value) async {
         if (value == 'from_web') await _run(widget.onSyncFromWeb);
         if (value == 'to_web') await _run(widget.onSyncToWeb);
@@ -1436,30 +1623,30 @@ class _SyncButtonState extends State<_SyncButton> with SingleTickerProviderState
       ],
       child: Container(
         height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: AppColors.accentGoldSubtle,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.accentGold.withOpacity(0.3), width: 1),
+          border: Border.all(color: AppColors.accentGold.withOpacity(0.25), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             RotationTransition(
               turns: _spin,
-              child: const Icon(Icons.sync_rounded, size: 16, color: AppColors.accentGold),
+              child: const Icon(Icons.sync_rounded, size: 15, color: AppColors.accentGold),
             ),
             const SizedBox(width: 6),
             Text(
-              _syncing ? 'Synchronizujem...' : 'Synchronizovať',
+              _syncing ? 'Sync...' : 'Sync',
               style: GoogleFonts.dmSans(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.accentGold,
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.accentGold),
+            const Icon(Icons.arrow_drop_down_rounded, size: 16, color: AppColors.accentGold),
           ],
         ),
       ),
@@ -1499,23 +1686,26 @@ class _HeaderQuickButtonState extends State<_HeaderQuickButton> {
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: _hovered ? widget.color.withOpacity(0.15) : widget.color.withOpacity(0.08),
+            color: _hovered ? widget.color.withOpacity(0.18) : widget.color.withOpacity(0.09),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: _hovered ? widget.color.withOpacity(0.5) : widget.color.withOpacity(0.2),
+              color: _hovered ? widget.color.withOpacity(0.55) : widget.color.withOpacity(0.22),
               width: 1,
             ),
+            boxShadow: _hovered
+                ? [BoxShadow(color: widget.color.withOpacity(0.15), blurRadius: 10)]
+                : [],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 15, color: widget.color),
-              const SizedBox(width: 7),
+              Icon(widget.icon, size: 14, color: widget.color),
+              const SizedBox(width: 6),
               Text(
                 widget.label,
                 style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                   color: widget.color,
                 ),
               ),
@@ -1558,11 +1748,11 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           decoration: BoxDecoration(
-            color: _hovered ? widget.color.withOpacity(0.18) : widget.color.withOpacity(0.1),
+            color: _hovered ? widget.color.withOpacity(0.15) : widget.color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: _hovered ? widget.color.withOpacity(0.6) : widget.color.withOpacity(0.25),
-              width: 1.5,
+              color: _hovered ? widget.color.withOpacity(0.55) : widget.color.withOpacity(0.22),
+              width: 1,
             ),
           ),
           child: Row(
@@ -1587,7 +1777,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                   ),
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: widget.color.withOpacity(0.7)),
+              Icon(Icons.arrow_forward_ios_rounded, size: 13, color: widget.color.withOpacity(0.6)),
             ],
           ),
         ),

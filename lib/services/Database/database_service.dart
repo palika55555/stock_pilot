@@ -2902,6 +2902,7 @@ class DatabaseService {
       } else {
         final fullMap = <String, dynamic>{
           'unique_id': uniqueId,
+          'user_id': _currentUserId,
           'warehouse_id': wid,
           'name': name,
           'plu': plu,
@@ -2926,10 +2927,27 @@ class DatabaseService {
           'has_extended_pricing': 0,
           'iba_cele_mnozstva': 0,
         };
-        final product = Product.fromMap(fullMap);
-        await insertProduct(product);
-        existingByUniqueId[uniqueId] = product;
-        inserted++;
+        final existingAnyUser = await db.query(
+          'products',
+          where: 'unique_id = ?',
+          whereArgs: [uniqueId],
+          limit: 1,
+        );
+        if (existingAnyUser.isNotEmpty) {
+          await db.update(
+            'products',
+            fullMap,
+            where: 'unique_id = ?',
+            whereArgs: [uniqueId],
+          );
+          existingByUniqueId[uniqueId] = Product.fromMap(fullMap);
+          updated++;
+        } else {
+          final product = Product.fromMap(fullMap);
+          await insertProduct(product);
+          existingByUniqueId[uniqueId] = product;
+          inserted++;
+        }
       }
     }
     return inserted + updated;
