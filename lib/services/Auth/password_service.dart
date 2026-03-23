@@ -1,35 +1,39 @@
 import '../../models/user.dart';
 import '../Database/database_service.dart';
+import 'hash_service.dart';
 
 class PasswordService {
   final DatabaseService _dbService = DatabaseService();
 
-  /// Overí, či je zadané heslo správne pre daného používateľa
+  /// Overí, či je zadané heslo správne pre daného používateľa.
+  /// Podporuje starý plaintext aj nový SHA-256+salt formát.
   Future<bool> verifyPassword(String username, String password) async {
-    User? user = await _dbService.getUserByUsername(username);
-    return user != null && user.password == password;
+    final user = await _dbService.getUserByUsername(username);
+    if (user == null) return false;
+    return _verifyUserPassword(user, password);
   }
 
-  /// Zmení heslo pre daného používateľa
-  /// Vracia true ak bola zmena úspešná, false ak používateľ neexistuje
-  /// Vyhodí výnimku ak nastane chyba
+  /// Zmení heslo pre daného používateľa.
+  /// Vracia true ak bola zmena úspešná.
   Future<bool> changePassword(
     String username,
     String currentPassword,
     String newPassword,
   ) async {
-    // Overenie používateľa a súčasného hesla
-    User? user = await _dbService.getUserByUsername(username);
-
-    if (user == null || user.password != currentPassword) {
+    final user = await _dbService.getUserByUsername(username);
+    if (user == null || !_verifyUserPassword(user, currentPassword)) {
       return false;
     }
 
-    // Aktualizácia hesla
+    // Nové heslo vždy hashujeme — nikdy neukladáme plaintext.
+    final newSalt = HashService.generateSalt();
+    final newHash = HashService.hashPassword(newPassword, newSalt);
+
     final updatedUser = User(
       id: user.id,
       username: user.username,
-      password: newPassword,
+      password: newHash,
+      passwordSalt: newSalt,
       fullName: user.fullName,
       role: user.role,
       email: user.email,
@@ -41,5 +45,17 @@ class PasswordService {
 
     await _dbService.updateUser(updatedUser);
     return true;
+  }
+
+  /// Overí heslo — podporuje plaintext (starý) aj hash (nový).
+  /// Plaintext fallback je tu len pre migráciu; po prvom logine
+  /// je záznam automaticky konvertovaný na hash.
+  bool _verifyUserPassword(User user, String rawPassword) {
+    final salt = user.passwordSalt;
+    if (salt == null || salt.isEmpty) {
+      // Starý plaintext záznam — porovnaj priamo.
+      return user.password == rawPassword;
+    }
+    return HashService.verifyPassword(rawPassword, user.password, salt);
   }
 }

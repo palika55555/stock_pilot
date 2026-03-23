@@ -331,6 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       id: user.id,
       username: user.username,
       password: user.password,
+      passwordSalt: user.passwordSalt,
       fullName: user.fullName,
       role: newRole,
       email: user.email,
@@ -341,7 +342,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     await _db.updateUser(updatedUser);
     if (!mounted) return;
-    await syncUserToBackend(updatedUser);
+    // Heslo sa nesynchronizuje na backend — spravuje backend samostatne.
+    final syncUser = User(
+      id: updatedUser.id,
+      username: updatedUser.username,
+      password: '',
+      fullName: updatedUser.fullName,
+      role: updatedUser.role,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      department: updatedUser.department,
+      avatarUrl: updatedUser.avatarUrl,
+      joinDate: updatedUser.joinDate,
+    );
+    await syncUserToBackend(syncUser);
     if (!mounted) return;
     final newToken = await refreshAccessToken();
     if (newToken != null && mounted) {

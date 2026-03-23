@@ -2,6 +2,7 @@ class User {
   final int? id;
   final String username;
   final String password;
+  final String? passwordSalt;
   final String fullName;
   final String role; // 'admin' or 'user'
   final String email;
@@ -14,6 +15,7 @@ class User {
     this.id,
     required this.username,
     required this.password,
+    this.passwordSalt,
     required this.fullName,
     required this.role,
     required this.email,
@@ -28,6 +30,7 @@ class User {
       'id': id,
       'username': username,
       'password': password,
+      'password_salt': passwordSalt,
       'full_name': fullName,
       'role': role,
       'email': email,
@@ -43,6 +46,7 @@ class User {
       id: map['id'],
       username: map['username'],
       password: map['password'] ?? '',
+      passwordSalt: map['password_salt'] as String?,
       fullName: map['full_name'],
       role: map['role'],
       email: map['email'],

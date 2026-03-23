@@ -7,6 +7,7 @@ import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
 import '../../services/sync/sync_manager.dart';
+import '../../services/Auth/hash_service.dart';
 import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
@@ -138,7 +139,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       User? user = await _dbService.getUserByUsername(username);
       if (!mounted) return;
 
-      final bool localOk = user != null && user.password == password;
+      // Overenie hesla — ak salt chýba (starý záznam), porovnaj plaintext a ihneď zahashuj.
+      bool localOk = false;
+      if (user != null) {
+        final salt = user.passwordSalt;
+        if (salt == null || salt.isEmpty) {
+          // Starý plaintext záznam — overíme a migrujeme na hash.
+          if (user.password == password) {
+            localOk = true;
+            // Migruj na hash.
+            final newSalt = HashService.generateSalt();
+            final newHash = HashService.hashPassword(password, newSalt);
+            final migratedUser = User(
+              id: user.id,
+              username: user.username,
+              password: newHash,
+              passwordSalt: newSalt,
+              fullName: user.fullName,
+              role: user.role,
+              email: user.email,
+              phone: user.phone,
+              department: user.department,
+              avatarUrl: user.avatarUrl,
+              joinDate: user.joinDate,
+            );
+            await _dbService.updateUser(migratedUser);
+            user = migratedUser;
+          }
+        } else {
+          localOk = HashService.verifyPassword(password, user.password, salt);
+        }
+      }
 
       if (!localOk) {
         // Lokálny účet neexistuje alebo heslo nesedí – skús prihlásenie cez backend (iný PC / webový účet)
@@ -163,6 +194,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               id: user.id,
               username: fromBackend.username,
               password: fromBackend.password,
+              passwordSalt: fromBackend.passwordSalt,
               fullName: fromBackend.fullName,
               role: fromBackend.role,
               email: fromBackend.email,
@@ -206,7 +238,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
       if (_rememberMe) {
         await _dbService.setRememberMe(true);
-        await _dbService.setSavedUsername(user.username);
+        await _dbService.setSavedUsername(user!.username);
       } else {
         await _dbService.clearSavedLogin();
       }
@@ -216,7 +248,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       if (!mounted) return;
 
       await _finishLogin(
-        user,
+        user!,
         backendUserId: backendResult?.userId,
         ownerFullName: backendResult?.ownerFullName,
         ownerUsername: backendResult?.ownerUsername,

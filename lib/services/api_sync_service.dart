@@ -8,6 +8,7 @@ import '../models/warehouse.dart';
 import '../models/supplier.dart';
 import '../models/company.dart';
 import 'Database/database_service.dart';
+import 'Auth/hash_service.dart';
 import 'auth_storage_service.dart';
 import '../config/app_config.dart';
 
@@ -55,10 +56,14 @@ class BackendLoginResult {
 /// Z profilu vráteného backendom pri prihlásení (a hesla z formulára) vytvorí model User pre lokálnu DB.
 User userFromBackendProfile(String username, String password, Map<String, dynamic>? profile) {
   final p = profile ?? {};
+  // Nikdy neukladáme plaintext heslo — vždy hashujeme.
+  final salt = HashService.generateSalt();
+  final hashedPassword = HashService.hashPassword(password, salt);
   return User(
     id: null,
     username: p['username']?.toString() ?? username,
-    password: password,
+    password: hashedPassword,
+    passwordSalt: salt,
     fullName: p['full_name']?.toString() ?? p['fullName']?.toString() ?? username,
     role: p['role']?.toString() ?? 'user',
     email: p['email']?.toString() ?? '',

@@ -235,7 +235,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 38,
+      version: 39,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -293,6 +293,7 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
         password TEXT,
+        password_salt TEXT,
         full_name TEXT,
         role TEXT,
         email TEXT,
@@ -1174,6 +1175,7 @@ class DatabaseService {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT UNIQUE,
           password TEXT,
+          password_salt TEXT,
           full_name TEXT,
           role TEXT,
           email TEXT,
@@ -2147,6 +2149,17 @@ class DatabaseService {
         }
       }
     }
+
+    // Version 39: password hashing – add salt column
+    if (oldVersion < 39) {
+      final tableInfo = await db.rawQuery('PRAGMA table_info(users)');
+      final hasSalt = tableInfo.any((c) => c['name'] == 'password_salt');
+      if (!hasSalt) {
+        await db.execute('ALTER TABLE users ADD COLUMN password_salt TEXT');
+      }
+      // Existujúce plaintext heslá ponecháme — pri ďalšom prihlásení
+      // sa automaticky zahashujú (viď login_page.dart).
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -2193,6 +2206,7 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
         password TEXT,
+        password_salt TEXT,
         full_name TEXT,
         role TEXT,
         email TEXT,
@@ -2832,20 +2846,17 @@ class DatabaseService {
       return int.tryParse(v.toString());
     }
 
-    String rowKey(String uniqueId, int? warehouseId) =>
-        '$uniqueId::${warehouseId ?? 'null'}';
-
     // Batch načítaj všetky existujúce produkty naraz – 1 dotaz namiesto N
     final existingRows = await db.query(
       'products',
       where: 'user_id = ?',
       whereArgs: [_currentUserId],
     );
-    final existingByKey = <String, Product>{};
+    final existingByUniqueId = <String, Product>{};
     for (final row in existingRows) {
       final p = Product.fromMap(row);
       if (p.uniqueId != null && p.uniqueId!.isNotEmpty) {
-        existingByKey[rowKey(p.uniqueId!, p.warehouseId)] = p;
+        existingByUniqueId[p.uniqueId!] = p;
       }
     }
 
@@ -2865,14 +2876,15 @@ class DatabaseService {
           : (eanRaw != null ? eanRaw.toString().trim() : null);
       final cleanEan = ean?.isEmpty == true ? null : ean;
 
-      final existing = existingByKey[rowKey(uniqueId, wid)];
+      final existing = existingByUniqueId[uniqueId];
       if (existing != null) {
         final changed =
             existing.name != name ||
             existing.plu != plu ||
             existing.unit != unit ||
             existing.qty != qty ||
-            existing.ean != cleanEan;
+            existing.ean != cleanEan ||
+            existing.warehouseId != wid;
         if (changed) {
           await updateProduct(
             existing.copyWith(
@@ -2881,6 +2893,7 @@ class DatabaseService {
               unit: unit,
               qty: qty,
               ean: cleanEan,
+              warehouseId: wid,
             ),
             enqueueSync: false,
           );
@@ -2915,6 +2928,7 @@ class DatabaseService {
         };
         final product = Product.fromMap(fullMap);
         await insertProduct(product);
+        existingByUniqueId[uniqueId] = product;
         inserted++;
       }
     }
