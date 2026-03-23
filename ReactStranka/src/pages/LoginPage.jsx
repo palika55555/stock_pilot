@@ -209,6 +209,15 @@ export default function LoginPage() {
               <p className="footer-text" style={{ marginBottom: 12 }}>
                 Naskenujte URL v autentifikátore a potvrďte prvý kód.
               </p>
+              {otpauthUri && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauthUri)}`}
+                    alt="2FA QR kód"
+                    style={{ borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: '#fff' }}
+                  />
+                </div>
+              )}
               <label className="field-label">
                 <span>otpauth URL</span>
                 <input type="text" value={otpauthUri} readOnly className="input" />
