@@ -5,7 +5,11 @@
       "WebSearch",
       "Bash(grep -i \"purchase_price\\\\|below_cost\\\\|min_price\" backend/DBsync/migrations/*.sql)",
       "Bash(find C:UserspavolDesktopFlutterstock_pilot -type f \\\\\\(-name .env* -o -name *.env -o -name *secret* -o -name *config* -o -name *credentials* \\\\\\))",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(wc:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
 }

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 
 export default function WarehousesPage() {
   const navigate = useNavigate()

@@ -156,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _syncProductsWithBackend() async {
-    final token = getBackendToken();
+    final token = await getBackendTokenAsync();
     if (token == null || !mounted) return;
     try {
       final backendProducts = await fetchProductsFromBackendWithToken(token);
@@ -193,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Tichá automatická synchronizácia – spúšťa sa pri detekcii zmien na webe
   /// alebo pri obnove internetového pripojenia. Bez akéhokoľvek potvrdenia.
   Future<void> _autoSync() async {
-    final token = getBackendToken();
+    final token = await getBackendTokenAsync();
     if (token == null || !mounted) return;
     try {
       // Pull zákazníkov
@@ -223,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _pullCustomersFromBackend({bool silent = false}) async {
     if (!silent) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final token = getBackendToken();
+    final token = getBackendToken() ?? await getBackendTokenAsync();
     if (token == null) {
       if (mounted && !silent) {
         final isSubUser = UserSession.role == 'user' && UserSession.ownerDisplayName != null;
@@ -267,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Nahratie lokálnych dát na web (produkty, zákazníci).
   Future<void> _pushToBackend({bool silent = false}) async {
     if (!silent) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final token = getBackendToken();
+    final token = getBackendToken() ?? await getBackendTokenAsync();
     if (token == null) {
       if (mounted && !silent) {
         final isSubUser = UserSession.role == 'user' && UserSession.ownerDisplayName != null;

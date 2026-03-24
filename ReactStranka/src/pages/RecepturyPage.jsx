@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 import './sync-pages.css'
 
 function fmtNum(v) {

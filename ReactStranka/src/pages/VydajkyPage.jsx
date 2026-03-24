@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE_FOR_CALLS } from '../config'
-import { getAuth, getAuthHeaders } from '../utils/auth'
+import { getAuth } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
 import './sync-pages.css'
 
 function fmtDate(iso) {
@@ -54,10 +54,9 @@ export default function VydajkyPage() {
     if (!auth) return
     let cancelled = false
     setLoading(true)
-    fetch(`${API_BASE_FOR_CALLS}/stock-outs/all`, { headers: getAuthHeaders(auth) })
-      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+    apiFetch('/stock-outs/all')
       .then((d) => { if (!cancelled) setStockOuts(Array.isArray(d?.stock_outs) ? d.stock_outs : []) })
-      .catch((e) => { if (!cancelled) setError(`Načítanie zlyhalo (${e})`) })
+      .catch((e) => { if (!cancelled) setError(e.message || 'Načítanie zlyhalo') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [auth])

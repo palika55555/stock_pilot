@@ -187,7 +187,19 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Nastavenie 2FA'),
-            content: SelectableText('Naskenujte v autentifikátore:\n$otpUri'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.network(
+                  'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${Uri.encodeComponent(otpUri)}',
+                  width: 220,
+                  height: 220,
+                  errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 12),
+                SelectableText('Naskenujte v autentifikátore:\n$otpUri'),
+              ],
+            ),
             actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
           ),
         );

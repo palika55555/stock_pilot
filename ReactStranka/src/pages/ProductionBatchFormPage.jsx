@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
 import './ProductionPage.css'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 
 const DEFAULT_PRODUCT_TYPES = ['Zamková dlažba', 'Tvárnice', 'Obrubníky', 'Dlažobné kostky', 'Iné']
 

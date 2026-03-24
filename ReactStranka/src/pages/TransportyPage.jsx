@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 import './TransportyPage.css'
 
 // ── Formatters ────────────────────────────────────────────────────────────────

@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import './DashboardPage.css'
-import { API_BASE_FOR_CALLS } from '../config'
-import { getAuth, getAuthHeaders } from '../utils/auth'
+import { getAuth } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -79,13 +79,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!auth?.token) return
     let cancelled = false
-    const headers = getAuthHeaders(auth)
     const promises = [
-      fetch(`${API_BASE_FOR_CALLS}/dashboard/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return {} }; return r.ok ? r.json() : {} }),
-      fetch(`${API_BASE_FOR_CALLS}/dashboard/activity?limit=20`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return { activity: [] } }; return r.ok ? r.json() : { activity: [] } }),
+      apiFetch('/dashboard/stats').catch(() => ({})),
+      apiFetch('/dashboard/activity?limit=20').catch(() => ({ activity: [] })),
     ]
     if (auth?.user?.role === 'db_owner') {
-      promises.push(fetch(`${API_BASE_FOR_CALLS}/admin/stats`, { headers }).then((r) => { if (r.status === 401) { navigate('/', { replace: true }); return null }; return r.ok ? r.json() : null }))
+      promises.push(apiFetch('/admin/stats').catch(() => null))
     }
     Promise.all(promises)
       .then((results) => {
@@ -108,7 +107,7 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [auth, navigate])
+  }, [auth])
 
   // Notifikácie sa načítajú automaticky cez NotificationContext (addFromApi s 30s cooldown).
   // Manuálne volanie refresh() tu spôsobovalo duplicate API calls na každý mount.

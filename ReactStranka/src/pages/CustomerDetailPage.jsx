@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomerDetailPage.css'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null

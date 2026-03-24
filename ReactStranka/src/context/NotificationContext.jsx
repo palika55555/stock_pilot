@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { API_BASE_FOR_CALLS } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 
 const NOTIFICATION_STORAGE_KEY = 'stockpilot_notifications'
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -60,11 +60,10 @@ export function NotificationProvider({ children, auth }) {
       if (!force && now - lastFetchRef.current < 30_000) return
       lastFetchRef.current = now
 
-      const headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
       const newItems = []
       try {
         // Len products – stats prichádzajú z dashboard API inde
-        const productsRes = await fetch(`${API_BASE_FOR_CALLS}/products`, { headers }).then((r) => (r.ok ? r.json() : []))
+        const productsRes = await apiFetch('/products').catch(() => [])
         if (Array.isArray(productsRes)) {
           const low = productsRes.filter((p) => (p.qty ?? 0) < 5)
           low.slice(0, 10).forEach((p) => {

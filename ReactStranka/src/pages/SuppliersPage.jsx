@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import '../components/DetailDrawer.css'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 import DetailDrawer, { DrawerRow } from '../components/DetailDrawer'
 
 const EMPTY_FORM = {

@@ -16,6 +16,7 @@ import 'services/Shortcuts/app_shortcuts_service.dart';
 import 'Providers/theme_locale_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'services/auth_storage_service.dart';
+import 'services/api_sync_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -60,6 +61,9 @@ void main() async {
           username: initialUser.username,
           role: initialUser.role,
         );
+        // Obnov access token zo secure storage do pamäte – aby sync fungoval
+        // ihneď po automatickom prihlásení (bez čakania na HomeScreen._initSyncManager).
+        await getBackendTokenAsync();
       }
     }
     // Ak žiadny používateľ nie je prihlásený, skontrolujeme či v DB vôbec sú používatelia

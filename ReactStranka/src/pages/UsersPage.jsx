@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import './CustomersPage.css'
 import './UsersPage.css'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 
 const TIER_LABELS = { free: 'Free', basic: 'Basic', pro: 'Pro', enterprise: 'Enterprise' }
 const TIER_LIMITS = { free: 0, basic: 2, pro: 5, enterprise: -1 }

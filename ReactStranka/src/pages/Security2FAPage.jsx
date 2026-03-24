@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { API_BASE_FOR_CALLS } from '../config'
 import { getAuth, getAuthHeaders } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
+import { API_BASE_FOR_CALLS } from '../config'
 
 export default function Security2FAPage() {
   const [status, setStatus] = useState(null)

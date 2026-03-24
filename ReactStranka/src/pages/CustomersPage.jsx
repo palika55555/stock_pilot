@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './DashboardPage.css'
 import '../components/DetailDrawer.css'
-import { API_BASE_FOR_CALLS } from '../config'
-import { getAuth, getAuthHeaders } from '../utils/auth'
+import { getAuth } from '../utils/auth'
+import { apiFetch } from '../utils/apiFetch'
 import DetailDrawer, { DrawerRow } from '../components/DetailDrawer'
 
 const EMPTY_FORM = {
@@ -47,14 +47,11 @@ export default function CustomersPage() {
     setAuth(a)
   }, [navigate])
 
-  const fetchCustomers = useCallback(async (a) => {
-    if (!a) return
+  const fetchCustomers = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_BASE_FOR_CALLS}/customers`, { headers: getAuthHeaders(a) })
-      if (!res.ok) throw new Error('Načítanie zlyhalo')
-      const data = await res.json()
+      const data = await apiFetch('/customers')
       setCustomers(Array.isArray(data) ? data : [])
     } catch (e) {
       setError(e.message || 'Chyba')
@@ -63,7 +60,7 @@ export default function CustomersPage() {
     }
   }, [])
 
-  useEffect(() => { if (auth) fetchCustomers(auth) }, [auth, fetchCustomers])
+  useEffect(() => { if (auth) fetchCustomers() }, [auth, fetchCustomers])
 
   const filtered = search.trim()
     ? customers.filter((c) => {
@@ -113,18 +110,12 @@ export default function CustomersPage() {
         default_vat_rate: parseInt(form.default_vat_rate, 10) || 20,
         is_active: form.is_active,
       }
-      const url = mode === 'create'
-        ? `${API_BASE_FOR_CALLS}/customers`
-        : `${API_BASE_FOR_CALLS}/customers/${selected.id}`
-      const res = await fetch(url, {
-        method: mode === 'create' ? 'POST' : 'PUT',
-        headers: getAuthHeaders(auth),
-        body: JSON.stringify(body),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setSaveError(data.error || 'Uloženie zlyhalo'); return }
+      const data = await apiFetch(
+        mode === 'create' ? '/customers' : `/customers/${selected.id}`,
+        { method: mode === 'create' ? 'POST' : 'PUT', body: JSON.stringify(body) },
+      )
 
-      await fetchCustomers(auth)
+      await fetchCustomers()
       if (mode === 'create') {
         closeDrawer()
       } else {
