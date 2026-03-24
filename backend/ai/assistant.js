@@ -1,7 +1,8 @@
 /**
  * AI asistent – odpovede + nástroj navigate (klient vykoná navigáciu).
  * Google Gemini API – kľúč len v prostredí: GEMINI_API_KEY (alebo GOOGLE_API_KEY).
- * Voliteľne: GEMINI_MODEL (default gemini-2.0-flash).
+ * GEMINI_MODEL – predvolene gemini-1.5-flash (gemini-2.0-flash často nemá free tier / limit 0).
+ * GEMINI_MODEL_FALLBACKS – voliteľné, čiarkou oddelené modely (skúšajú sa pri quota / 429).
  */
 const rateLimit = require('express-rate-limit');
 
@@ -100,6 +101,29 @@ function partsText(parts) {
     .trim();
 }
 
+function buildModelTryList() {
+  const primary = (process.env.GEMINI_MODEL || 'gemini-1.5-flash').trim();
+  const extra = (process.env.GEMINI_MODEL_FALLBACKS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  /** Typické modely s odlišnými free-tier limitmi – používajú sa len pri chybe kvóty. */
+  const defaults = ['gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+  const ordered = [primary, ...extra, ...defaults];
+  return [...new Set(ordered)];
+}
+
+function isQuotaOrRateLimitError(err) {
+  const msg = (err?.message || '').toLowerCase();
+  return (
+    err?.status === 429 ||
+    msg.includes('quota') ||
+    msg.includes('exceeded') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit')
+  );
+}
+
 async function geminiGenerateContent({ apiKey, model, contents, systemInstruction }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
@@ -136,6 +160,27 @@ async function geminiGenerateContent({ apiKey, model, contents, systemInstructio
     throw err;
   }
   return data;
+}
+
+/** Skúša modely v poradí, ak predchádzajúci zlyhá kvôli kvóte / limitu. */
+async function geminiGenerateContentWithFallback({ apiKey, contents, systemInstruction }) {
+  const models = buildModelTryList();
+  let lastErr;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      return await geminiGenerateContent({ apiKey, model, contents, systemInstruction });
+    } catch (e) {
+      lastErr = e;
+      const retry = isQuotaOrRateLimitError(e) && i < models.length - 1;
+      if (retry) {
+        console.warn(`[POST /ai/assistant] model ${model}: ${e.message} – skúšam ďalší`);
+      } else {
+        throw e;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -187,16 +232,14 @@ function registerAiAssistantRoutes(apiRouter) {
       return res.status(400).json({ success: false, error: 'Očakáva sa aspoň jedna používateľská správa.' });
     }
 
-    const model = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
     const allActions = [];
     let contents = clientMessagesToContents(messages);
     let lastReply = '';
 
     try {
       for (let round = 0; round < 4; round++) {
-        const data = await geminiGenerateContent({
+        const data = await geminiGenerateContentWithFallback({
           apiKey,
-          model,
           contents,
           systemInstruction: SYSTEM_PROMPT,
         });
@@ -248,9 +291,6 @@ function registerAiAssistantRoutes(apiRouter) {
         actions: allActions,
       });
     } catch (err) {
-      if (err.code === 'NO_KEY') {
-        return res.status(503).json({ success: false, error: 'AI nie je nakonfigurované.' });
-      }
       console.error('[POST /ai/assistant]', err.message);
       const status = err.status >= 400 && err.status < 600 ? err.status : 502;
       return res.status(status).json({

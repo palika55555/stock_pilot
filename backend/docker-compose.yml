@@ -9,6 +9,8 @@ services:
     environment:
       - NODE_ENV=production
       - NODE_OPTIONS=--max-old-space-size=256
+      # Kľúč z https://openrouteservice.org/dev/#/signup (trasovanie nákladného vozidla HGV)
+      - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
     deploy:
       resources:
         limits:
