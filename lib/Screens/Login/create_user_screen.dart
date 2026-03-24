@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
-import '../../screens/Home/Home_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/welcome/welcome_reveal_screen.dart';
 
 /// Obrazovka na vytvorenie nového používateľa (volaná z prihlasovacej stránky).
 class CreateUserScreen extends StatefulWidget {
@@ -144,17 +144,14 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => HomeScreen(
+          MaterialPageRoute<void>(
+            builder: (context) => WelcomeRevealScreen(
               user: createdUser,
               routeObserver: widget.routeObserver,
+              postHomeSnackText:
+                  'Nová databáza vytvorená. Vitajte, ${createdUser.fullName}.',
+              postHomeSnackColor: AppColors.success,
             ),
-          ),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Nová databáza vytvorená. Vitajte, ${createdUser.fullName}.'),
-            backgroundColor: AppColors.success,
           ),
         );
       }

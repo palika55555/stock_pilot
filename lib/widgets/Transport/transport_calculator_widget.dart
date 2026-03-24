@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
+import '../../models/hgv_routing_options.dart';
 import '../../services/Transport/transport_service.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/Transport/transport_pdf_service.dart';
@@ -34,15 +35,23 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
     text: '1.5',
   );
   final TextEditingController _apiKeyController = TextEditingController();
+  final TextEditingController _orsApiKeyController = TextEditingController();
+  final TextEditingController _hgvHeightController = TextEditingController(text: '10');
+  final TextEditingController _hgvWeightController = TextEditingController(text: '40');
+  final TextEditingController _hgvLengthController = TextEditingController(text: '16.5');
+  final TextEditingController _hgvWidthController = TextEditingController(text: '2.55');
 
   String? get _effectiveApiKey {
     final customKey = _apiKeyController.text.trim();
     if (customKey.isNotEmpty) {
       return customKey;
     }
-    // V produkcii by ste mali vrátiť null alebo vlastný kľúč
-    // Pre teraz vrátime null, aby sa použil fallback
     return null;
+  }
+
+  String? get _effectiveOrsApiKey {
+    final k = _orsApiKeyController.text.trim();
+    return k.isNotEmpty ? k : null;
   }
 
   bool _isCalculating = false;
@@ -62,6 +71,11 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
     _fuelConsumptionController.dispose();
     _fuelPriceController.dispose();
     _apiKeyController.dispose();
+    _orsApiKeyController.dispose();
+    _hgvHeightController.dispose();
+    _hgvWeightController.dispose();
+    _hgvLengthController.dispose();
+    _hgvWidthController.dispose();
     super.dispose();
   }
 
@@ -87,10 +101,18 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
 
     try {
       // Vypočítame vzdialenosť a trasu
+      final hgv = HgvRoutingOptions.fromTextFields(
+        heightText: _hgvHeightController.text,
+        weightText: _hgvWeightController.text,
+        lengthText: _hgvLengthController.text,
+        widthText: _hgvWidthController.text,
+      );
       final routeData = await _transportService.calculateDistanceWithRoute(
         origin: _originController.text,
         destination: _destinationController.text,
         apiKey: _effectiveApiKey,
+        openRouteServiceApiKey: _effectiveOrsApiKey,
+        hgvOptions: hgv,
       );
 
       double distance = routeData['distance'] as double;
@@ -384,9 +406,68 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
             Expanded(
               child: _buildGlassInput(
                 _apiKeyController,
-                'API kľúč (voliteľný)',
+                'Google Maps API (voliteľný, návrhy adries)',
                 Icons.vpn_key,
                 obscureText: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 15),
+        _buildGlassInput(
+          _orsApiKeyController,
+          'OpenRouteService API (voliteľný, trasa ak nie ste prihlásený)',
+          Icons.local_shipping_rounded,
+          obscureText: true,
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Vozidlo (trasovanie – mosty, hmotnosť, rozmery)',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: TransportCalculatorTheme.textMuted,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _buildGlassInput(
+                _hgvHeightController,
+                'Výška max. (m)',
+                Icons.height_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildGlassInput(
+                _hgvWeightController,
+                'Hmotnosť (t)',
+                Icons.scale_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildGlassInput(
+                _hgvLengthController,
+                'Dĺžka (m)',
+                Icons.straighten_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildGlassInput(
+                _hgvWidthController,
+                'Šírka (m)',
+                Icons.aspect_ratio_rounded,
               ),
             ),
           ],
@@ -446,7 +527,7 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Aplikácia používa OpenStreetMap (bezplatné). Pre ešte lepšie výsledky môžete zadať vlastný Google Maps API kľúč.',
+                    'Parametre vozidla (výška, hmotnosť, dĺžka, šírka) sa posielajú do OpenRouteService (HGV) – úprava nízkych mostov a zákazov. Pri prihlásení trasuje backend; inak zadajte ORS API kľúč. Google kľúč len na návrhy adries.',
                     style: TextStyle(
                       fontSize: 11,
                       color: TransportCalculatorTheme.textMuted,
@@ -493,7 +574,12 @@ class _TransportCalculatorWidgetState extends State<TransportCalculatorWidget> {
               onChanged:
                   onChanged ??
                   (value) {
-                    if (controller == _apiKeyController) {
+                    if (controller == _apiKeyController ||
+                        controller == _orsApiKeyController ||
+                        controller == _hgvHeightController ||
+                        controller == _hgvWeightController ||
+                        controller == _hgvLengthController ||
+                        controller == _hgvWidthController) {
                       setState(() {});
                     }
                   },

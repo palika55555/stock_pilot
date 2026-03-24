@@ -28,8 +28,17 @@ import '../../widgets/sync/sync_status_badge.dart';
 class HomeScreen extends StatefulWidget {
   final User user;
   final RouteObserver<ModalRoute<void>>? routeObserver;
+  /// Voliteľný snackbar po vstupe (napr. po privítacom prechode).
+  final String? initialSnackBarText;
+  final Color? initialSnackBarColor;
 
-  const HomeScreen({super.key, required this.user, this.routeObserver});
+  const HomeScreen({
+    super.key,
+    required this.user,
+    this.routeObserver,
+    this.initialSnackBarText,
+    this.initialSnackBarColor,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -77,6 +86,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) AutoLockService.instance.start(context);
+      final msg = widget.initialSnackBarText;
+      if (msg != null && msg.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: widget.initialSnackBarColor ?? AppColors.success,
+          ),
+        );
+      }
     });
     SyncCheckService.instance.start();
     SyncService.startSync(userId);

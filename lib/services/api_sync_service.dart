@@ -29,6 +29,13 @@ String? getBackendToken() => _backendToken;
 String _bearer(String? token) =>
     (token != null && token.isNotEmpty) ? 'Bearer $token' : '';
 
+Future<void> _persistTwoFactorTrustFromResponse(Map<String, dynamic>? map) async {
+  final t = map?['twoFactorTrustToken'] as String?;
+  if (t != null && t.isNotEmpty) {
+    await AuthStorageService.instance.saveTwoFactorTrustToken(t);
+  }
+}
+
 /// Výsledok backend loginu – prístupový token, refresh token, userId a voliteľný profil z backendu (pre vytvorenie/aktualizáciu lokálneho používateľa).
 class BackendLoginResult {
   final String? accessToken;
@@ -313,13 +320,21 @@ Future<BackendLoginResult?> fetchBackendToken(
   bool rememberMe = false,
 }) async {
   try {
+    final trust = await AuthStorageService.instance.getTwoFactorTrustToken();
+    final deviceId = await AuthStorageService.instance.getOrCreateClientDeviceId();
     final uri = Uri.parse('${AppConfig.apiBase}/auth/login');
     final res = await http
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
           // Nikdy nelogujeme heslo.
-          body: jsonEncode({'username': username, 'password': password, 'rememberMe': rememberMe}),
+          body: jsonEncode({
+            'username': username,
+            'password': password,
+            'rememberMe': rememberMe,
+            'deviceId': deviceId,
+            if (trust != null && trust.isNotEmpty) 'twoFactorTrustToken': trust,
+          }),
         )
         .timeout(const Duration(seconds: 10));
 
@@ -358,6 +373,7 @@ Future<BackendLoginResult?> fetchBackendToken(
     }
     if (access != null && access.isNotEmpty && refresh != null && refresh.isNotEmpty) {
       await saveTokensAndSet(access, refresh, userId: userId);
+      await _persistTwoFactorTrustFromResponse(map);
       return BackendLoginResult(
         accessToken: access,
         refreshToken: refresh,
@@ -380,6 +396,7 @@ Future<BackendLoginResult?> verify2faLogin({
   String? backupCode,
 }) async {
   try {
+    final deviceId = await AuthStorageService.instance.getOrCreateClientDeviceId();
     final uri = Uri.parse('${AppConfig.apiBase}/auth/2fa/verify');
     final res = await http
         .post(
@@ -387,6 +404,7 @@ Future<BackendLoginResult?> verify2faLogin({
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'loginChallengeToken': loginChallengeToken,
+            'deviceId': deviceId,
             if (totpCode != null && totpCode.isNotEmpty) 'totpCode': totpCode,
             if (backupCode != null && backupCode.isNotEmpty) 'backupCode': backupCode,
           }),
@@ -411,6 +429,7 @@ Future<BackendLoginResult?> verify2faLogin({
     }
     if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) return null;
     await saveTokensAndSet(access, refresh, userId: userId);
+    await _persistTwoFactorTrustFromResponse(map);
     return BackendLoginResult(
       accessToken: access,
       refreshToken: refresh,
@@ -447,12 +466,17 @@ Future<BackendLoginResult?> confirm2faSetup({
   required String totpCode,
 }) async {
   try {
+    final deviceId = await AuthStorageService.instance.getOrCreateClientDeviceId();
     final uri = Uri.parse('${AppConfig.apiBase}/auth/2fa/confirm');
     final res = await http
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'loginChallengeToken': loginChallengeToken, 'totpCode': totpCode}),
+          body: jsonEncode({
+            'loginChallengeToken': loginChallengeToken,
+            'totpCode': totpCode,
+            'deviceId': deviceId,
+          }),
         )
         .timeout(const Duration(seconds: 10));
     if (res.statusCode != 200) return null;
@@ -474,6 +498,7 @@ Future<BackendLoginResult?> confirm2faSetup({
     }
     if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) return null;
     await saveTokensAndSet(access, refresh, userId: userId);
+    await _persistTwoFactorTrustFromResponse(map);
     return BackendLoginResult(
       accessToken: access,
       refreshToken: refresh,

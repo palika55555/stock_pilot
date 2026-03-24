@@ -21,11 +21,16 @@ class _CustomersPageState extends State<CustomersPage>
     with TickerProviderStateMixin {
   final CustomerService _customerService = CustomerService();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   List<Customer> _customers = [];
   List<Customer> _filteredCustomers = [];
   bool _loading = true;
   int _statusFilter = 0; // 0 = všetci, 1 = aktívni, 2 = neaktívni
+
+  /// Počet položiek zobrazených v liste (lazy „dopĺňanie“ pri scrollovaní).
+  int _visibleCount = 0;
+  static const int _pageSize = 22;
 
   late final AnimationController _listController;
 
@@ -33,19 +38,51 @@ class _CustomersPageState extends State<CustomersPage>
   void initState() {
     super.initState();
     _listController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 720),
       vsync: this,
-    )..forward();
+    );
+    _scrollController.addListener(_onListScroll);
     _searchController.addListener(_onSearchChanged);
     _loadCustomers();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onListScroll);
+    _scrollController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _listController.dispose();
     super.dispose();
+  }
+
+  bool _pendingLoadMore = false;
+
+  void _onListScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_visibleCount >= _filteredCustomers.length) return;
+    final pos = _scrollController.position;
+    if (pos.pixels < pos.maxScrollExtent - 280) return;
+    if (_pendingLoadMore) return;
+    _pendingLoadMore = true;
+    Future.microtask(() {
+      if (!mounted) return;
+      _pendingLoadMore = false;
+      if (_visibleCount >= _filteredCustomers.length) return;
+      if (!_scrollController.hasClients) return;
+      final p = _scrollController.position;
+      if (p.pixels < p.maxScrollExtent - 280) return;
+      setState(() {
+        _visibleCount = (_visibleCount + _pageSize).clamp(
+          0,
+          _filteredCustomers.length,
+        );
+      });
+    });
+  }
+
+  void _resetVisibleWindow() {
+    _visibleCount = _filteredCustomers.length.clamp(0, _pageSize);
   }
 
   void _onSearchChanged() {
@@ -69,6 +106,7 @@ class _CustomersPageState extends State<CustomersPage>
           .toList();
     }
     _filteredCustomers = list;
+    _resetVisibleWindow();
   }
 
   Future<void> _loadCustomers() async {
@@ -82,6 +120,9 @@ class _CustomersPageState extends State<CustomersPage>
         _filterCustomers();
         _loading = false;
       });
+      _listController
+        ..reset()
+        ..forward();
     }
   }
 
@@ -148,15 +189,15 @@ class _CustomersPageState extends State<CustomersPage>
     );
     if (confirm == true && mounted) {
       await _customerService.deleteCustomer(c.id!);
-      if (mounted) {
-        await _loadCustomersAndSync();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.customerDeleted),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+      if (!mounted) return;
+      await _loadCustomersAndSync();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.customerDeleted),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -260,7 +301,7 @@ class _CustomersPageState extends State<CustomersPage>
           ),
           const SizedBox(height: 12),
           if (_loading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+            const Expanded(child: _CustomersLoadingSkeleton())
           else
             Expanded(
               child: _filteredCustomers.isEmpty
@@ -292,21 +333,51 @@ class _CustomersPageState extends State<CustomersPage>
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      physics: const ClampingScrollPhysics(),
-                      itemCount: _filteredCustomers.length,
-                      itemBuilder: (context, index) {
-                        final c = _filteredCustomers[index];
-                        return _CustomerCard(
-                          customer: c,
-                          index: index,
-                          controller: _listController,
-                          onEdit: () => _editCustomer(c),
-                          onDelete: () => _deleteCustomer(c),
-                          onPriceQuote: () => _createPriceQuote(c),
-                        );
+                  : RefreshIndicator(
+                      color: AppColors.accentGold,
+                      backgroundColor: AppColors.bgCard,
+                      displacement: 48,
+                      onRefresh: () async {
+                        await _loadCustomersAndSync();
                       },
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        itemCount: _visibleCount +
+                            (_visibleCount < _filteredCustomers.length ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= _visibleCount) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 24, top: 8),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: AppColors.accentGold.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          final c = _filteredCustomers[index];
+                          return _CustomerCard(
+                            customer: c,
+                            index: index,
+                            totalForAnimation: _visibleCount,
+                            controller: _listController,
+                            onEdit: () => _editCustomer(c),
+                            onDelete: () => _deleteCustomer(c),
+                            onPriceQuote: () => _createPriceQuote(c),
+                          );
+                        },
+                      ),
                     ),
             ),
         ],
@@ -329,9 +400,127 @@ class _CustomersPageState extends State<CustomersPage>
   }
 }
 
+/// Shimmer + karty ako náhrada pri prvom načítaní z DB.
+class _CustomersLoadingSkeleton extends StatefulWidget {
+  const _CustomersLoadingSkeleton();
+
+  @override
+  State<_CustomersLoadingSkeleton> createState() =>
+      _CustomersLoadingSkeletonState();
+}
+
+class _CustomersLoadingSkeletonState extends State<_CustomersLoadingSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmer = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (context, _) {
+        final t = _shimmer.value;
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+          physics: const BouncingScrollPhysics(),
+          itemCount: 8,
+          itemBuilder: (context, i) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ShimmerCard(phase: (t + i * 0.09) % 1.0),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ShimmerCard extends StatelessWidget {
+  const _ShimmerCard({required this.phase});
+
+  final double phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = AppColors.bgElevated;
+    final glow = Color.lerp(
+      AppColors.bgCard,
+      AppColors.accentGold.withValues(alpha: 0.22),
+      (phase * 2 > 1) ? 2 - phase * 2 : phase * 2,
+    )!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: AppColors.cardDecoration.copyWith(
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: glow.withValues(alpha: 0.35),
+            blurRadius: 18,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Color.lerp(base, AppColors.bgCard, phase)!,
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 14,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(base, AppColors.bgCard, phase * 0.9)!,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 11,
+                  width: 180,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(base, AppColors.bgCard, phase * 0.85)!,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CustomerCard extends StatefulWidget {
   final Customer customer;
   final int index;
+  final int totalForAnimation;
   final AnimationController controller;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -340,6 +529,7 @@ class _CustomerCard extends StatefulWidget {
   const _CustomerCard({
     required this.customer,
     required this.index,
+    required this.totalForAnimation,
     required this.controller,
     required this.onEdit,
     required this.onDelete,
@@ -357,21 +547,24 @@ class _CustomerCardState extends State<_CustomerCard> {
   Widget build(BuildContext context) {
     final c = widget.customer;
     final l10n = AppLocalizations.of(context)!;
+    final n = widget.totalForAnimation.clamp(1, 9999);
+    final start = (widget.index / n * 0.82).clamp(0.0, 0.82);
     final animation = CurvedAnimation(
       parent: widget.controller,
       curve: Interval(
-        (0.05 * widget.index).clamp(0.0, 0.9),
+        start,
         1.0,
-        curve: Curves.easeOutQuart,
+        curve: Curves.easeOutCubic,
       ),
     );
 
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
+        final v = animation.value;
         return Transform.translate(
-          offset: Offset(0, 30 * (1 - animation.value)),
-          child: Opacity(opacity: animation.value, child: child),
+          offset: Offset(0, 22 * (1 - v)),
+          child: Opacity(opacity: v, child: child),
         );
       },
       child: GestureDetector(
@@ -414,7 +607,7 @@ class _CustomerCardState extends State<_CustomerCard> {
                             decoration: BoxDecoration(
                               color: c.isActive
                                   ? AppColors.successSubtle
-                                  : AppColors.textMuted.withOpacity(0.3),
+                                  : AppColors.textMuted.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -547,7 +740,7 @@ class _FilterChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

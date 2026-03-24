@@ -20,7 +20,14 @@ const { syncQuotesFull, fetchQuotesFull } = require('./DBsync/sync/quoteSyncFull
 const { syncInvoicesFull, fetchInvoicesFull } = require('./DBsync/sync/invoiceSync');
 const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
 const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
-const { signTokens, verifyAccessToken, verifyRefreshToken } = require('./auth/jwt');
+const {
+  signTokens,
+  verifyAccessToken,
+  verifyRefreshToken,
+  verifyTwoFactorTrustToken,
+  signTwoFactorTrustToken,
+  normalizeClientDeviceId,
+} = require('./auth/jwt');
 const {
   generateTotpSecret,
   verifyTotpCode,
@@ -36,6 +43,26 @@ const { registerSyncRoutes } = require('./sync/syncRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+/** OpenRouteService – trasy pre ťažké nákladné vozidlá (driving-hgv), nie osobné auto */
+const OPENROUTESERVICE_API_KEY = (process.env.OPENROUTESERVICE_API_KEY || '').trim();
+/** Predvolená max. výška vozidla (m), ak klient nepošle ?height= */
+const HGV_VEHICLE_HEIGHT_M = Math.min(
+  25,
+  Math.max(2, parseFloat(process.env.HGV_VEHICLE_HEIGHT_M) || 10)
+);
+
+/** Bez ? parametrov z klienta – predvolené ORS obmedzenia */
+function resolveHgvRouteParams(query) {
+  const h = parseFloat(query.height);
+  const w = parseFloat(query.weight);
+  const len = parseFloat(query.length);
+  const wid = parseFloat(query.width);
+  const height = Number.isFinite(h) ? Math.min(25, Math.max(2, h)) : HGV_VEHICLE_HEIGHT_M;
+  const weight = Number.isFinite(w) ? Math.min(100, Math.max(3.5, w)) : 40;
+  const length = Number.isFinite(len) ? Math.min(25, Math.max(5, len)) : 16.5;
+  const width = Number.isFinite(wid) ? Math.min(3.5, Math.max(2, wid)) : 2.55;
+  return { height, weight, length, width };
+}
 
 // PostgreSQL – URL nastav v Coolify ako DATABASE_URL (postgresql://user:pass@host:5432/dbname)
 const databaseUrl = process.env.DATABASE_URL;
@@ -59,6 +86,7 @@ const TWOFA_ENFORCE_ALL = String(process.env.TWOFA_ENFORCE_ALL || 'false').toLow
 const authMetrics = {
   login_requires_2fa: 0,
   login_requires_2fa_setup: 0,
+  login_twofa_skipped_trust_24h: 0,
   twofa_verify_success: 0,
   twofa_verify_fail: 0,
   backup_code_used: 0,
@@ -156,16 +184,17 @@ const authenticateToken = (req, res, next) => {
 };
 
 function issueAuthResponse(res, user, ownerInfo, rememberMe, extra = {}) {
+  const { twoFactorTrust, trustDeviceKey, ...restExtra } = extra;
   const tokens = signTokens(
     { userId: user.id, email: user.email || '', role: user.role || 'user' },
     !!rememberMe
   );
-  return res.status(200).json({
+  const body = {
     success: true,
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: tokens.accessExpiresIn,
-    ...extra,
+    ...restExtra,
     user: {
       id: user.id,
       username: user.username,
@@ -176,7 +205,13 @@ function issueAuthResponse(res, user, ownerInfo, rememberMe, extra = {}) {
       ownerUsername: ownerInfo ? ownerInfo.username : null,
       ownerFullName: ownerInfo ? ownerInfo.fullName : null,
     },
-  });
+  };
+  if (twoFactorTrust) {
+    const d = normalizeClientDeviceId(trustDeviceKey);
+    const trustTok = d ? signTwoFactorTrustToken(user.id, d) : null;
+    if (trustTok) body.twoFactorTrustToken = trustTok;
+  }
+  return res.status(200).json(body);
 }
 
 // API router – všetky endpointy sú pod /api/:API_PATH_PREFIX/ (napr. /api/sp-9f2a4e1b/auth/login)
@@ -310,7 +345,7 @@ app.get('/health/db-tables', async (req, res) => {
 
 // --- API: Auth – JWT + TOTP 2FA ---
 apiRouter.post('/auth/login', async (req, res) => {
-  const { username, password, rememberMe } = req.body || {};
+  const { username, password, rememberMe, twoFactorTrustToken, deviceId } = req.body || {};
   if (!username || !password) {
     return res.status(401).json({ success: false, error: 'Username a heslo sú povinné' });
   }
@@ -371,6 +406,15 @@ apiRouter.post('/auth/login', async (req, res) => {
       ownerInfo,
     });
     if (user.twofa_enabled) {
+      const trust = verifyTwoFactorTrustToken(twoFactorTrustToken, deviceId);
+      if (trust && String(trust.userId) === String(user.id)) {
+        authMetrics.login_twofa_skipped_trust_24h += 1;
+        console.log('[auth] Login OK (2FA skipped – 24h trust token, device-bound):', user.username);
+        return issueAuthResponse(res, user, ownerInfo, rememberMe, {
+          twoFactorTrust: true,
+          trustDeviceKey: deviceId,
+        });
+      }
       authMetrics.login_requires_2fa += 1;
       return res.status(200).json({ success: true, requires2fa: true, loginChallengeToken: challenge });
     }
@@ -423,7 +467,7 @@ apiRouter.post('/auth/2fa/confirm', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const { loginChallengeToken, totpCode } = req.body || {};
+  const { loginChallengeToken, totpCode, deviceId } = req.body || {};
   const challengePayload = verifyLoginChallenge(loginChallengeToken);
   if (!challengePayload?.userId || !totpCode) {
     return res.status(401).json({ success: false, error: 'Neplatný setup token alebo TOTP kód.' });
@@ -458,6 +502,8 @@ apiRouter.post('/auth/2fa/confirm', async (req, res) => {
     authMetrics.twofa_verify_success += 1;
     return issueAuthResponse(res, user, challengePayload.ownerInfo || null, !!challengePayload.rememberMe, {
       backupCodes,
+      twoFactorTrust: true,
+      trustDeviceKey: deviceId,
     });
   } catch (err) {
     console.error('[auth] 2fa confirm error:', err.message);
@@ -469,7 +515,7 @@ apiRouter.post('/auth/2fa/verify', async (req, res) => {
   if (!pool || !poolReady) {
     return res.status(503).json({ success: false, error: 'Databáza nie je k dispozícii' });
   }
-  const { loginChallengeToken, totpCode, backupCode } = req.body || {};
+  const { loginChallengeToken, totpCode, backupCode, deviceId } = req.body || {};
   const challengePayload = verifyLoginChallenge(loginChallengeToken);
   if (!challengePayload?.userId || (!totpCode && !backupCode)) {
     return res.status(401).json({ success: false, error: 'Neplatný login challenge alebo 2FA kód.' });
@@ -509,7 +555,10 @@ apiRouter.post('/auth/2fa/verify', async (req, res) => {
     }
 
     authMetrics.twofa_verify_success += 1;
-    return issueAuthResponse(res, user, challengePayload.ownerInfo || null, !!challengePayload.rememberMe);
+    return issueAuthResponse(res, user, challengePayload.ownerInfo || null, !!challengePayload.rememberMe, {
+      twoFactorTrust: true,
+      trustDeviceKey: deviceId,
+    });
   } catch (err) {
     console.error('[auth] 2fa verify error:', err.message);
     return res.status(500).json({ success: false, error: 'Chyba servera' });
@@ -1002,17 +1051,88 @@ apiRouter.get('/geocode/search', async (req, res) => {
   }
 });
 
-// OSRM proxy – výpočet trasy (vzdialenosť + polyline)
+// Trasa pre nákladné vozidlo nad 3,5 t – OpenRouteService driving-hgv (nie OSRM „driving“ = osobné auto)
 apiRouter.get('/route/osrm', async (req, res) => {
   const { fromLon, fromLat, toLon, toLat } = req.query;
   if (!fromLon || !fromLat || !toLon || !toLat) return res.status(400).json({ error: 'Chýbajú súradnice' });
+  const flon = parseFloat(fromLon);
+  const flat = parseFloat(fromLat);
+  const tlon = parseFloat(toLon);
+  const tlat = parseFloat(toLat);
+  if ([flon, flat, tlon, tlat].some((n) => Number.isNaN(n))) {
+    return res.status(400).json({ error: 'Neplatné súradnice' });
+  }
+  if (!OPENROUTESERVICE_API_KEY) {
+    return res.status(503).json({
+      error:
+        'Na serveri nie je nastavený OPENROUTESERVICE_API_KEY (OpenRouteService, profil nákladného vozidla).',
+    });
+  }
+  const { height: hgvH, weight: hgvW, length: hgvLen, width: hgvWid } = resolveHgvRouteParams(req.query);
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'StockPilot/1.0' } });
-    const data = await r.json();
-    res.json(data);
+    const r = await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv/geojson', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTESERVICE_API_KEY}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        coordinates: [
+          [flon, flat],
+          [tlon, tlat],
+        ],
+        options: {
+          profile_params: {
+            restrictions: {
+              height: hgvH,
+              weight: hgvW,
+              length: hgvLen,
+              width: hgvWid,
+            },
+          },
+        },
+      }),
+    });
+    const raw = await r.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      return res.status(502).json({ error: 'Neplatná odpoveď OpenRouteService.', details: raw.slice(0, 400) });
+    }
+    if (!r.ok) {
+      const msg =
+        data?.error?.message ||
+        (typeof data?.error === 'string' ? data.error : null) ||
+        `OpenRouteService HTTP ${r.status}`;
+      return res.status(502).json({ error: msg });
+    }
+    const feat = data.features?.[0];
+    if (!feat?.geometry?.coordinates?.length) {
+      return res.status(404).json({
+        error: `Nebola nájdená trasa pre zadané parametre vozidla (výška ${hgvH} m, hmotnosť ${hgvW} t, dĺžka ${hgvLen} m, šírka ${hgvWid} m – mosty, podjazdy alebo iné obmedzenia).`,
+      });
+    }
+    const distM = feat.properties?.summary?.distance;
+    if (distM == null || distM <= 0) {
+      return res.status(404).json({ error: 'Neplatná vzdialenosť trasy pre nákladné vozidlo.' });
+    }
+    return res.json({
+      code: 'Ok',
+      routes: [
+        {
+          distance: distM,
+          geometry: {
+            type: feat.geometry.type || 'LineString',
+            coordinates: feat.geometry.coordinates,
+          },
+        },
+      ],
+    });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[route/osrm]', e.message);
+    return res.status(500).json({ error: e.message });
   }
 });
 

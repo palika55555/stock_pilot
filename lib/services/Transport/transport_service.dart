@@ -1,6 +1,9 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:http/http.dart' as http;
+
+import '../../config/app_config.dart';
+import '../../models/hgv_routing_options.dart';
+import '../auth_storage_service.dart';
 
 class TransportService {
   // Google Distance Matrix API endpoint
@@ -11,120 +14,53 @@ class TransportService {
   ///
   /// [origin] - Začiatočná adresa
   /// [destination] - Cieľová adresa
-  /// [apiKey] - Google Maps API kľúč (voliteľný)
+  /// [apiKey] – zachované kvôli kompatibilite (Google Places v autocomplete); na trasu sa nepoužíva.
+  /// [openRouteServiceApiKey] – voliteľný kľúč OpenRouteService (driving-hgv), ak nie ste prihlásení cez backend.
+  /// [hgvOptions] – rozmery a hmotnosť vozidla pre ORS (mosty, zákazy); ak null, použijú sa predvolené hodnoty.
   ///
-  /// Vráti mapu s vzdialenosťou, polyline trasou a súradnicami
+  /// Vráti mapu s vzdialenosťou, polyline trasou a súradnicami. Trasa je pre nákladné vozidlo nad 3,5 t (HGV).
   Future<Map<String, dynamic>> calculateDistanceWithRoute({
     required String origin,
     required String destination,
     String? apiKey,
+    String? openRouteServiceApiKey,
+    HgvRoutingOptions? hgvOptions,
   }) async {
-    // Ak je zadaný Google Maps API kľúč, použijeme Google Distance Matrix API
-    if (apiKey != null && apiKey.isNotEmpty) {
-      try {
-        final url = Uri.parse(
-          '$_baseUrl/distancematrix/json?'
-          'origins=${Uri.encodeComponent(origin)}&'
-          'destinations=${Uri.encodeComponent(destination)}&'
-          'units=metric&'
-          'key=$apiKey',
-        );
-
-        final response = await http.get(url);
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-
-          if (data['status'] == 'OK' && data['rows'].isNotEmpty) {
-            final element = data['rows'][0]['elements'][0];
-
-            if (element['status'] == 'OK') {
-              // Vzdialenosť v metroch, prevedieme na kilometre
-              final distanceInMeters = element['distance']['value'] as int;
-              final distance = distanceInMeters / 1000.0;
-              
-              // Získame súradnice pre polyline
-              final originCoords = await _geocodeAddress(origin);
-              final destCoords = await _geocodeAddress(destination);
-              
-              if (originCoords != null && destCoords != null) {
-                final routeData = await _getRouteWithPolyline(
-                  originCoords['lat']!,
-                  originCoords['lon']!,
-                  destCoords['lat']!,
-                  destCoords['lon']!,
-                );
-                
-                return {
-                  'distance': distance,
-                  'polyline': routeData['polyline'],
-                  'originCoords': originCoords,
-                  'destinationCoords': destCoords,
-                };
-              }
-              
-              return {
-                'distance': distance,
-                'polyline': null,
-                'originCoords': originCoords,
-                'destinationCoords': destCoords,
-              };
-            }
-          }
-        }
-      } catch (e) {
-        // Pri chybe Google API použijeme OpenRouteService
-      }
-    }
-
-    // Použijeme OpenRouteService API (bezplatné, bez API kľúča) pre skutočnú cestnú vzdialenosť
+    final opts = hgvOptions ?? HgvRoutingOptions.defaults;
     try {
-      // Najprv získame súradnice adries pomocou Nominatim
       final originCoords = await _geocodeAddress(origin);
       final destCoords = await _geocodeAddress(destination);
 
       if (originCoords != null && destCoords != null) {
-        // Skúsime použiť OpenRouteService pre skutočnú cestnú vzdialenosť
-        try {
-          final routeData = await _getRouteWithPolyline(
-            originCoords['lat']!,
-            originCoords['lon']!,
-            destCoords['lat']!,
-            destCoords['lon']!,
-          );
-
-          if (routeData['distance'] != null && routeData['distance']! > 0) {
-            return {
-              'distance': routeData['distance']!,
-              'polyline': routeData['polyline'],
-              'originCoords': originCoords,
-              'destinationCoords': destCoords,
-            };
-          }
-        } catch (e) {
-          // Ak OpenRouteService zlyhá, použijeme Haversine ako fallback
-        }
-
-        // Fallback na Haversine vzorec (vzdušná vzdialenosť)
-        final distance = _calculateHaversineDistance(
+        final routeData = await _getRouteWithPolyline(
           originCoords['lat']!,
           originCoords['lon']!,
           destCoords['lat']!,
           destCoords['lon']!,
+          openRouteServiceApiKey: openRouteServiceApiKey,
+          hgvOptions: opts,
         );
-        
-        return {
-          'distance': distance,
-          'polyline': null,
-          'originCoords': originCoords,
-          'destinationCoords': destCoords,
-        };
+
+        final d = routeData['distance'] as double?;
+        if (d != null && d > 0) {
+          return {
+            'distance': d,
+            'polyline': routeData['polyline'],
+            'originCoords': originCoords,
+            'destinationCoords': destCoords,
+          };
+        }
+        throw StateError(
+          'Nepodarilo sa vypočítať trasu pre nákladné vozidlo nad 3,5 t. '
+          'Prihláste sa (backend používa OpenRouteService), alebo zadajte vlastný OpenRouteService API kľúč.',
+        );
       }
-    } catch (e) {
-      // Pri chybe použijeme odhad
+    } on StateError {
+      rethrow;
+    } catch (_) {
+      // geocoding / sieť
     }
 
-    // Fallback na odhad
     final distance = _estimateDistance(origin, destination);
     return {
       'distance': distance,
@@ -145,120 +81,16 @@ class TransportService {
     required String origin,
     required String destination,
     String? apiKey,
+    String? openRouteServiceApiKey,
+    HgvRoutingOptions? hgvOptions,
   }) async {
-    // Ak je zadaný Google Maps API kľúč, použijeme Google Distance Matrix API
-    if (apiKey != null && apiKey.isNotEmpty) {
-      try {
-        final url = Uri.parse(
-          '$_baseUrl/distancematrix/json?'
-          'origins=${Uri.encodeComponent(origin)}&'
-          'destinations=${Uri.encodeComponent(destination)}&'
-          'units=metric&'
-          'key=$apiKey',
-        );
-
-        final response = await http.get(url);
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-
-          if (data['status'] == 'OK' && data['rows'].isNotEmpty) {
-            final element = data['rows'][0]['elements'][0];
-
-            if (element['status'] == 'OK') {
-              // Vzdialenosť v metroch, prevedieme na kilometre
-              final distanceInMeters = element['distance']['value'] as int;
-              final distance = distanceInMeters / 1000.0;
-              
-              // Získame súradnice pre polyline
-              final originCoords = await _geocodeAddress(origin);
-              final destCoords = await _geocodeAddress(destination);
-              
-              if (originCoords != null && destCoords != null) {
-                final routeData = await _getRouteWithPolyline(
-                  originCoords['lat']!,
-                  originCoords['lon']!,
-                  destCoords['lat']!,
-                  destCoords['lon']!,
-                );
-                
-                return {
-                  'distance': distance,
-                  'polyline': routeData['polyline'],
-                  'originCoords': originCoords,
-                  'destinationCoords': destCoords,
-                };
-              }
-              
-              return {
-                'distance': distance,
-                'polyline': null,
-                'originCoords': originCoords,
-                'destinationCoords': destCoords,
-              };
-            }
-          }
-        }
-      } catch (e) {
-        // Pri chybe Google API použijeme OpenRouteService
-      }
-    }
-
-    // Použijeme OpenRouteService API (bezplatné, bez API kľúča) pre skutočnú cestnú vzdialenosť
-    try {
-      // Najprv získame súradnice adries pomocou Nominatim
-      final originCoords = await _geocodeAddress(origin);
-      final destCoords = await _geocodeAddress(destination);
-
-      if (originCoords != null && destCoords != null) {
-        // Skúsime použiť OpenRouteService pre skutočnú cestnú vzdialenosť
-        try {
-          final routeData = await _getRouteWithPolyline(
-            originCoords['lat']!,
-            originCoords['lon']!,
-            destCoords['lat']!,
-            destCoords['lon']!,
-          );
-
-          if (routeData['distance'] != null && routeData['distance']! > 0) {
-            return {
-              'distance': routeData['distance']!,
-              'polyline': routeData['polyline'],
-              'originCoords': originCoords,
-              'destinationCoords': destCoords,
-            };
-          }
-        } catch (e) {
-          // Ak OpenRouteService zlyhá, použijeme Haversine ako fallback
-        }
-
-        // Fallback na Haversine vzorec (vzdušná vzdialenosť)
-        final distance = _calculateHaversineDistance(
-          originCoords['lat']!,
-          originCoords['lon']!,
-          destCoords['lat']!,
-          destCoords['lon']!,
-        );
-        
-        return {
-          'distance': distance,
-          'polyline': null,
-          'originCoords': originCoords,
-          'destinationCoords': destCoords,
-        };
-      }
-    } catch (e) {
-      // Pri chybe použijeme odhad
-    }
-
-    // Fallback na odhad
-    final distance = _estimateDistance(origin, destination);
-    return {
-      'distance': distance,
-      'polyline': null,
-      'originCoords': null,
-      'destinationCoords': null,
-    };
+    return calculateDistanceWithRoute(
+      origin: origin,
+      destination: destination,
+      apiKey: apiKey,
+      openRouteServiceApiKey: openRouteServiceApiKey,
+      hgvOptions: hgvOptions,
+    );
   }
 
   /// Vypočíta vzdialenosť medzi dvoma adresami pomocou Google Distance Matrix API alebo OpenRouteService
@@ -272,74 +104,36 @@ class TransportService {
     required String origin,
     required String destination,
     String? apiKey,
+    String? openRouteServiceApiKey,
+    HgvRoutingOptions? hgvOptions,
   }) async {
-    // Ak je zadaný Google Maps API kľúč, použijeme Google Distance Matrix API
-    if (apiKey != null && apiKey.isNotEmpty) {
-      try {
-        final url = Uri.parse(
-          '$_baseUrl/distancematrix/json?'
-          'origins=${Uri.encodeComponent(origin)}&'
-          'destinations=${Uri.encodeComponent(destination)}&'
-          'units=metric&'
-          'key=$apiKey',
-        );
-
-        final response = await http.get(url);
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-
-          if (data['status'] == 'OK' && data['rows'].isNotEmpty) {
-            final element = data['rows'][0]['elements'][0];
-
-            if (element['status'] == 'OK') {
-              // Vzdialenosť v metroch, prevedieme na kilometre
-              final distanceInMeters = element['distance']['value'] as int;
-              return distanceInMeters / 1000.0;
-            }
-          }
-        }
-      } catch (e) {
-        // Pri chybe Google API použijeme OpenRouteService
-      }
-    }
-
-    // Použijeme OpenRouteService API (bezplatné, bez API kľúča) pre skutočnú cestnú vzdialenosť
+    final opts = hgvOptions ?? HgvRoutingOptions.defaults;
     try {
-      // Najprv získame súradnice adries pomocou Nominatim
       final originCoords = await _geocodeAddress(origin);
       final destCoords = await _geocodeAddress(destination);
 
       if (originCoords != null && destCoords != null) {
-        // Skúsime použiť OpenRouteService pre skutočnú cestnú vzdialenosť
-        try {
-          final routeDistance = await _getRouteDistanceFromOpenRouteService(
-            originCoords['lat']!,
-            originCoords['lon']!,
-            destCoords['lat']!,
-            destCoords['lon']!,
-          );
-
-          if (routeDistance != null && routeDistance > 0) {
-            return routeDistance;
-          }
-        } catch (e) {
-          // Ak OpenRouteService zlyhá, použijeme Haversine ako fallback
-        }
-
-        // Fallback na Haversine vzorec (vzdušná vzdialenosť)
-        return _calculateHaversineDistance(
+        final routeDistance = await _getRouteDistanceFromOpenRouteService(
           originCoords['lat']!,
           originCoords['lon']!,
           destCoords['lat']!,
           destCoords['lon']!,
+          openRouteServiceApiKey: openRouteServiceApiKey,
+          hgvOptions: opts,
+        );
+
+        if (routeDistance != null && routeDistance > 0) {
+          return routeDistance;
+        }
+        throw StateError(
+          'Nepodarilo sa vypočítať trasu pre nákladné vozidlo nad 3,5 t. '
+          'Prihláste sa (backend používa OpenRouteService), alebo zadajte vlastný OpenRouteService API kľúč.',
         );
       }
-    } catch (e) {
-      // Pri chybe použijeme odhad
-    }
+    } on StateError {
+      rethrow;
+    } catch (_) {}
 
-    // Fallback na odhad
     return _estimateDistance(origin, destination);
   }
 
@@ -456,168 +250,151 @@ class TransportService {
     return null;
   }
 
-  /// Získa skutočnú cestnú vzdialenosť a polyline trasu pomocou OpenStreetMap služieb
-  /// Používa OSRM ako primárnu metódu (presnejšie meranie), GraphHopper ako fallback
+  /// Parsovanie odpovede v tvare OSRM / backend proxy (distance v metroch).
+  Map<String, dynamic>? _parseOsrmLikeRoutesJson(Map<String, dynamic> data) {
+    final code = data['code'];
+    if (code != null && code != 'Ok' && code != 'ok') {
+      return null;
+    }
+    final routes = data['routes'];
+    if (routes is! List || routes.isEmpty) return null;
+    final route = routes[0] as Map<String, dynamic>;
+    final distRaw = route['distance'];
+    final dm = distRaw is num ? distRaw.toDouble() : null;
+    if (dm == null || dm <= 0) return null;
+    final distanceKm = dm / 1000.0;
+    final geometry = route['geometry'] as Map<String, dynamic>?;
+    List<Map<String, double>>? polylinePoints;
+    if (geometry != null && geometry['coordinates'] != null) {
+      final coordinates = geometry['coordinates'] as List;
+      polylinePoints = coordinates.map((coord) {
+        final c = coord as List;
+        return {
+          'lat': (c[1] as num).toDouble(),
+          'lon': (c[0] as num).toDouble(),
+        };
+      }).toList();
+    }
+    return {'distance': distanceKm, 'polyline': polylinePoints};
+  }
+
+  /// OpenRouteService GeoJSON (driving-hgv) – distance v metroch v properties.summary.
+  Map<String, dynamic>? _parseOrsGeoJsonRoute(Map<String, dynamic> data) {
+    final feats = data['features'];
+    if (feats is! List || feats.isEmpty) return null;
+    final feat = feats[0] as Map<String, dynamic>;
+    final geom = feat['geometry'] as Map<String, dynamic>?;
+    final coords = geom?['coordinates'] as List?;
+    final props = feat['properties'] as Map<String, dynamic>?;
+    final summary = props?['summary'] as Map<String, dynamic>?;
+    final distM = summary?['distance'];
+    final dm = distM is num ? distM.toDouble() : null;
+    if (coords == null || coords.isEmpty || dm == null || dm <= 0) return null;
+    final distanceKm = dm / 1000.0;
+    final polylinePoints = coords.map((coord) {
+      final c = coord as List;
+      return {
+        'lat': (c[1] as num).toDouble(),
+        'lon': (c[0] as num).toDouble(),
+      };
+    }).toList();
+    return {'distance': distanceKm, 'polyline': polylinePoints};
+  }
+
+  /// Trasa pre nákladné vozidlo nad 3,5 t: backend (OpenRouteService HGV), inak priamy ORS s kľúčom.
   Future<Map<String, dynamic>> _getRouteWithPolyline(
     double lat1,
     double lon1,
     double lat2,
-    double lon2,
-  ) async {
-    // Primárna metóda: OSRM (Open Source Routing Machine) - presnejšie meranie
-    try {
-      final url = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/'
-        '${lon1},${lat1};${lon2},${lat2}?'
-        'overview=full&'
-        'alternatives=false&'
-        'steps=false&'
-        'geometries=geojson',
-      );
-
-      final response = await http.get(
-        url,
-        headers: {'User-Agent': 'StockPilot/1.0'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        if (data['code'] == 'Ok' &&
-            data['routes'] != null &&
-            data['routes'].isNotEmpty) {
-          final route = data['routes'][0] as Map<String, dynamic>;
-          final distance = route['distance'] as double?;
-          final geometry = route['geometry'] as Map<String, dynamic>?;
-
-          if (distance != null && distance > 0) {
-            // Vzdialenosť je v metroch, prevedieme na kilometre
-            final distanceKm = distance / 1000.0;
-            
-            // Extrahujeme polyline súradnice z GeoJSON
-            List<Map<String, double>>? polylinePoints;
-            if (geometry != null && geometry['coordinates'] != null) {
-              final coordinates = geometry['coordinates'] as List;
-              polylinePoints = coordinates.map((coord) {
-                // GeoJSON formát je [lon, lat]
-                return {
-                  'lat': (coord[1] as num).toDouble(),
-                  'lon': (coord[0] as num).toDouble(),
-                };
-              }).toList();
-            }
-            
-            return {
-              'distance': distanceKm,
-              'polyline': polylinePoints,
-            };
-          }
+    double lon2, {
+    String? openRouteServiceApiKey,
+    required HgvRoutingOptions hgvOptions,
+  }) async {
+    final token = await AuthStorageService.instance.getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      try {
+        final url = Uri.parse('${AppConfig.apiBase}/route/osrm').replace(
+          queryParameters: <String, String>{
+            'fromLon': lon1.toString(),
+            'fromLat': lat1.toString(),
+            'toLon': lon2.toString(),
+            'toLat': lat2.toString(),
+            'height': hgvOptions.heightM.toString(),
+            'weight': hgvOptions.weightT.toString(),
+            'length': hgvOptions.lengthM.toString(),
+            'width': hgvOptions.widthM.toString(),
+          },
+        );
+        final response = await http.get(
+          url,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'User-Agent': 'StockPilot/1.0',
+          },
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final parsed = _parseOsrmLikeRoutesJson(data);
+          if (parsed != null) return parsed;
         }
+      } catch (_) {
+        // skúsime ORS
       }
-    } catch (e) {
-      // Pri chybe OSRM skúsime GraphHopper ako fallback
     }
 
-    // Fallback na GraphHopper (tiež založený na OpenStreetMap dátach)
-    try {
-      final url = Uri.parse(
-        'https://graphhopper.com/api/1/route?'
-        'point=$lat1,$lon1&'
-        'point=$lat2,$lon2&'
-        'vehicle=car&'
-        'type=json&'
-        'instructions=false&'
-        'calc_points=true&'
-        'points_encoded=false&'
-        'key=', // Prázdny kľúč pre bezplatné použitie
-      );
-
-      final response = await http.get(
-        url,
-        headers: {'User-Agent': 'StockPilot/1.0'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        if (data['paths'] != null && data['paths'].isNotEmpty) {
-          final path = data['paths'][0] as Map<String, dynamic>;
-          final distance = path['distance'] as double?;
-          final points = path['points'] as Map<String, dynamic>?;
-
-          if (distance != null && distance > 0) {
-            // Vzdialenosť je v metroch, prevedieme na kilometre
-            final distanceKm = distance / 1000.0;
-            
-            // Extrahujeme polyline súradnice
-            List<Map<String, double>>? polylinePoints;
-            if (points != null && points['coordinates'] != null) {
-              final coordinates = points['coordinates'] as List;
-              polylinePoints = coordinates.map((coord) {
-                // GraphHopper formát je [lon, lat]
-                return {
-                  'lat': (coord[1] as num).toDouble(),
-                  'lon': (coord[0] as num).toDouble(),
-                };
-              }).toList();
-            }
-            
-            return {
-              'distance': distanceKm,
-              'polyline': polylinePoints,
-            };
-          }
+    final orsKey = openRouteServiceApiKey?.trim();
+    if (orsKey != null && orsKey.isNotEmpty) {
+      try {
+        final url = Uri.parse(
+          'https://api.openrouteservice.org/v2/directions/driving-hgv/geojson',
+        );
+        final response = await http.post(
+          url,
+          headers: {
+            'Authorization': 'Bearer $orsKey',
+            'Content-Type': 'application/json',
+            'User-Agent': 'StockPilot/1.0',
+          },
+          body: json.encode({
+            'coordinates': [
+              [lon1, lat1],
+              [lon2, lat2],
+            ],
+            'options': {
+              'profile_params': {
+                'restrictions': hgvOptions.toOrsRestrictions(),
+              },
+            },
+          }),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final parsed = _parseOrsGeoJsonRoute(data);
+          if (parsed != null) return parsed;
         }
-      }
-    } catch (e) {
-      // Pri chybe vrátime null a použije sa Haversine fallback
+      } catch (_) {}
     }
 
-    return {
-      'distance': null,
-      'polyline': null,
-    };
+    return {'distance': null, 'polyline': null};
   }
 
-  /// Získa skutočnú cestnú vzdialenosť pomocou OpenStreetMap služieb
-  /// Používa OSRM ako primárnu metódu (presnejšie meranie), GraphHopper ako fallback
   Future<double?> _getRouteDistanceFromOpenRouteService(
     double lat1,
     double lon1,
     double lat2,
-    double lon2,
-  ) async {
-    final routeData = await _getRouteWithPolyline(lat1, lon1, lat2, lon2);
+    double lon2, {
+    String? openRouteServiceApiKey,
+    required HgvRoutingOptions hgvOptions,
+  }) async {
+    final routeData = await _getRouteWithPolyline(
+      lat1,
+      lon1,
+      lat2,
+      lon2,
+      openRouteServiceApiKey: openRouteServiceApiKey,
+      hgvOptions: hgvOptions,
+    );
     return routeData['distance'] as double?;
-  }
-
-  /// Vypočíta vzdialenosť medzi dvoma bodmi pomocou Haversine vzorca
-  /// Toto je vzdušná vzdialenosť (as the crow flies), nie skutočná cestná vzdialenosť
-  double _calculateHaversineDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const double earthRadius = 6371; // Polomer Zeme v kilometroch
-
-    final double dLat = _degreesToRadians(lat2 - lat1);
-    final double dLon = _degreesToRadians(lon2 - lon1);
-
-    final double a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degreesToRadians(lat1)) *
-            math.cos(_degreesToRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return earthRadius * c;
-  }
-
-  double _degreesToRadians(double degrees) {
-    return degrees * (3.141592653589793 / 180.0);
   }
 
   /// Jednoduchý odhad vzdialenosti na základe adries

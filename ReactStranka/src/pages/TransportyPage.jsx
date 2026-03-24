@@ -11,14 +11,6 @@ const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('sk-SK') : '—'
 const fmtNum  = (v, d = 2) => new Intl.NumberFormat('sk-SK', { minimumFractionDigits: d, maximumFractionDigits: d }).format(Number(v) || 0)
 const fmtEur  = (v) => new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
 
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371
-  const dL = ((lat2 - lat1) * Math.PI) / 180
-  const dG = ((lon2 - lon1) * Math.PI) / 180
-  const a = Math.sin(dL / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dG / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
 // ── AnimatedNumber ────────────────────────────────────────────────────────────
 function AnimatedNumber({ target, format = (v) => v, duration = 700 }) {
   const [val, setVal] = useState(0)
@@ -277,6 +269,10 @@ function CalculatorTab({ auth }) {
   const [fuelL, setFuelL]           = useState('8.0')
   const [fuelP, setFuelP]           = useState('1.55')
   const [roundTrip, setRoundTrip]   = useState(false)
+  const [hgvH, setHgvH]             = useState('10')
+  const [hgvW, setHgvW]             = useState('40')
+  const [hgvLen, setHgvLen]         = useState('16.5')
+  const [hgvWid, setHgvWid]         = useState('2.55')
   const [notes, setNotes]           = useState('')
   const [customers, setCustomers]   = useState([])
   const [custId, setCustId]         = useState('')
@@ -326,19 +322,40 @@ function CalculatorTab({ auth }) {
       if (!oC || !dC) { setErr('Nepodarilo sa nájsť zadané adresy.'); setBusy(false); return }
 
       let dist = null, routeCoords = null
+      let routeErr = null
       try {
+        const qs = new URLSearchParams({
+          fromLon: String(oC.lon),
+          fromLat: String(oC.lat),
+          toLon: String(dC.lon),
+          toLat: String(dC.lat),
+          height: hgvH.trim() || '10',
+          weight: hgvW.trim() || '40',
+          length: hgvLen.trim() || '16.5',
+          width: hgvWid.trim() || '2.55',
+        })
         const r = await fetch(
-          `${API_BASE_FOR_CALLS}/route/osrm?fromLon=${oC.lon}&fromLat=${oC.lat}&toLon=${dC.lon}&toLat=${dC.lat}`,
+          `${API_BASE_FOR_CALLS}/route/osrm?${qs.toString()}`,
           { headers: getAuthHeaders(auth) }
         )
         const d = await r.json()
-        if (d?.routes?.length) {
+        if (!r.ok) {
+          routeErr = d?.error || `HTTP ${r.status}`
+        } else if (d?.routes?.length) {
           dist = d.routes[0].distance / 1000
           routeCoords = d.routes[0].geometry?.coordinates ?? null
+        } else {
+          routeErr = 'Žiadna trasa pre nákladné vozidlo.'
         }
-      } catch {}
+      } catch (e) {
+        routeErr = e?.message || 'Sieťová chyba'
+      }
 
-      if (!dist || dist <= 0) dist = haversine(oC.lat, oC.lon, dC.lat, dC.lon)
+      if (routeErr || !dist || dist <= 0) {
+        setErr(routeErr || 'Nepodarilo sa vypočítať trasu pre nákladné vozidlo nad 3,5 t (profil HGV). Na serveri musí byť nastavený OPENROUTESERVICE_API_KEY.')
+        setBusy(false)
+        return
+      }
       if (roundTrip) dist *= 2
 
       const pkm   = parseFloat(pricePerKm) || 0
@@ -444,6 +461,26 @@ function CalculatorTab({ auth }) {
           <div className="tp-field">
             <label className="tp-label">Cena nafty (€ / l)</label>
             <input type="number" className="tp-input" value={fuelP} onChange={e => setFuelP(e.target.value)} step="0.01" min="0" />
+          </div>
+
+          <div className="tp-field tp-field--full" style={{ gridColumn: '1 / -1' }}>
+            <div className="tp-label" style={{ textTransform: 'none', letterSpacing: 'normal', fontSize: '0.8rem' }}>Vozidlo (trasovanie – mosty, hmotnosť)</div>
+          </div>
+          <div className="tp-field">
+            <label className="tp-label">Výška max. (m)</label>
+            <input type="number" className="tp-input" value={hgvH} onChange={e => setHgvH(e.target.value)} step="0.1" min="2" max="25" />
+          </div>
+          <div className="tp-field">
+            <label className="tp-label">Hmotnosť (t)</label>
+            <input type="number" className="tp-input" value={hgvW} onChange={e => setHgvW(e.target.value)} step="0.5" min="3.5" max="100" />
+          </div>
+          <div className="tp-field">
+            <label className="tp-label">Dĺžka (m)</label>
+            <input type="number" className="tp-input" value={hgvLen} onChange={e => setHgvLen(e.target.value)} step="0.1" min="5" max="25" />
+          </div>
+          <div className="tp-field">
+            <label className="tp-label">Šírka (m)</label>
+            <input type="number" className="tp-input" value={hgvWid} onChange={e => setHgvWid(e.target.value)} step="0.01" min="2" max="3.5" />
           </div>
 
           {/* Round trip toggle – full row */}

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import { API_BASE_FOR_CALLS } from '../config'
+import { getAuth } from '../utils/auth'
+import { getOrCreateClientDeviceId } from '../utils/deviceId'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -22,10 +24,18 @@ export default function LoginPage() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     try {
+      const prior = getAuth()
+      const twoFactorTrustToken = prior?.twoFactorTrustToken
+      const deviceId = getOrCreateClientDeviceId()
       const res = await fetch(`${API_BASE_FOR_CALLS}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          deviceId,
+          ...(twoFactorTrustToken ? { twoFactorTrustToken } : {}),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success && data.requires2fa) {
@@ -56,13 +66,11 @@ export default function LoginPage() {
           user: data.user || { id: null, fullName: username, username, role: 'user', email: '' },
           token: data.accessToken,
           refreshToken: data.refreshToken ?? null,
+          ...(data.twoFactorTrustToken ? { twoFactorTrustToken: data.twoFactorTrustToken } : {}),
         }
         localStorage.setItem('stockpilot_auth', JSON.stringify(auth))
-        setMessage({
-          type: 'success',
-          text: `Vitajte, ${data.user?.fullName || data.user?.username || username}!`,
-        })
-        navigate('/dashboard', { replace: true })
+        setMessage({ type: 'success', text: 'Presmerujeme vás…' })
+        navigate('/welcome', { replace: true })
       } else {
         setMessage({ type: 'error', text: data.error || 'Prihlásenie zlyhalo.' })
       }
@@ -78,9 +86,10 @@ export default function LoginPage() {
       user: data.user || { id: null, fullName: username, username, role: 'user', email: '' },
       token: data.accessToken,
       refreshToken: data.refreshToken ?? null,
+      ...(data.twoFactorTrustToken ? { twoFactorTrustToken: data.twoFactorTrustToken } : {}),
     }
     localStorage.setItem('stockpilot_auth', JSON.stringify(auth))
-    navigate('/dashboard', { replace: true })
+    navigate('/welcome', { replace: true })
   }
 
   const handleVerifySubmit = async (e) => {
@@ -88,11 +97,13 @@ export default function LoginPage() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     try {
+      const deviceId = getOrCreateClientDeviceId()
       const res = await fetch(`${API_BASE_FOR_CALLS}/auth/2fa/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           loginChallengeToken: challengeToken,
+          deviceId,
           totpCode: showBackup ? undefined : totpCode,
           backupCode: showBackup ? backupCode : undefined,
         }),
@@ -115,10 +126,15 @@ export default function LoginPage() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     try {
+      const deviceId = getOrCreateClientDeviceId()
       const res = await fetch(`${API_BASE_FOR_CALLS}/auth/2fa/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginChallengeToken: challengeToken, totpCode: setupCode }),
+        body: JSON.stringify({
+          loginChallengeToken: challengeToken,
+          totpCode: setupCode,
+          deviceId,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {

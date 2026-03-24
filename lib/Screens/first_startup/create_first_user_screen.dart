@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/api_sync_service.dart';
 import '../../models/user.dart';
-import '../../screens/Home/Home_screen.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/welcome/welcome_reveal_screen.dart';
 import '../Login/web_login_screen.dart';
 import '../../widgets/Common/standard_text_field.dart';
 import '../../widgets/Common/purple_button.dart';
@@ -58,17 +59,14 @@ class _CreateFirstUserScreenState extends State<CreateFirstUserScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(
+            MaterialPageRoute<void>(
+              builder: (context) => WelcomeRevealScreen(
                 user: createdUser,
                 routeObserver: widget.routeObserver,
+                postHomeSnackText:
+                    'Vitajte, ${createdUser.fullName}. Prvý používateľ bol vytvorený.',
+                postHomeSnackColor: AppColors.success,
               ),
-            ),
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Vitajte, ${createdUser.fullName}. Prvý používateľ bol vytvorený.'),
-              backgroundColor: Colors.green,
             ),
           );
         }

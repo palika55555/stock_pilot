@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../home/home_screen.dart';
 import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
@@ -12,6 +11,7 @@ import '../../models/user.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/Common/change_password_dialog.dart';
+import '../../widgets/welcome/welcome_reveal_screen.dart';
 import 'create_user_screen.dart';
 
 /// Tmavé pozadie s mriežkou a zlatou žiarou zhora. [glowOpacity] pre jemné pulzovanie (0.1–0.2).
@@ -394,17 +394,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
     if (mounted) setState(() => _isLoading = false);
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(user: user),
-      ),
-    );
-    final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.loggedInAs(user.fullName)),
-        backgroundColor: user.role == 'admin' ? Colors.redAccent : Colors.green,
+      MaterialPageRoute<void>(
+        builder: (context) => WelcomeRevealScreen(
+          user: user,
+          postHomeSnackText: l10n.loggedInAs(user.fullName),
+          postHomeSnackColor:
+              user.role == 'admin' ? Colors.redAccent : Colors.green,
+        ),
       ),
     );
   }

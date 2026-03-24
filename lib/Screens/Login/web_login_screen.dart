@@ -4,10 +4,10 @@ import '../../services/Database/database_service.dart';
 import '../../services/user_session.dart';
 import '../../services/api_sync_service.dart';
 import '../../services/sync/sync_manager.dart';
-import '../../screens/Home/Home_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/Common/standard_text_field.dart';
 import '../../widgets/Common/purple_button.dart';
+import '../../widgets/welcome/welcome_reveal_screen.dart';
 
 /// Prihlásenie len cez web účet (backend). Používa sa keď je lokálna DB prázdna –
 /// web slúži ako záloha: prihlásenie vytvorí lokálny účet z webu a vstúpi do aplikácie.
@@ -124,17 +124,14 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(
+        MaterialPageRoute<void>(
+          builder: (context) => WelcomeRevealScreen(
             user: createdUser,
             routeObserver: widget.routeObserver,
+            postHomeSnackText:
+                'Vitajte, ${createdUser.fullName}. Prihlásený z web účtu.',
+            postHomeSnackColor: AppColors.success,
           ),
-        ),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Vitajte, ${createdUser.fullName}. Prihlásený z web účtu.'),
-          backgroundColor: AppColors.success,
         ),
       );
     } catch (e) {
