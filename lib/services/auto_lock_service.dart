@@ -12,6 +12,7 @@ class AutoLockService {
   static const String _prefKey = 'auto_lock_minutes';
 
   Timer? _timer;
+  Timer? _warningTimer;
   int _timeoutMinutes = 0;
   DateTime? _backgroundedAt;
   BuildContext? _context;
@@ -28,6 +29,8 @@ class AutoLockService {
   void stop() {
     _timer?.cancel();
     _timer = null;
+    _warningTimer?.cancel();
+    _warningTimer = null;
     _context = null;
     _backgroundedAt = null;
   }
@@ -48,6 +51,7 @@ class AutoLockService {
   void onAppPaused() {
     _backgroundedAt = DateTime.now();
     _timer?.cancel();
+    _warningTimer?.cancel();
   }
 
   /// Volaj pri AppLifecycleState.resumed – skontroluje či uplynul timeout.
@@ -69,15 +73,53 @@ class AutoLockService {
 
   void _resetTimer() {
     _timer?.cancel();
+    _warningTimer?.cancel();
     if (_timeoutMinutes <= 0) return;
+    final totalSeconds = _timeoutMinutes * 60;
     _timer = Timer(Duration(minutes: _timeoutMinutes), _lock);
+    // Minútu pred odhlásením (ak je celkový čas > 60 s)
+    if (totalSeconds > 60) {
+      _warningTimer = Timer(
+        Duration(seconds: totalSeconds - 60),
+        _showIdleWarning,
+      );
+    }
+  }
+
+  void _showIdleWarning() {
+    final ctx = _context;
+    if (ctx == null || !ctx.mounted) return;
+    showDialog<void>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Blíži sa odhlásenie'),
+        content: const Text(
+          'Z dôvodu nečinnosti budete o jednu minútu automaticky odhlásení. '
+          'Dotknite sa obrazovky alebo použite tlačidlo nižšie na predĺženie relácie.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              resetOnActivity();
+            },
+            child: const Text('Zostať prihlásený'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _lock() {
     _timer?.cancel();
+    _warningTimer?.cancel();
+    _timer = null;
+    _warningTimer = null;
     final ctx = _context;
+    stop();
     if (ctx != null && ctx.mounted) {
-      LogoutService.logout(ctx);
+      LogoutService.beginLogoutFlow(ctx, idleTimeout: true);
     }
   }
 

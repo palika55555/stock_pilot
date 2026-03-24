@@ -17,6 +17,7 @@ import '../../Screens/Transport/transport_calculator_screen.dart';
 import '../../Screens/inventory/inventory_history_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
+import 'package:stock_pilot/screens/assistant/ai_assistant_screen.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 import 'package:stock_pilot/services/logout_service.dart';
 import '../../theme/app_theme.dart';
@@ -71,6 +72,18 @@ class AppDrawer extends StatelessWidget {
                     title: l10n.overview,
                     isActive: true,
                     onTap: () => Navigator.pop(context),
+                  ),
+                  _DrawerMenuItem(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'AI asistent',
+                    isActive: false,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        _drawerFadeRoute(AiAssistantScreen(userRole: userRole)),
+                      );
+                    },
                   ),
                   _DrawerMenuItem(
                     icon: Icons.qr_code_scanner_rounded,
@@ -536,7 +549,7 @@ class _LogoutItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: GestureDetector(
-        onTap: () => LogoutService.logout(context),
+        onTap: () => LogoutService.beginLogoutFlow(context),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(

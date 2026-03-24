@@ -40,6 +40,7 @@ const {
   verifyLoginChallenge,
 } = require('./auth/twofa');
 const { registerSyncRoutes } = require('./sync/syncRoutes');
+const { registerAiAssistantRoutes } = require('./ai/assistant');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -1287,6 +1288,7 @@ apiRouter.put('/customers/:id', async (req, res) => {
 // --- Generický sync systém: push / pull / conflicts / resolve / SSE stream ---
 // Dokumentácia: backend/sync/syncRoutes.js
 registerSyncRoutes(apiRouter, pool);
+registerAiAssistantRoutes(apiRouter);
 
 // --- Kontrola zmien na webe (Flutter periodicky volá a zobrazí notifikáciu ak sa zmenilo) ---
 apiRouter.get('/sync/check', (_req, res) => {

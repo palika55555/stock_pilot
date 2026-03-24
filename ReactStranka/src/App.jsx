@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import WelcomePage from './pages/WelcomePage'
+import GoodbyePage from './pages/GoodbyePage'
 import DashboardPage from './pages/DashboardPage'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
@@ -41,6 +42,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/welcome" element={<PrivateRoute><WelcomePage /></PrivateRoute>} />
+        <Route path="/goodbye" element={<PrivateRoute><GoodbyePage /></PrivateRoute>} />
         <Route path="/dashboard" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="customers" element={<CustomersPage />} />

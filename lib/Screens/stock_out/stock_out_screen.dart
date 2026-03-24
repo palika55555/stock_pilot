@@ -12,6 +12,7 @@ import '../../services/StockOut/stock_out_pdf_service.dart';
 import '../../services/StockOut/stock_out_service.dart';
 import '../../services/Warehouse/warehouse_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/Common/grid_background.dart';
 import '../../widgets/Receipts/stock_out_list_widget.dart';
 import '../../widgets/Receipts/stock_out_modal_widget.dart';
 
@@ -589,7 +590,7 @@ class _StockOutScreenState extends State<StockOutScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: AppColors.bgPrimary,
+      backgroundColor: const Color(0xFF080C0F),
       appBar: PreferredSize(
         preferredSize:
             const Size.fromHeight(_appBarHeight + _appBarFilterHeight),
@@ -622,41 +623,46 @@ class _StockOutScreenState extends State<StockOutScreen> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.only(
-            top: _appBarHeight + _appBarFilterHeight),
-        child: Stack(
-          children: [
-            Column(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: StockOutBackground()),
+          Padding(
+            padding: const EdgeInsets.only(
+                top: _appBarHeight + _appBarFilterHeight),
+            child: Stack(
               children: [
-                _buildDateBar(),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF6366F1)))
-                      : StockOutList(
-                          stockOuts: _filteredStockOuts,
-                          canEditApproved:
-                              widget.userRole == 'admin',
-                          onAddTap: _openNewModal,
-                          onApprove: _approveStockOut,
-                          onEdit: _openEditModal,
-                          onStorno: _stornoStockOut,
-                          onExportPdf: _exportStockOutPdf,
-                        ),
+                Column(
+                  children: [
+                    _buildDateBar(),
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                  color: Color(0xFFEF4444)))
+                          : StockOutList(
+                              stockOuts: _filteredStockOuts,
+                              canEditApproved:
+                                  widget.userRole == 'admin',
+                              onAddTap: _openNewModal,
+                              onApprove: _approveStockOut,
+                              onEdit: _openEditModal,
+                              onStorno: _stornoStockOut,
+                              onExportPdf: _exportStockOutPdf,
+                            ),
+                    ),
+                  ],
                 ),
+                if (_minimizedDraft != null)
+                  Positioned(
+                    bottom: 80,
+                    left: 16,
+                    right: 16,
+                    child: _buildMinimizedBar(),
+                  ),
               ],
             ),
-            if (_minimizedDraft != null)
-              Positioned(
-                bottom: 80,
-                left: 16,
-                right: 16,
-                child: _buildMinimizedBar(),
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openNewModal,

@@ -171,8 +171,8 @@ class MobileUserInfoWidget extends StatelessWidget {
               ),
             ],
           ),
-          onTap: () async {
-            await LogoutService.logout(context);
+          onTap: () {
+            LogoutService.beginLogoutFlow(context);
           },
         ),
       ],

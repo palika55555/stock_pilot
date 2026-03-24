@@ -20,6 +20,7 @@ import '../../services/auto_lock_service.dart';
 import '../../services/product_cache.dart';
 import '../../screens/Notifications/notification_center_screen.dart';
 import '../../screens/Search/search_screen.dart';
+import '../../screens/assistant/ai_assistant_screen.dart';
 import '../../screens/goods_receipt/goods_receipt_screen.dart';
 import '../../screens/stock_out/stock_out_screen.dart';
 import '../../theme/app_theme.dart';
@@ -437,6 +438,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             activeIndex: 0,
             onSwitchRole: _switchRole,
             onAddProduct: _showAddProductModal,
+            onOpenAssistant: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => AiAssistantScreen(userRole: _currentRole),
+                ),
+              );
+            },
           ),
           Expanded(
             child: HomeOverview(
@@ -490,6 +499,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         activeIndex: 0,
         scaffoldKey: _scaffoldKey,
         userRole: _currentRole,
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => AiAssistantScreen(userRole: _currentRole),
+            ),
+          );
+        },
+        backgroundColor: AppColors.accentGold,
+        foregroundColor: AppColors.bgPrimary,
+        child: const Icon(Icons.auto_awesome_rounded),
       ),
     );
   }

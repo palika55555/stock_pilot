@@ -1,0 +1,133 @@
+.goodbye-page {
+  min-height: 100vh;
+  position: relative;
+  background: #0f0f12;
+  color: #f1f3f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.goodbye-page__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(37, 37, 48, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 37, 48, 0.45) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+.goodbye-page__glow {
+  position: absolute;
+  top: -18vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, 90vw);
+  height: 440px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.28) 0%,
+    rgba(239, 68, 68, 0.08) 45%,
+    transparent 70%
+  );
+  animation: goodbye-glow 2.4s ease-in-out forwards;
+  pointer-events: none;
+}
+
+@keyframes goodbye-glow {
+  0% {
+    opacity: 0.45;
+    transform: translateX(-50%) scale(0.92);
+  }
+  45% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0.88;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+.goodbye-page__content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 2rem;
+  max-width: 90vw;
+}
+
+.goodbye-page__title {
+  margin: 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 2.5rem + 1vw, 2.75rem);
+  letter-spacing: 0.03em;
+  animation: goodbye-title-in 0.6s ease-out both;
+}
+
+.goodbye-page__name {
+  margin: 1rem 0 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.35rem);
+  font-weight: 500;
+  color: #8b92a9;
+  animation: goodbye-name-in 0.6s ease-out 0.12s both;
+}
+
+.goodbye-page__subtitle {
+  margin: 0.5rem 0 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #4b5568;
+  animation: goodbye-name-in 0.6s ease-out 0.2s both;
+}
+
+@keyframes goodbye-title-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes goodbye-name-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.goodbye-page__bar {
+  margin: 2.5rem auto 0;
+  width: 140px;
+  height: 3px;
+  border-radius: 2px;
+  background: #252a3d;
+  overflow: hidden;
+}
+
+.goodbye-page__bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  background: rgba(239, 68, 68, 0.85);
+  animation: goodbye-bar 2.2s ease-out forwards;
+}
+
+@keyframes goodbye-bar {
+  to {
+    width: 100%;
+  }
+}

@@ -126,20 +126,23 @@ class _LogoutFarewellScreenState extends State<LogoutFarewellScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    FadeTransition(
-                      opacity: _subtitleOpacity,
-                      child: Text(
-                        widget.displayName.isNotEmpty ? widget.displayName : ' ',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.dmSans(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondary,
+                    if (widget.displayName.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      FadeTransition(
+                        opacity: _subtitleOpacity,
+                        child: Text(
+                          widget.displayName,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
+                      const SizedBox(height: 8),
+                    ] else
+                      const SizedBox(height: 8),
                     FadeTransition(
                       opacity: _subtitleOpacity,
                       child: Padding(

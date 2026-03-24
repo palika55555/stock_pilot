@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
-import { getAuth, clearAuth } from '../utils/auth'
+import { getAuth } from '../utils/auth'
 import './DashboardLayout.css'
 
 const NAV_SECTIONS = [
@@ -88,8 +88,7 @@ export default function DashboardLayout() {
   }, [notifOpen])
 
   const handleLogout = () => {
-    clearAuth()
-    navigate('/', { replace: true })
+    navigate('/goodbye', { replace: true })
   }
 
   if (!auth) return null

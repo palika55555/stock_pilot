@@ -184,8 +184,8 @@ class UserOptionsSheet extends StatelessWidget {
                       Icons.logout_rounded,
                       "Odhlásiť sa",
                       Colors.redAccent,
-                      onTap: () async {
-                        await LogoutService.logout(context);
+                      onTap: () {
+                        LogoutService.beginLogoutFlow(context);
                       },
                     ),
                   ],

@@ -159,3 +159,123 @@ class _DiagonalStripePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+/// Rovnaká kompozícia ako [ReceiptBackground], ale s červeným podtónom (výdaj tovaru).
+class StockOutBackground extends StatelessWidget {
+  const StockOutBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Stack(
+      children: [
+        const ColoredBox(color: Color(0xFF080C0F)),
+
+        CustomPaint(
+          size: Size.infinite,
+          painter: _DiagonalStripePainterStockOut(),
+        ),
+
+        // Červený glow — top right
+        Positioned(
+          top: -size.height * 0.15,
+          right: -size.width * 0.15,
+          child: Container(
+            width: size.width * 0.8,
+            height: size.width * 0.8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFEF4444).withOpacity(0.13),
+                  const Color(0xFFEF4444).withOpacity(0.04),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+        ),
+
+        // Tmavší červený glow — bottom left
+        Positioned(
+          bottom: -size.height * 0.1,
+          left: -size.width * 0.2,
+          child: Container(
+            width: size.width * 0.6,
+            height: size.width * 0.6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFDC2626).withOpacity(0.08),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 1.0],
+              ),
+            ),
+          ),
+        ),
+
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 120,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF080C0F).withOpacity(0.6),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Diagonálne čiary + mriežka s červeným nádychom (výdajky).
+class _DiagonalStripePainterStockOut extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFEF4444).withOpacity(0.028)
+      ..strokeWidth = 1.0;
+
+    const spacing = 22.0;
+    final diagonal = math.sqrt(size.width * size.width + size.height * size.height);
+    final count = (diagonal / spacing).ceil() + 2;
+
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.rotate(-math.pi / 6);
+    canvas.translate(-size.width / 2, -size.height / 2);
+
+    for (int i = -count; i <= count * 2; i++) {
+      final x = i * spacing;
+      canvas.drawLine(
+        Offset(x, -diagonal),
+        Offset(x, size.height + diagonal),
+        paint,
+      );
+    }
+    canvas.restore();
+
+    final hPaint = Paint()
+      ..color = const Color(0xFF2A1A1A).withOpacity(0.65)
+      ..strokeWidth = 0.4;
+    const hStep = 40.0;
+    for (double y = 0; y <= size.height; y += hStep) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

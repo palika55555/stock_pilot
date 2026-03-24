@@ -80,6 +80,25 @@ class _SettingsPageState extends State<SettingsPage> {
     await AutoLockService.saveTimeout(selected);
     AutoLockService.instance.updateTimeout(selected);
     setState(() => _autoLockMinutes = selected);
+    if (!mounted) return;
+    if (selected > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pri nečinnosti budete po ${_autoLockLabel(selected)} automaticky odhlásení. '
+            'Minútu pred odhlásením zobrazíme upozornenie – môžete predĺžiť reláciu.',
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Automatické odhlásenie po nečinnosti je vypnuté.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Future<String?> _showCodePrompt({

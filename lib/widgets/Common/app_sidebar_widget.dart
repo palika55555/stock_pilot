@@ -56,6 +56,8 @@ class AppSidebar extends StatefulWidget {
   final void Function(String role)? onSwitchRole;
   /// Otvorí modal na ručné vytvorenie produktu / produktovej karty.
   final VoidCallback? onAddProduct;
+  /// Voliteľné – otvorí AI asistenta (desktop sidebar).
+  final VoidCallback? onOpenAssistant;
 
   const AppSidebar({
     super.key,
@@ -64,6 +66,7 @@ class AppSidebar extends StatefulWidget {
     this.activeIndex = 0,
     this.onSwitchRole,
     this.onAddProduct,
+    this.onOpenAssistant,
   });
 
   @override
@@ -329,6 +332,27 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
                       ),
                     ),
             ),
+            if (widget.onOpenAssistant != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: GestureDetector(
+                  onTap: widget.onOpenAssistant,
+                  child: Container(
+                    width: btnSize,
+                    height: btnSize,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGoldSubtle,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.accentGold.withOpacity(0.35)),
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: isNarrow ? 16.0 : 18.0,
+                      color: AppColors.accentGold,
+                    ),
+                  ),
+                ),
+              ),
             GestureDetector(
               onTap: _toggleCollapse,
               child: Container(
@@ -1139,7 +1163,7 @@ class _LogoutButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => LogoutService.logout(context),
+      onTap: () => LogoutService.beginLogoutFlow(context),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
