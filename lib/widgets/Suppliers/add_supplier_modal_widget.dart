@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../models/supplier.dart';
 import '../../services/External/finstat_service.dart';
 import '../../services/Supplier/supplier_service.dart';
@@ -32,11 +35,22 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
     text: '20',
   );
 
-  bool _isLoading = false;
+  final FocusNode _icoFocus = FocusNode();
+  Timer? _icoDebounce;
+
   bool _isSaving = false;
   bool _isActive = true;
 
+  /// Či práve beží lookup (manuálny alebo auto).
+  bool _lookupInFlight = false;
+
+  /// Posledný výsledok smart načítania (null = ešte žiadny pokus v tejto session).
+  bool? _lookupSuccess;
+  String? _lookupHint;
+
   bool get _isEditMode => widget.supplier != null;
+
+  static const List<int> _vatPresets = [0, 5, 10, 19, 20, 23];
 
   @override
   void initState() {
@@ -54,10 +68,59 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
       _vatController.text = s.defaultVatRate.toString();
       _isActive = s.isActive;
     }
+    _icoController.addListener(_onIcoTextChanged);
+    for (final c in <TextEditingController>[
+      _nameController,
+      _emailController,
+      _addressController,
+      _cityController,
+      _postalCodeController,
+      _dicController,
+      _icDphController,
+      _vatController,
+    ]) {
+      c.addListener(_refreshCompleteness);
+    }
+  }
+
+  void _refreshCompleteness() {
+    if (mounted) setState(() {});
+  }
+
+  void _onIcoTextChanged() {
+    setState(() {
+      if (_lookupSuccess != null || _lookupHint != null) {
+        _lookupSuccess = null;
+        _lookupHint = null;
+      }
+    });
+    if (_isEditMode) return;
+    _icoDebounce?.cancel();
+    final ico = _icoController.text.trim();
+    if (ico.length != 8 || !RegExp(r'^\d{8}$').hasMatch(ico)) return;
+    _icoDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _fetchFinstatData(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _icoDebounce?.cancel();
+    _icoController.removeListener(_onIcoTextChanged);
+    for (final c in <TextEditingController>[
+      _nameController,
+      _emailController,
+      _addressController,
+      _cityController,
+      _postalCodeController,
+      _dicController,
+      _icDphController,
+      _vatController,
+    ]) {
+      c.removeListener(_refreshCompleteness);
+    }
+    _icoFocus.dispose();
     _nameController.dispose();
     _icoController.dispose();
     _emailController.dispose();
@@ -70,25 +133,50 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
     super.dispose();
   }
 
-  Future<void> _fetchFinstatData() async {
+  double get _formCompleteness {
+    int ok = 0;
+    const total = 9;
+    if (_icoController.text.trim().length == 8) ok++;
+    if (_nameController.text.trim().isNotEmpty) ok++;
+    if (_vatController.text.trim().isNotEmpty) ok++;
+    if (_emailController.text.trim().isNotEmpty) ok++;
+    if (_addressController.text.trim().isNotEmpty) ok++;
+    if (_cityController.text.trim().isNotEmpty) ok++;
+    if (_postalCodeController.text.trim().isNotEmpty) ok++;
+    if (_dicController.text.trim().isNotEmpty) ok++;
+    if (_icDphController.text.trim().isNotEmpty) ok++;
+    return ok / total;
+  }
+
+  Future<void> _fetchFinstatData({bool silent = false}) async {
     final ico = _icoController.text.trim();
     if (ico.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Zadajte najprv IČO')),
-      );
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Zadajte najprv IČO')),
+        );
+      }
       return;
     }
     if (ico.length != 8 || !RegExp(r'^\d+$').hasMatch(ico)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('IČO musí obsahovať presne 8 číslic')),
-      );
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('IČO musí obsahovať presne 8 číslic')),
+        );
+      }
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _lookupInFlight = true;
+      _lookupSuccess = null;
+      _lookupHint = null;
+    });
 
     try {
       final supplier = await _finstatService.fetchSupplierData(ico);
+      if (!mounted) return;
+      if (_icoController.text.trim() != ico) return;
       if (supplier != null) {
         setState(() {
           _nameController.text = supplier.name;
@@ -98,16 +186,34 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
           _postalCodeController.text = supplier.postalCode ?? '';
           _dicController.text = supplier.dic ?? '';
           _icDphController.text = supplier.icDph ?? '';
+          _lookupSuccess = true;
+          _lookupHint = supplier.name;
+        });
+        HapticFeedback.lightImpact();
+      } else {
+        setState(() {
+          _lookupSuccess = false;
+          _lookupHint = 'Pre toto IČO sa nepodarilo získať údaje.';
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      if (_icoController.text.trim() != ico) return;
+      setState(() {
+        _lookupSuccess = false;
+        _lookupHint = silent
+            ? 'Chyba siete alebo registra. Skúste znova.'
+            : e.toString();
+      });
+      if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Chyba pri načítaní dát: ${e.toString()}')),
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _lookupInFlight = false);
+      }
     }
   }
 
@@ -140,7 +246,7 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
               : _dicController.text.trim(),
           icDph: _icDphController.text.trim().isEmpty
               ? null
-              : _icDphController.text.trim(),
+              : _icDphController.text.trim().toUpperCase(),
           defaultVatRate: vatClamped,
           isActive: _isActive,
         );
@@ -175,7 +281,7 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
               : _dicController.text.trim(),
           icDph: _icDphController.text.trim().isEmpty
               ? null
-              : _icDphController.text.trim(),
+              : _icDphController.text.trim().toUpperCase(),
           defaultVatRate: vatClamped,
           isActive: _isActive,
         );
@@ -205,14 +311,283 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
     }
   }
 
+  String? _validateEmail(String? v) {
+    final t = v?.trim() ?? '';
+    if (t.isEmpty) return null;
+    final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(t);
+    return ok ? null : 'Neplatný formát e-mailu';
+  }
+
+  String? _validateDic(String? v) {
+    final t = v?.trim() ?? '';
+    if (t.isEmpty) return null;
+    return RegExp(r'^\d{10}$').hasMatch(t) ? null : 'DIČ má 10 číslic';
+  }
+
+  String? _validateIcDph(String? v) {
+    final t = v?.trim().toUpperCase() ?? '';
+    if (t.isEmpty) return null;
+    return RegExp(r'^SK\d{10}$').hasMatch(t)
+        ? null
+        : 'Očakávaný tvar SK + 10 číslic';
+  }
+
+  Widget _sectionLabel(String title, String subtitle, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.accentGoldSubtle,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.accentGold),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    height: 1.25,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _smartStatusBanner() {
+    if (_lookupInFlight) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: AppColors.infoSubtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.info.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.info,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Načítavam údaje z obchodného registra…',
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_lookupSuccess == true && _lookupHint != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: AppColors.successSubtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.auto_awesome_rounded,
+                color: AppColors.success, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Smart doplnenie',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Polia boli vyplnené podľa IČO. Skontrolujte údaje pred uložením.',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _lookupHint!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_lookupSuccess == false && _lookupHint != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: AppColors.warningSubtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: AppColors.warning, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _lookupHint!,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _completenessStrip() {
+    final p = _formCompleteness;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Úplnosť údajov',
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              Text(
+                '${(p * 100).round()} %',
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accentGold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: p,
+              minHeight: 6,
+              backgroundColor: AppColors.borderDefault,
+              color: AppColors.accentGold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _vatChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _vatPresets.map((v) {
+          final selected =
+              _vatController.text.trim() == v.toString();
+          return FilterChip(
+            label: Text('$v %'),
+            selected: selected,
+            showCheckmark: false,
+            selectedColor: AppColors.accentGoldSubtle,
+            backgroundColor: AppColors.bgElevated,
+            side: BorderSide(
+              color: selected ? AppColors.accentGold : AppColors.borderDefault,
+            ),
+            labelStyle: GoogleFonts.dmSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? AppColors.accentGold : AppColors.textSecondary,
+            ),
+            onSelected: (_) {
+              setState(() => _vatController.text = v.toString());
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.bgElevated.withValues(alpha: 0.45),
+            AppColors.bgCard,
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: const Border(
           top: BorderSide(color: AppColors.borderDefault, width: 1),
         ),
       ),
@@ -224,72 +599,96 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle bar
               Center(
                 child: Container(
                   width: 40,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: AppColors.borderDefault,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
-
-              // Header
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      color: AppColors.accentGoldSubtle,
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.accentGold.withValues(alpha: 0.25),
+                          AppColors.bgElevated,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: const Icon(
                       Icons.local_shipping_rounded,
                       color: AppColors.accentGold,
-                      size: 22,
+                      size: 24,
                     ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Text(
-                      _isEditMode
-                          ? 'Upraviť dodávateľa'
-                          : 'Pridať nového dodávateľa',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isEditMode
+                              ? 'Upraviť dodávateľa'
+                              : 'Pridať nového dodávateľa',
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          _isEditMode
+                              ? 'Upravte údaje a uložte zmeny.'
+                              : 'IČO → automatické doplnenie z registra',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
-                      width: 32,
-                      height: 32,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: AppColors.bgElevated,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.borderDefault),
                       ),
                       child: const Icon(
                         Icons.close_rounded,
                         color: AppColors.textSecondary,
-                        size: 18,
+                        size: 20,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-
-              // IČO + Finstat lookup
+              const SizedBox(height: 18),
+              _completenessStrip(),
+              _sectionLabel(
+                'Identifikácia',
+                'IČO vyhľadá automaticky po zadaní 8 číslic, alebo ťuknite na lupu.',
+                Icons.tag_rounded,
+              ),
               TextFormField(
                 controller: _icoController,
+                focusNode: _icoFocus,
                 readOnly: _isEditMode,
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.search,
@@ -301,14 +700,15 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                 onFieldSubmitted: (_) => _fetchFinstatData(),
                 decoration: InputDecoration(
                   labelText: 'IČO',
-                  hintText: _isEditMode ? null : 'Zadajte IČO a kliknite na lupu',
+                  hintText:
+                      _isEditMode ? null : '8 číslic — doplní sa automaticky',
                   prefixIcon: const Icon(Icons.numbers,
                       color: AppColors.textSecondary, size: 20),
                   suffixIcon: _isEditMode
                       ? null
-                      : (_isLoading
+                      : (_lookupInFlight
                           ? const Padding(
-                              padding: EdgeInsets.all(10.0),
+                              padding: EdgeInsets.all(10),
                               child: SizedBox(
                                 width: 20,
                                 height: 20,
@@ -319,18 +719,22 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                               ),
                             )
                           : IconButton(
-                              icon: const Icon(Icons.search,
+                              icon: const Icon(Icons.search_rounded,
                                   color: AppColors.accentGold),
-                              onPressed: _fetchFinstatData,
-                              tooltip: 'Načítať dáta z Finstatu',
+                              onPressed: () => _fetchFinstatData(),
+                              tooltip: 'Načítať z registra',
                             )),
                 ),
                 validator: (value) =>
                     value == null || value.isEmpty ? 'Zadajte IČO' : null,
               ),
-              const SizedBox(height: 14),
-
-              // Názov firmy
+              const SizedBox(height: 12),
+              _smartStatusBanner(),
+              _sectionLabel(
+                'Fakturačné údaje',
+                'Názov a adresa pre doklady.',
+                Icons.apartment_rounded,
+              ),
               TextFormField(
                 controller: _nameController,
                 style: GoogleFonts.dmSans(color: AppColors.textPrimary),
@@ -343,15 +747,15 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                     value == null || value.isEmpty ? 'Zadajte názov' : null,
               ),
               const SizedBox(height: 14),
-
-              // DPH + Email
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _vatController,
                       keyboardType: TextInputType.number,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'DPH %',
                         hintText: '20',
@@ -375,19 +779,20 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                     child: TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'E-mail',
                         prefixIcon: Icon(Icons.email_outlined,
                             color: AppColors.textSecondary, size: 20),
                       ),
+                      validator: _validateEmail,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-
-              // Adresa
+              _vatChips(),
+              const SizedBox(height: 6),
               TextFormField(
                 controller: _addressController,
                 style: GoogleFonts.dmSans(color: AppColors.textPrimary),
@@ -399,15 +804,14 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                 ),
               ),
               const SizedBox(height: 14),
-
-              // Mesto + PSČ
               Row(
                 children: [
                   Expanded(
                     flex: 2,
                     child: TextFormField(
                       controller: _cityController,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'Mesto',
                         prefixIcon: Icon(Icons.location_city_rounded,
@@ -420,7 +824,8 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                     child: TextFormField(
                       controller: _postalCodeController,
                       keyboardType: TextInputType.number,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'PSČ',
                         hintText: '067 45',
@@ -435,45 +840,57 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-
-              // DIČ + IČ DPH
+              const SizedBox(height: 18),
+              _sectionLabel(
+                'Daňové identifikátory',
+                'DIČ a IČ DPH podľa výpisu z Finančnej správy.',
+                Icons.receipt_long_rounded,
+              ),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _dicController,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      keyboardType: TextInputType.number,
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'DIČ',
-                        hintText: 'Daňové ID',
+                        hintText: '10 číslic',
                         prefixIcon: Icon(Icons.receipt_outlined,
                             color: AppColors.textSecondary, size: 20),
                       ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      validator: _validateDic,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
                       controller: _icDphController,
-                      style: GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      style:
+                          GoogleFonts.dmSans(color: AppColors.textPrimary),
+                      textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
                         labelText: 'IČ DPH',
-                        hintText: 'SK...',
-                        prefixIcon: Icon(Icons.account_box_outlined,
+                        hintText: 'SK1234567890',
+                        prefixIcon: Icon(Icons.badge_outlined,
                             color: AppColors.textSecondary, size: 20),
                       ),
+                      validator: _validateIcDph,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-
-              // Aktívny switch
               Container(
                 decoration: BoxDecoration(
                   color: AppColors.bgElevated,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: SwitchListTile(
@@ -500,9 +917,7 @@ class _AddSupplierModalState extends State<AddSupplierModal> {
                   onChanged: (v) => setState(() => _isActive = v),
                 ),
               ),
-              const SizedBox(height: 28),
-
-              // Uložiť
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 52,

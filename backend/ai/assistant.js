@@ -1,8 +1,8 @@
 /**
  * AI asistent – odpovede + nástroj navigate (klient vykoná navigáciu).
  * Google Gemini API – kľúč len v prostredí: GEMINI_API_KEY (alebo GOOGLE_API_KEY).
- * GEMINI_MODEL – predvolene gemini-1.5-flash (gemini-2.0-flash často nemá free tier / limit 0).
- * GEMINI_MODEL_FALLBACKS – voliteľné, čiarkou oddelené modely (skúšajú sa pri quota / 429).
+ * GEMINI_MODEL – predvolene gemini-2.5-flash-lite (1.5 bez prípony už API nemusí mať).
+ * GEMINI_MODEL_FALLBACKS – čiarkou oddelené modely; pri kvóte / „not found“ sa skúša ďalší.
  */
 const rateLimit = require('express-rate-limit');
 
@@ -102,13 +102,13 @@ function partsText(parts) {
 }
 
 function buildModelTryList() {
-  const primary = (process.env.GEMINI_MODEL || 'gemini-1.5-flash').trim();
+  const primary = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim();
   const extra = (process.env.GEMINI_MODEL_FALLBACKS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  /** Typické modely s odlišnými free-tier limitmi – používajú sa len pri chybe kvóty. */
-  const defaults = ['gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+  /** Aktuálne stable modely (2.5 → 2.0); staré „gemini-1.5-flash“ bez verzie často vrátia NOT_FOUND. */
+  const defaults = ['gemini-2.5-flash', 'gemini-2.0-flash'];
   const ordered = [primary, ...extra, ...defaults];
   return [...new Set(ordered)];
 }
@@ -122,6 +122,22 @@ function isQuotaOrRateLimitError(err) {
     msg.includes('resource_exhausted') ||
     msg.includes('rate limit')
   );
+}
+
+/** Model neexistuje alebo nepodporuje generateContent – skúsiť ďalší v zozname. */
+function isModelNotAvailableError(err) {
+  const msg = (err?.message || '').toLowerCase();
+  return (
+    err?.status === 404 ||
+    msg.includes('not found') ||
+    msg.includes('is not found for api version') ||
+    msg.includes('not supported for generatecontent') ||
+    msg.includes('call listmodels')
+  );
+}
+
+function shouldTryNextModel(err) {
+  return isQuotaOrRateLimitError(err) || isModelNotAvailableError(err);
 }
 
 async function geminiGenerateContent({ apiKey, model, contents, systemInstruction }) {
@@ -172,7 +188,7 @@ async function geminiGenerateContentWithFallback({ apiKey, contents, systemInstr
       return await geminiGenerateContent({ apiKey, model, contents, systemInstruction });
     } catch (e) {
       lastErr = e;
-      const retry = isQuotaOrRateLimitError(e) && i < models.length - 1;
+      const retry = shouldTryNextModel(e) && i < models.length - 1;
       if (retry) {
         console.warn(`[POST /ai/assistant] model ${model}: ${e.message} – skúšam ďalší`);
       } else {
