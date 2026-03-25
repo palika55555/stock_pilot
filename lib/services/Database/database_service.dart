@@ -235,7 +235,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 39,
+      version: 40,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -724,6 +724,19 @@ class DatabaseService {
         created_at TEXT,
         FOREIGN KEY (batch_id) REFERENCES production_batches(id),
         FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS paving_stones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        length_mm REAL NOT NULL,
+        width_mm REAL NOT NULL,
+        thickness_mm REAL NOT NULL,
+        pieces_per_layer INTEGER NOT NULL CHECK (pieces_per_layer > 0),
+        layers_per_pallet INTEGER NOT NULL CHECK (layers_per_pallet > 0),
+        user_id TEXT,
+        created_at TEXT
       )
     ''');
     final custInfo = await db.rawQuery('PRAGMA table_info(customers)');
@@ -2159,6 +2172,30 @@ class DatabaseService {
       }
       // Existujúce plaintext heslá ponecháme — pri ďalšom prihlásení
       // sa automaticky zahashujú (viď login_page.dart).
+    }
+    if (oldVersion < 40) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS paving_stones (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          length_mm REAL NOT NULL,
+          width_mm REAL NOT NULL,
+          thickness_mm REAL NOT NULL,
+          pieces_per_layer INTEGER NOT NULL CHECK (pieces_per_layer > 0),
+          layers_per_pallet INTEGER NOT NULL CHECK (layers_per_pallet > 0),
+          user_id TEXT,
+          created_at TEXT
+        )
+      ''');
+      await db.execute(
+        'ALTER TABLE production_batches ADD COLUMN paving_stone_id INTEGER REFERENCES paving_stones(id)',
+      );
+      await db.execute(
+        'ALTER TABLE production_batches ADD COLUMN requested_m2 REAL',
+      );
+      await db.execute(
+        'ALTER TABLE production_batches ADD COLUMN actual_stored_m2 REAL',
+      );
     }
   }
 
