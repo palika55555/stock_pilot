@@ -1,3 +1,20 @@
+/// Priority of a user-to-user message notification.
+enum MessagePriority {
+  info('INFO'),
+  warning('WARNING'),
+  urgent('URGENT');
+
+  final String value;
+  const MessagePriority(this.value);
+
+  static MessagePriority fromString(String? s) {
+    for (final e in MessagePriority.values) {
+      if (e.value == s) return e;
+    }
+    return MessagePriority.info;
+  }
+}
+
 /// Typ udalosti notifikácie (príjemky, zásoby, ceny).
 enum NotificationType {
   receiptSubmitted('RECEIPT_SUBMITTED'),
@@ -7,7 +24,8 @@ enum NotificationType {
   receiptReversed('RECEIPT_REVERSED'),
   receiptPendingLong('RECEIPT_PENDING_LONG'),
   stockLow('STOCK_LOW'),
-  priceChange('PRICE_CHANGE');
+  priceChange('PRICE_CHANGE'),
+  userMessage('USER_MESSAGE');
 
   final String value;
   const NotificationType(this.value);
@@ -42,6 +60,9 @@ class AppNotification {
   final DateTime createdAt;
   final bool read;
   final String? targetUsername; // komu je určená (null = všetci / in-app pre všetkých)
+  final String? senderUsername;
+  final MessagePriority priority;
+  final bool isManual;
 
   const AppNotification({
     this.id,
@@ -54,6 +75,9 @@ class AppNotification {
     required this.createdAt,
     this.read = false,
     this.targetUsername,
+    this.senderUsername,
+    this.priority = MessagePriority.info,
+    this.isManual = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -68,6 +92,9 @@ class AppNotification {
       'created_at': createdAt.toIso8601String(),
       'read': read ? 1 : 0,
       'target_username': targetUsername,
+      'sender_username': senderUsername,
+      'priority': priority.value,
+      'is_manual': isManual ? 1 : 0,
     };
   }
 
@@ -85,6 +112,9 @@ class AppNotification {
           : DateTime.now(),
       read: (map['read'] as int?) == 1,
       targetUsername: map['target_username'] as String?,
+      senderUsername: map['sender_username'] as String?,
+      priority: MessagePriority.fromString(map['priority'] as String?),
+      isManual: (map['is_manual'] as int?) == 1,
     );
   }
 
@@ -99,6 +129,9 @@ class AppNotification {
     DateTime? createdAt,
     bool? read,
     String? targetUsername,
+    String? senderUsername,
+    MessagePriority? priority,
+    bool? isManual,
   }) {
     return AppNotification(
       id: id ?? this.id,
@@ -111,6 +144,9 @@ class AppNotification {
       createdAt: createdAt ?? this.createdAt,
       read: read ?? this.read,
       targetUsername: targetUsername ?? this.targetUsername,
+      senderUsername: senderUsername ?? this.senderUsername,
+      priority: priority ?? this.priority,
+      isManual: isManual ?? this.isManual,
     );
   }
 }
