@@ -2,10 +2,12 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:stock_pilot/models/paving_stone.dart';
 import 'package:stock_pilot/models/production_batch.dart';
 import 'package:stock_pilot/models/production_batch_recipe_item.dart';
 import 'package:stock_pilot/services/Database/database_service.dart';
 import 'package:stock_pilot/services/api_sync_service.dart';
+import 'package:stock_pilot/services/paving_stone_service.dart';
 import 'package:stock_pilot/theme/app_theme.dart';
 
 const List<String> _defaultProductTypes = [
@@ -51,6 +53,12 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
   double? _costTotal;
   double? _revenueTotal;
 
+  List<PavingStone> _pavingStones = [];
+  PavingStone? _selectedPavingStone;
+  double _requestedM2 = 0;
+  PavingStoneCalculation? _calc;
+  bool _hasPallets = false;
+
   final List<RecipeRow> _recipeRows = [
     RecipeRow(materialName: 'Voda', unit: 'l'),
     RecipeRow(materialName: 'Plastifikátor', unit: 'kg'),
@@ -85,8 +93,11 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
       _notes = widget.editBatch!.notes ?? '';
       _costTotal = widget.editBatch!.costTotal;
       _revenueTotal = widget.editBatch!.revenueTotal;
+      _requestedM2 = widget.editBatch!.requestedM2 ?? 0;
       _loadRecipe();
+      _checkHasPallets();
     }
+    _loadPavingStones();
   }
 
   Future<void> _loadRecipe() async {
@@ -124,6 +135,9 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
         createdAt: widget.editBatch?.createdAt ?? DateTime.now().toIso8601String(),
         costTotal: _costTotal,
         revenueTotal: _revenueTotal,
+        pavingStoneId: _selectedPavingStone?.id,
+        requestedM2: _selectedPavingStone != null ? _requestedM2 : null,
+        actualStoredM2: _calc?.actualM2,
       );
 
       int batchId;
@@ -168,6 +182,38 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
     setState(() {
       _customFractionRows.add(RecipeRow(materialName: 'Frakcia', unit: 'kg'));
     });
+  }
+
+  Future<void> _loadPavingStones() async {
+    final stones = await PavingStoneService().getPavingStones(DatabaseService.currentUserId);
+    if (mounted) setState(() => _pavingStones = stones);
+  }
+
+  Future<void> _checkHasPallets() async {
+    if (widget.editBatch?.id == null) return;
+    final pallets = await _db.getPalletsByBatchId(widget.editBatch!.id!);
+    if (mounted) setState(() => _hasPallets = pallets.isNotEmpty);
+  }
+
+  void _onPavingStoneSelected(PavingStone? stone) {
+    setState(() {
+      _selectedPavingStone = stone;
+      if (stone != null) _productType = stone.name;
+      _calc = null;
+    });
+  }
+
+  void _onM2Changed(String value) {
+    final m2 = double.tryParse(value.replaceAll(',', '.'));
+    if (m2 != null && m2 > 0 && _selectedPavingStone != null) {
+      setState(() {
+        _requestedM2 = m2;
+        _calc = PavingStoneService.calculate(m2, _selectedPavingStone!);
+        _quantityProduced = _calc!.totalPieces;
+      });
+    } else {
+      setState(() { _calc = null; _quantityProduced = 0; });
+    }
   }
 
   @override
@@ -235,29 +281,88 @@ class _ProductionBatchFormScreenState extends State<ProductionBatchFormScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _productTypes.contains(_productType) ? _productType : null,
-              decoration: const InputDecoration(labelText: 'Typ výrobku', border: OutlineInputBorder()),
-              items: _productTypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-              onChanged: (v) => setState(() => _productType = v ?? _defaultProductTypes.first),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              initialValue: _quantityProduced == 0 ? '' : _quantityProduced.toString(),
-              decoration: const InputDecoration(
-                labelText: 'Počet vyrobených kusov',
-                border: OutlineInputBorder(),
+            if (_pavingStones.isNotEmpty) ...[
+              const Text('Typ výrobku — dlažba', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<PavingStone>(
+                value: _selectedPavingStone,
+                decoration: const InputDecoration(labelText: 'Vyberte dlažbu (m²)', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<PavingStone>(value: null, child: Text('— Žiadna —')),
+                  ..._pavingStones.map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text('${s.name} (${s.m2PerPallet.toStringAsFixed(2)} m²/paleta)'),
+                  )),
+                ],
+                onChanged: _onPavingStoneSelected,
               ),
-              keyboardType: TextInputType.number,
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Zadajte počet';
-                final n = int.tryParse(v);
-                if (n == null || n < 0) return 'Neplatný počet';
-                return null;
-              },
-              onSaved: (v) => _quantityProduced = int.tryParse(v ?? '0') ?? 0,
-              onChanged: (v) => _quantityProduced = int.tryParse(v) ?? 0,
-            ),
+              const SizedBox(height: 8),
+            ],
+            if (_selectedPavingStone == null)
+              DropdownButtonFormField<String>(
+                value: _productTypes.contains(_productType) ? _productType : null,
+                decoration: const InputDecoration(labelText: 'Typ výrobku', border: OutlineInputBorder()),
+                items: _productTypes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (v) => setState(() => _productType = v ?? _defaultProductTypes.first),
+              ),
+            const SizedBox(height: 16),
+            if (_selectedPavingStone != null) ...[
+              AbsorbPointer(
+                absorbing: _hasPallets,
+                child: TextFormField(
+                  initialValue: _requestedM2 > 0 ? _requestedM2.toString() : '',
+                  decoration: InputDecoration(
+                    labelText: 'Požadované m²',
+                    border: const OutlineInputBorder(),
+                    suffixText: 'm²',
+                    helperText: _hasPallets ? 'Uzamknuté — palety už existujú' : null,
+                    filled: _hasPallets,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Zadajte m²';
+                    final n = double.tryParse(v.replaceAll(',', '.'));
+                    if (n == null || n <= 0) return 'Zadajte kladné číslo';
+                    return null;
+                  },
+                  onChanged: _onM2Changed,
+                ),
+              ),
+              if (_calc != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgPrimary,
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '→ ${_calc!.totalPieces} ks  |  '
+                    '${_calc!.fullPallets} paliet'
+                    '${_calc!.remainingLayers > 0 ? " + ${_calc!.remainingLayers} vrstvy" : ""}  |  '
+                    'skutočné m²: ${_calc!.actualM2.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ] else
+              TextFormField(
+                initialValue: _quantityProduced == 0 ? '' : _quantityProduced.toString(),
+                decoration: const InputDecoration(
+                  labelText: 'Počet vyrobených kusov',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Zadajte počet';
+                  final n = int.tryParse(v);
+                  if (n == null || n < 0) return 'Neplatný počet';
+                  return null;
+                },
+                onSaved: (v) => _quantityProduced = int.tryParse(v ?? '0') ?? 0,
+                onChanged: (v) => _quantityProduced = int.tryParse(v) ?? 0,
+              ),
             const SizedBox(height: 20),
             const Divider(),
             const Text('Receptúra (materiály)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary)),
