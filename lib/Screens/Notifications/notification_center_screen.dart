@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/app_notification.dart';
 import '../../services/Notifications/notification_service.dart';
+import '../../widgets/Notifications/compose_message_dialog.dart';
 import '../goods_receipt/goods_receipt_screen.dart';
 
 /// Plnoobrazovkový stred notifikácií: zoznam, filtre, označiť všetky ako prečítané, tap → príjemka.
@@ -17,7 +18,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   List<AppNotification> _notifications = [];
   bool _loading = true;
   String? _currentUsername;
-  String _filter = 'all'; // all | unread | receipt | stock
+  String _filter = 'all'; // all | unread | messages | system
 
   @override
   void initState() {
@@ -36,11 +37,13 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     if (!mounted) return;
     setState(() => _loading = true);
     final unreadOnly = _filter == 'unread';
-    final typeFilter = _filter == 'receipt' ? 'receipt' : (_filter == 'stock' ? 'stock' : null);
+    bool? isManual;
+    if (_filter == 'messages') isManual = true;
+    if (_filter == 'system') isManual = false;
     final list = await _notificationService.getNotifications(
       username: _currentUsername,
       unreadOnly: unreadOnly,
-      typeFilter: typeFilter,
+      isManual: isManual,
       limit: 200,
     );
     if (mounted) setState(() {
@@ -91,6 +94,17 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
             ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await showDialog(
+            context: context,
+            builder: (_) => const ComposeMessageDialog(),
+          );
+          _loadNotifications();
+        },
+        tooltip: 'Nová správa',
+        child: const Icon(Icons.edit_rounded),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -140,15 +154,15 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'Príjemky',
-            selected: _filter == 'receipt',
-            onTap: () => setState(() { _filter = 'receipt'; _loadNotifications(); }),
+            label: 'Správy',
+            selected: _filter == 'messages',
+            onTap: () => setState(() { _filter = 'messages'; _loadNotifications(); }),
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'Zásoby',
-            selected: _filter == 'stock',
-            onTap: () => setState(() { _filter = 'stock'; _loadNotifications(); }),
+            label: 'Systémové',
+            selected: _filter == 'system',
+            onTap: () => setState(() { _filter = 'system'; _loadNotifications(); }),
           ),
         ],
       ),
@@ -201,41 +215,69 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final n = notification;
-    final iconData = _iconForType(n.type);
-    final iconColor = _colorForType(n.type);
-    return Material(
-      color: n.read ? const Color(0xFF1A1A1A) : const Color(0xFF252528),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: iconColor.withOpacity(0.2),
-          child: Icon(iconData, color: iconColor, size: 22),
-        ),
-        title: Text(
-          n.title,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: n.read ? FontWeight.normal : FontWeight.w600,
-            fontSize: 14,
+    final isManual = n.isManual;
+    final borderColor = isManual ? _priorityColor(n.priority) : Colors.transparent;
+    final iconData = isManual ? Icons.person_rounded : _iconForType(n.type);
+    final iconColor = isManual ? _priorityColor(n.priority) : _colorForType(n.type);
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: borderColor, width: 4)),
+      ),
+      child: Material(
+        color: n.read ? const Color(0xFF1A1A1A) : const Color(0xFF252528),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: iconColor.withOpacity(0.2),
+            child: Icon(iconData, color: iconColor, size: 22),
           ),
-        ),
-        subtitle: n.body.isNotEmpty
-            ? Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  n.body,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.white54),
+          title: Text(
+            n.title,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: n.read ? FontWeight.normal : FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (n.body.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    n.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Colors.white54),
+                  ),
                 ),
-              )
-            : null,
-        trailing: Text(
-          _formatTime(n.createdAt),
-          style: const TextStyle(fontSize: 11, color: Colors.white38),
+              if (isManual && n.senderUsername != null)
+                Text(
+                  'Od: ${n.senderUsername}',
+                  style: const TextStyle(fontSize: 11, color: Colors.white38),
+                ),
+            ],
+          ),
+          trailing: Text(
+            _formatTime(n.createdAt),
+            style: const TextStyle(fontSize: 11, color: Colors.white38),
+          ),
+          onTap: onTap,
         ),
-        onTap: onTap,
       ),
     );
+  }
+
+  Color _priorityColor(MessagePriority priority) {
+    switch (priority) {
+      case MessagePriority.urgent:
+        return Colors.red;
+      case MessagePriority.warning:
+        return Colors.orange;
+      case MessagePriority.info:
+        return Colors.blue;
+    }
   }
 
   IconData _iconForType(String type) {
