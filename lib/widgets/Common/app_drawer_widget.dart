@@ -18,6 +18,7 @@ import '../../Screens/inventory/inventory_history_screen.dart';
 import 'package:stock_pilot/screens/Settings/settings_page.dart';
 import 'package:stock_pilot/screens/goods_receipt/goods_receipt_screen.dart';
 import 'package:stock_pilot/screens/assistant/ai_assistant_screen.dart';
+import 'package:stock_pilot/screens/paving_stone/paving_stone_list_screen.dart';
 import 'package:stock_pilot/l10n/app_localizations.dart';
 import 'package:stock_pilot/services/logout_service.dart';
 import '../../theme/app_theme.dart';
@@ -137,6 +138,14 @@ class AppDrawer extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, _drawerFadeRoute( ProductionOrderListScreen(userRole: userRole)));
+                    },
+                  ),
+                  _DrawerMenuItem(
+                    icon: Icons.view_module_rounded,
+                    title: 'Katalóg dlažieb',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, _drawerFadeRoute( const PavingStoneListScreen()));
                     },
                   ),
                   _DrawerMenuItem(
