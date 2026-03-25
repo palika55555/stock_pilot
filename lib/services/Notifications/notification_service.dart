@@ -15,7 +15,7 @@ class NotificationService {
     required String? username,
     bool unreadOnly = false,
     String? typeFilter, // 'receipt' | 'stock' | null = all
-    bool? isManual,
+    bool? isManual, // null = no filter, true = manual only, false = system only
     int limit = 100,
     int offset = 0,
   }) async {
@@ -310,12 +310,13 @@ class NotificationService {
       recipients = targetUsernames.where((u) => u != senderUsername).toList();
     }
 
+    final now = DateTime.now();
     for (final username in recipients) {
       await _db.insertAppNotification(AppNotification(
         type: 'USER_MESSAGE',
         title: title,
         body: body,
-        createdAt: DateTime.now(),
+        createdAt: now,
         targetUsername: username,
         senderUsername: senderUsername,
         priority: priority,
