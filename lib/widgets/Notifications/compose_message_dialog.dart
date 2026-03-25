@@ -33,12 +33,20 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     _currentUsername = prefs.getString('current_user_username');
-    final users = await DatabaseService().getAllUsers();
-    if (!mounted) return;
-    setState(() {
-      _users = users;
-      _loading = false;
-    });
+    try {
+      final users = await DatabaseService().getAllUsers();
+      if (!mounted) return;
+      setState(() {
+        _users = users;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nepodarilo sa načítať zoznam používateľov.')),
+      );
+    }
   }
 
   void _toggleAll(bool? value) {
@@ -101,16 +109,24 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
 
     setState(() => _sending = true);
 
-    await NotificationService().createUserMessage(
-      senderUsername: _currentUsername ?? '',
-      title: title,
-      body: body,
-      priority: _priority,
-      targetUsernames: _allSelected ? null : _selected.toList(),
-    );
-
-    if (!mounted) return;
-    Navigator.pop(context);
+    try {
+      await NotificationService().createUserMessage(
+        senderUsername: _currentUsername ?? '',
+        title: title,
+        body: body,
+        priority: _priority,
+        targetUsernames: _allSelected ? null : _selected.toList(),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chyba pri odosielaní správy. Skúste znova.')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
