@@ -8,6 +8,9 @@ class ProductionBatch {
   final String? createdAt;   // ISO datetime
   final double? costTotal;
   final double? revenueTotal;
+  final int? pavingStoneId;
+  final double? requestedM2;
+  final double? actualStoredM2;
 
   ProductionBatch({
     this.id,
@@ -18,6 +21,9 @@ class ProductionBatch {
     this.createdAt,
     this.costTotal,
     this.revenueTotal,
+    this.pavingStoneId,
+    this.requestedM2,
+    this.actualStoredM2,
   });
 
   /// Marža v % z výnosu: (revenue - cost) / revenue * 100. Null ak revenue je 0.
@@ -36,6 +42,9 @@ class ProductionBatch {
       'created_at': createdAt,
       'cost_total': costTotal,
       'revenue_total': revenueTotal,
+      'paving_stone_id': pavingStoneId,
+      'requested_m2': requestedM2,
+      'actual_stored_m2': actualStoredM2,
     };
   }
 
@@ -49,6 +58,9 @@ class ProductionBatch {
       createdAt: map['created_at'] as String?,
       costTotal: (map['cost_total'] as num?)?.toDouble(),
       revenueTotal: (map['revenue_total'] as num?)?.toDouble(),
+      pavingStoneId: map['paving_stone_id'] as int?,
+      requestedM2: (map['requested_m2'] as num?)?.toDouble(),
+      actualStoredM2: (map['actual_stored_m2'] as num?)?.toDouble(),
     );
   }
 
@@ -61,6 +73,9 @@ class ProductionBatch {
     String? createdAt,
     double? costTotal,
     double? revenueTotal,
+    int? pavingStoneId,
+    double? requestedM2,
+    double? actualStoredM2,
   }) {
     return ProductionBatch(
       id: id ?? this.id,
@@ -71,6 +86,9 @@ class ProductionBatch {
       createdAt: createdAt ?? this.createdAt,
       costTotal: costTotal ?? this.costTotal,
       revenueTotal: revenueTotal ?? this.revenueTotal,
+      pavingStoneId: pavingStoneId ?? this.pavingStoneId,
+      requestedM2: requestedM2 ?? this.requestedM2,
+      actualStoredM2: actualStoredM2 ?? this.actualStoredM2,
     );
   }
 }
