@@ -235,7 +235,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 40,
+      version: 41,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -864,7 +864,10 @@ class DatabaseService {
         created_at TEXT NOT NULL,
         read INTEGER NOT NULL DEFAULT 0,
         target_username TEXT,
-        user_id TEXT
+        user_id TEXT,
+        sender_username TEXT,
+        priority TEXT DEFAULT 'INFO',
+        is_manual INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -1784,7 +1787,10 @@ class DatabaseService {
           extra_data TEXT,
           created_at TEXT NOT NULL,
           read INTEGER NOT NULL DEFAULT 0,
-          target_username TEXT
+          target_username TEXT,
+          sender_username TEXT,
+          priority TEXT DEFAULT 'INFO',
+          is_manual INTEGER DEFAULT 0
         )
       ''');
       await db.execute('''
@@ -2195,6 +2201,17 @@ class DatabaseService {
       );
       await db.execute(
         'ALTER TABLE production_batches ADD COLUMN actual_stored_m2 REAL',
+      );
+    }
+    if (oldVersion < 41) {
+      await db.execute(
+        "ALTER TABLE app_notifications ADD COLUMN sender_username TEXT",
+      );
+      await db.execute(
+        "ALTER TABLE app_notifications ADD COLUMN priority TEXT DEFAULT 'INFO'",
+      );
+      await db.execute(
+        "ALTER TABLE app_notifications ADD COLUMN is_manual INTEGER DEFAULT 0",
       );
     }
   }
@@ -3532,6 +3549,13 @@ class DatabaseService {
     return maps.map((m) => User.fromMap(m)).toList();
   }
 
+  /// Všetci používatelia (pre výber príjemcov správ).
+  Future<List<User>> getAllUsers() async {
+    Database db = await database;
+    final maps = await db.query('users', orderBy: 'username ASC');
+    return maps.map((m) => User.fromMap(m)).toList();
+  }
+
   /// Všetci manažéri a admini (pre notifikácie).
   Future<List<User>> getManagersAndAdmins() async {
     Database db = await database;
@@ -3554,6 +3578,7 @@ class DatabaseService {
     String? targetUsername,
     bool? unreadOnly,
     String? typeFilter,
+    bool? isManual,
     int limit = 100,
     int offset = 0,
     DateTime? olderThan,
@@ -3576,6 +3601,10 @@ class DatabaseService {
     if (olderThan != null) {
       conditions.add('created_at >= ?');
       whereArgs.add(olderThan.toIso8601String());
+    }
+    if (isManual != null) {
+      conditions.add('is_manual = ?');
+      whereArgs.add(isManual ? 1 : 0);
     }
     final maps = await db.query(
       'app_notifications',
