@@ -118,15 +118,17 @@ Behaviour:
 ### 4.2 `DatabaseService.getAllUsers()`
 
 ```dart
-Future<List<AppUser>> getAllUsers()
+Future<List<User>> getAllUsers()
 ```
 
-- Returns all users from the `users` table, ordered by `username` ascending.
+- Returns all users (`User` model, `lib/models/user.dart`) from the `users` table, ordered by
+`username` ascending.
 - Excludes users with an inactive/deleted flag if such a column exists in the `users` table;
   otherwise returns all rows.
-- **Does not exclude the sender** — exclusion happens in `createUserMessage()` at insertion time.
-  The dialog shows all users including the current user so they can explicitly choose, but the
-  service skips inserting a notification to the sender.
+- **Does not exclude the sender** — exclusion happens in `createUserMessage()` for both the
+  broadcast path AND the targeted path (filter out senderUsername in both cases). The dialog
+  shows all users including the current user so they can explicitly choose, but the service
+  always skips inserting a notification to the sender.
 
 ---
 
