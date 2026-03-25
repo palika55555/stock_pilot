@@ -1,4 +1,5 @@
 import 'package:stock_pilot/models/paving_stone.dart';
+import 'package:stock_pilot/services/Database/database_service.dart';
 
 class PavingStoneCalculation {
   final int totalPieces;
@@ -35,5 +36,47 @@ class PavingStoneService {
       partialPieces: partialPieces,
       actualM2: actualM2,
     );
+  }
+
+  final DatabaseService _db = DatabaseService();
+
+  Future<List<PavingStone>> getPavingStones(String? userId) async {
+    final db = await _db.database;
+    final maps = await db.query(
+      'paving_stones',
+      where: userId != null ? 'user_id = ?' : null,
+      whereArgs: userId != null ? [userId] : null,
+      orderBy: 'name ASC',
+    );
+    return maps.map(PavingStone.fromMap).toList();
+  }
+
+  Future<PavingStone?> getPavingStoneById(int id) async {
+    final db = await _db.database;
+    final maps = await db.query('paving_stones', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return PavingStone.fromMap(maps.first);
+  }
+
+  Future<int> insertPavingStone(PavingStone stone) async {
+    final db = await _db.database;
+    final map = Map<String, Object?>.from(stone.toMap())..remove('id');
+    map['created_at'] ??= DateTime.now().toIso8601String();
+    return db.insert('paving_stones', map);
+  }
+
+  Future<void> updatePavingStone(PavingStone stone) async {
+    final db = await _db.database;
+    await db.update(
+      'paving_stones',
+      stone.toMap(),
+      where: 'id = ?',
+      whereArgs: [stone.id],
+    );
+  }
+
+  Future<void> deletePavingStone(int id) async {
+    final db = await _db.database;
+    await db.delete('paving_stones', where: 'id = ?', whereArgs: [id]);
   }
 }
