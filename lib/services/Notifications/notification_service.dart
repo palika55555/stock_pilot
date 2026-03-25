@@ -15,26 +15,23 @@ class NotificationService {
     required String? username,
     bool unreadOnly = false,
     String? typeFilter, // 'receipt' | 'stock' | null = all
+    bool? isManual,
     int limit = 100,
     int offset = 0,
   }) async {
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
-    String? typeValue;
-    if (typeFilter == 'receipt') {
-      typeValue = null; // filter by type in code for receipt-related types
-    } else if (typeFilter == 'stock') {
-      typeValue = 'STOCK_LOW';
-    }
     var list = await _db.getAppNotifications(
       targetUsername: username,
       unreadOnly: unreadOnly,
-      typeFilter: typeValue,
+      isManual: isManual,
       limit: limit,
       offset: offset,
       olderThan: cutoff,
     );
     if (typeFilter == 'receipt') {
       list = list.where((n) => _isReceiptType(n.type)).toList();
+    } else if (typeFilter == 'stock') {
+      list = list.where((n) => n.type == 'STOCK_LOW').toList();
     }
     return list;
   }
@@ -288,6 +285,41 @@ class NotificationService {
         extraData: jsonEncode({'production_order_id': orderId, 'order_number': orderNumber, 'actual_quantity': actualQuantity}),
         createdAt: DateTime.now(),
         targetUsername: u.username,
+      ));
+    }
+  }
+
+  Future<void> createUserMessage({
+    required String senderUsername,
+    required String title,
+    required String body,
+    required MessagePriority priority,
+    List<String>? targetUsernames,
+  }) async {
+    if (targetUsernames != null && targetUsernames.isEmpty) return;
+
+    final List<String> recipients;
+    if (targetUsernames == null) {
+      final allUsers = await _db.getAllUsers();
+      recipients = allUsers
+          .map((u) => u.username)
+          .where((u) => u != senderUsername)
+          .toList();
+    } else {
+      // Exclude sender from targeted sends too
+      recipients = targetUsernames.where((u) => u != senderUsername).toList();
+    }
+
+    for (final username in recipients) {
+      await _db.insertAppNotification(AppNotification(
+        type: 'USER_MESSAGE',
+        title: title,
+        body: body,
+        createdAt: DateTime.now(),
+        targetUsername: username,
+        senderUsername: senderUsername,
+        priority: priority,
+        isManual: true,
       ));
     }
   }
