@@ -102,7 +102,7 @@ class _CreatePalletsDialogState extends State<CreatePalletsDialog> {
   }
 
   Future<List<Pallet>?> _create() async {
-    if (_stone != null && _calc != null) {
+    if (_stone != null) {
       return _createPavingStonePallets();
     }
     return _createGenericPallets();
@@ -140,6 +140,12 @@ class _CreatePalletsDialogState extends State<CreatePalletsDialog> {
   }
 
   Future<List<Pallet>?> _createPavingStonePallets() async {
+    if (_calc == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Výpočet paliet nie je k dispozícii')),
+      );
+      return null;
+    }
     final count = int.tryParse(_countController.text) ?? _calc!.fullPallets;
     final db = DatabaseService();
     final created = <Pallet>[];
