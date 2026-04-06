@@ -240,5 +240,34 @@
   "importVatPurchase": "Purchase VAT %",
   "importPriceSaleWithoutVat": "Sale without VAT",
   "importPriceSaleWithVat": "Sale with VAT",
-  "importVatSale": "Sale VAT %"
+  "importVatSale": "Sale VAT %",
+  "updateAvailableTitle": "A new version is available",
+  "updateAvailableBody": "Version {version} is available (current: {current}).",
+  "@updateAvailableBody": {
+    "placeholders": {
+      "version": { "type": "String" },
+      "current": { "type": "String" }
+    }
+  },
+  "updateDownload": "Download",
+  "updateLater": "Later",
+  "monthlyClosingsTitle": "Monthly closings",
+  "monthlyClosingsOpenScreen": "Open",
+  "monthlyClosingsIntro": "In a closed calendar month you cannot create or edit goods receipts, stock issues, warehouse transfers, inventory adjustments, invoices, price quotes, or related production orders (by document date, production date, or invoice dates).",
+  "monthlyClosingsEmpty": "No closed months",
+  "monthlyClosingsCloseMonth": "Close month",
+  "monthlyClosingsReopenMonth": "Reopen",
+  "monthlyClosingsClosedAt": "Closed",
+  "monthlyClosingsBy": "By",
+  "monthlyClosingsAdminOnly": "Only an administrator can close or reopen months.",
+  "monthlyClosingsPickMonth": "Select month",
+  "monthlyClosingsNoteOptional": "Note (optional)",
+  "monthlyClosingsConfirmReopen": "Reopen month {month}?",
+  "@monthlyClosingsConfirmReopen": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "monthlyClosingsAlreadyClosed": "This month is already closed.",
+  "monthlyClosingsClosedSuccess": "Month closed."
 }

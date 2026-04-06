@@ -66,6 +66,10 @@ dependencies:
   base32: ^2.2.0
   archive: ^3.6.1
   lzma: ^1.0.1
+  package_info_plus: ^8.1.2
+  url_launcher: ^6.3.1
+  pub_semver: ^2.1.5
+  csv: ^6.0.0
 
 dev_dependencies:
   flutter_test:

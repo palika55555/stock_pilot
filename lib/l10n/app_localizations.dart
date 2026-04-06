@@ -1311,6 +1311,114 @@ abstract class AppLocalizations {
   /// In sk, this message translates to:
   /// **'DPH predaj %'**
   String get importVatSale;
+
+  /// No description provided for @updateAvailableTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Je dostupná nová verzia'**
+  String get updateAvailableTitle;
+
+  /// No description provided for @updateAvailableBody.
+  ///
+  /// In sk, this message translates to:
+  /// **'K dispozícii je verzia {version} (aktuálna: {current}).'**
+  String updateAvailableBody(String version, String current);
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In sk, this message translates to:
+  /// **'Stiahnuť'**
+  String get updateDownload;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In sk, this message translates to:
+  /// **'Neskôr'**
+  String get updateLater;
+
+  /// No description provided for @monthlyClosingsTitle.
+  ///
+  /// In sk, this message translates to:
+  /// **'Mesačné uzávierky'**
+  String get monthlyClosingsTitle;
+
+  /// No description provided for @monthlyClosingsOpenScreen.
+  ///
+  /// In sk, this message translates to:
+  /// **'Otvoriť'**
+  String get monthlyClosingsOpenScreen;
+
+  /// No description provided for @monthlyClosingsIntro.
+  ///
+  /// In sk, this message translates to:
+  /// **'V uzavretom kalendárnom mesiaci nie je možné vytvárať ani upravovať príjemky, výdajky, presuny skladom, inventúru, faktúry, cenové ponuky ani súvisiace výrobné príkazy (podľa dátumu dokladu, dátumu výroby alebo dátumov na faktúre).'**
+  String get monthlyClosingsIntro;
+
+  /// No description provided for @monthlyClosingsEmpty.
+  ///
+  /// In sk, this message translates to:
+  /// **'Žiadny uzavretý mesiac'**
+  String get monthlyClosingsEmpty;
+
+  /// No description provided for @monthlyClosingsCloseMonth.
+  ///
+  /// In sk, this message translates to:
+  /// **'Uzavrieť mesiac'**
+  String get monthlyClosingsCloseMonth;
+
+  /// No description provided for @monthlyClosingsReopenMonth.
+  ///
+  /// In sk, this message translates to:
+  /// **'Znovu otvoriť'**
+  String get monthlyClosingsReopenMonth;
+
+  /// No description provided for @monthlyClosingsClosedAt.
+  ///
+  /// In sk, this message translates to:
+  /// **'Uzavreté'**
+  String get monthlyClosingsClosedAt;
+
+  /// No description provided for @monthlyClosingsBy.
+  ///
+  /// In sk, this message translates to:
+  /// **'Kto'**
+  String get monthlyClosingsBy;
+
+  /// No description provided for @monthlyClosingsAdminOnly.
+  ///
+  /// In sk, this message translates to:
+  /// **'Uzatváranie a otváranie mesiacov môže len administrátor.'**
+  String get monthlyClosingsAdminOnly;
+
+  /// No description provided for @monthlyClosingsPickMonth.
+  ///
+  /// In sk, this message translates to:
+  /// **'Vyberte mesiac'**
+  String get monthlyClosingsPickMonth;
+
+  /// No description provided for @monthlyClosingsNoteOptional.
+  ///
+  /// In sk, this message translates to:
+  /// **'Poznámka (voliteľné)'**
+  String get monthlyClosingsNoteOptional;
+
+  /// No description provided for @monthlyClosingsConfirmReopen.
+  ///
+  /// In sk, this message translates to:
+  /// **'Znovu otvoriť mesiac {month}?'**
+  String monthlyClosingsConfirmReopen(String month);
+
+  /// No description provided for @monthlyClosingsAlreadyClosed.
+  ///
+  /// In sk, this message translates to:
+  /// **'Tento mesiac je už uzavretý.'**
+  String get monthlyClosingsAlreadyClosed;
+
+  /// No description provided for @monthlyClosingsClosedSuccess.
+  ///
+  /// In sk, this message translates to:
+  /// **'Mesiac bol uzavretý.'**
+  String get monthlyClosingsClosedSuccess;
 }
 
 class _AppLocalizationsDelegate

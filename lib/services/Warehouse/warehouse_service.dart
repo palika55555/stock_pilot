@@ -2,9 +2,11 @@ import '../../models/warehouse.dart';
 import '../../models/warehouse_movement_record.dart';
 import '../../models/warehouse_transfer.dart';
 import '../Database/database_service.dart';
+import '../monthly_closure_service.dart';
 
 class WarehouseService {
   final DatabaseService _db = DatabaseService();
+  final MonthlyClosureService _closures = MonthlyClosureService();
 
   Future<List<Warehouse>> getAllWarehouses() async {
     return await _db.getWarehouses();
@@ -45,6 +47,7 @@ class WarehouseService {
 
   /// Vytvorí presun a aktualizuje zásoby (zdroj −qty, cieľ +qty alebo nová karta).
   Future<int> createWarehouseTransfer(WarehouseTransfer transfer) async {
+    await _closures.assertDateOpen(transfer.createdAt);
     return await _db.executeWarehouseTransfer(transfer);
   }
 

@@ -641,4 +641,64 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get importVatSale => 'DPH prodej %';
+
+  @override
+  String get updateAvailableTitle => 'Je k dispozici nová verze';
+
+  @override
+  String updateAvailableBody(String version, String current) {
+    return 'Je k dispozici verze $version (aktuální: $current).';
+  }
+
+  @override
+  String get updateDownload => 'Stáhnout';
+
+  @override
+  String get updateLater => 'Později';
+
+  @override
+  String get monthlyClosingsTitle => 'Měsíční uzávěrky';
+
+  @override
+  String get monthlyClosingsOpenScreen => 'Otevřít';
+
+  @override
+  String get monthlyClosingsIntro =>
+      'V uzavřeném kalendářním měsíci nelze vytvářet ani upravovat příjemky, výdejky, přesuny mezi sklady, inventuru, faktury, cenové nabídky ani související výrobní příkazy (podle data dokladu, data výroby nebo data na faktuře).';
+
+  @override
+  String get monthlyClosingsEmpty => 'Žádný uzavřený měsíc';
+
+  @override
+  String get monthlyClosingsCloseMonth => 'Uzavřít měsíc';
+
+  @override
+  String get monthlyClosingsReopenMonth => 'Znovu otevřít';
+
+  @override
+  String get monthlyClosingsClosedAt => 'Uzavřeno';
+
+  @override
+  String get monthlyClosingsBy => 'Kdo';
+
+  @override
+  String get monthlyClosingsAdminOnly =>
+      'Měsíce může uzavírat a otevírat pouze administrátor.';
+
+  @override
+  String get monthlyClosingsPickMonth => 'Vyberte měsíc';
+
+  @override
+  String get monthlyClosingsNoteOptional => 'Poznámka (volitelné)';
+
+  @override
+  String monthlyClosingsConfirmReopen(String month) {
+    return 'Znovu otevřít měsíc $month?';
+  }
+
+  @override
+  String get monthlyClosingsAlreadyClosed => 'Tento měsíc je již uzavřen.';
+
+  @override
+  String get monthlyClosingsClosedSuccess => 'Měsíc byl uzavřen.';
 }

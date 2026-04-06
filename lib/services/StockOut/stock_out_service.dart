@@ -3,6 +3,7 @@ import '../../models/invoice.dart';
 import '../../models/stock_out.dart';
 import '../../models/stock_movement.dart';
 import '../Database/database_service.dart';
+import '../monthly_closure_service.dart';
 import '../api_sync_service.dart' show syncStockOutsToBackend;
 import '../pricing/pricing_service.dart';
 
@@ -28,6 +29,7 @@ class InsufficientStockException implements Exception {
 class StockOutService {
   final DatabaseService _db = DatabaseService();
   final PricingService _pricingService = PricingService();
+  final MonthlyClosureService _closures = MonthlyClosureService();
 
   Future<List<StockOut>> getAllStockOuts() async {
     return await _db.getStockOuts();
@@ -192,6 +194,7 @@ class StockOutService {
 
     final status = isDraft ? StockOutStatus.rozpracovany : StockOutStatus.vykazana;
     final toInsert = stockOut.copyWith(documentNumber: number, status: status);
+    await _closures.assertDateOpen(toInsert.createdAt);
 
     final stockOutId = await _db.insertStockOut(toInsert);
 
@@ -238,6 +241,8 @@ class StockOutService {
     if (stockOut.id == null) return;
     final existing = await _db.getStockOutById(stockOut.id!);
     if (existing == null || existing.isStorned || existing.jeVysporiadana) return;
+    await _closures.assertDateOpen(existing.createdAt);
+    await _closures.assertDateOpen(stockOut.createdAt);
 
     final wasApproved = existing.isApproved;
     if (wasApproved) {
@@ -273,6 +278,7 @@ class StockOutService {
   Future<void> approveStockOut(int stockOutId) async {
     final stockOut = await _db.getStockOutById(stockOutId);
     if (stockOut == null || stockOut.isApproved || stockOut.isStorned) return;
+    await _closures.assertDateOpen(stockOut.createdAt);
     final items = await _db.getStockOutItems(stockOutId);
     if (items.isNotEmpty) {
       await _validateStock(items);
@@ -291,6 +297,7 @@ class StockOutService {
   Future<void> stornoStockOut(int stockOutId, {required bool returnToStock}) async {
     final stockOut = await _db.getStockOutById(stockOutId);
     if (stockOut == null || stockOut.isStorned) return;
+    await _closures.assertDateOpen(stockOut.createdAt);
     if (stockOut.isApproved && returnToStock) {
       await _revertStockOutFromProducts(stockOutId);
     }

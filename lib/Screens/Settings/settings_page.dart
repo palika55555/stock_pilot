@@ -17,6 +17,8 @@ import 'company_edit_screen.dart';
 import 'receipt_pdf_style_screen.dart';
 import 'product_kinds_screen.dart';
 import 'notification_settings_screen.dart';
+import 'oberon_import_screen.dart';
+import 'monthly_closing_screen.dart';
 
 class SettingsPage extends StatefulWidget {
   /// Rola prihláseného používateľa ('admin' alebo 'user'). Určuje napr. zobrazenie položky „Vymazať dáta z DB”.
@@ -550,6 +552,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     : l10n.defaultPath,
                 onTap: () => _showDbPathInfo(),
               ),
+              _buildListTile(
+                icon: Icons.event_busy_outlined,
+                title: l10n.monthlyClosingsTitle,
+                trailing: l10n.monthlyClosingsOpenScreen,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (context) => MonthlyClosingScreen(
+                        userRole: widget.userRole,
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (widget.userRole == 'admin') ...[
                 _buildListTile(
                   icon: Icons.backup_rounded,
@@ -562,6 +579,19 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: l10n.clearDatabase,
                   trailing: l10n.delete,
                   onTap: () => _showClearDatabaseDialog(context),
+                ),
+                _buildListTile(
+                  icon: Icons.input_rounded,
+                  title: 'Import z Oberon (SQLite)',
+                  trailing: 'Mapovanie stĺpcov',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (context) => const OberonImportScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ],

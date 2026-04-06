@@ -3,6 +3,7 @@ import '../../models/stock_out.dart';
 import '../../models/receipt.dart';
 import '../../models/product.dart';
 import '../Database/database_service.dart';
+import '../monthly_closure_service.dart';
 import '../Recipe/recipe_service.dart';
 import '../StockOut/stock_out_service.dart';
 import '../Receipt/receipt_service.dart';
@@ -14,6 +15,7 @@ class ProductionOrderService {
   final StockOutService _stockOutService = StockOutService();
   final ReceiptService _receiptService = ReceiptService();
   final NotificationService _notificationService = NotificationService();
+  final MonthlyClosureService _closures = MonthlyClosureService();
 
   Future<String> getNextOrderNumber() async => _db.getNextProductionOrderNumber();
 
@@ -40,6 +42,7 @@ class ProductionOrderService {
   Future<int> createOrder({
     required ProductionOrder order,
   }) async {
+    await _closures.assertDateOpen(order.productionDate);
     final id = await _db.insertProductionOrder(order);
     syncProductionOrdersToBackend().ignore();
     return id;
@@ -47,6 +50,9 @@ class ProductionOrderService {
 
   Future<void> updateOrder(ProductionOrder order) async {
     if (order.id != null) {
+      final existing = await _db.getProductionOrderById(order.id!);
+      if (existing != null) await _closures.assertDateOpen(existing.productionDate);
+      await _closures.assertDateOpen(order.productionDate);
       await _db.updateProductionOrder(order);
       syncProductionOrdersToBackend().ignore();
     }
@@ -56,6 +62,7 @@ class ProductionOrderService {
   Future<void> submitForApproval(int orderId, String creatorName) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.isDraft || !order.requiresApproval) return;
+    await _closures.assertDateOpen(order.productionDate);
     final updated = order.copyWith(
       status: ProductionOrderStatus.pending,
       submittedAt: DateTime.now(),
@@ -73,6 +80,7 @@ class ProductionOrderService {
   Future<void> approveOrder(int orderId, String approverUsername) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.isPending) return;
+    await _closures.assertDateOpen(order.productionDate);
     final updated = order.copyWith(
       status: ProductionOrderStatus.approved,
       approvedAt: DateTime.now(),
@@ -95,6 +103,7 @@ class ProductionOrderService {
   Future<void> rejectOrder(int orderId, String rejectionReason) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.isPending) return;
+    await _closures.assertDateOpen(order.productionDate);
     final updated = order.copyWith(
       status: ProductionOrderStatus.rejected,
       rejectedAt: DateTime.now(),
@@ -116,6 +125,7 @@ class ProductionOrderService {
   Future<void> setOrderBackToDraft(int orderId) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || order.status != ProductionOrderStatus.rejected) return;
+    await _closures.assertDateOpen(order.productionDate);
     final updated = order.copyWith(
       status: ProductionOrderStatus.draft,
       submittedAt: null,
@@ -130,6 +140,7 @@ class ProductionOrderService {
   Future<void> startProduction(int orderId) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.canStartProduction) return;
+    await _closures.assertDateOpen(order.productionDate);
     final updated = order.copyWith(
       status: ProductionOrderStatus.inProgress,
       startedAt: DateTime.now(),
@@ -150,6 +161,9 @@ class ProductionOrderService {
   }) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.canComplete) return;
+    final now = DateTime.now();
+    await _closures.assertDateOpen(now);
+    await _closures.assertDateOpen(order.productionDate);
     final recipe = await _db.getRecipeById(order.recipeId);
     if (recipe == null) return;
     final ingredients = await _db.getRecipeIngredients(order.recipeId);
@@ -162,7 +176,6 @@ class ProductionOrderService {
 
     // 1) Výdajka surovín
     final stockOutNumber = await _db.getNextStockOutNumber();
-    final now = DateTime.now();
     final stockOut = StockOut(
       documentNumber: stockOutNumber,
       createdAt: now,

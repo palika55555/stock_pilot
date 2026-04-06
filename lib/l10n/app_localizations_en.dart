@@ -640,4 +640,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importVatSale => 'Sale VAT %';
+
+  @override
+  String get updateAvailableTitle => 'A new version is available';
+
+  @override
+  String updateAvailableBody(String version, String current) {
+    return 'Version $version is available (current: $current).';
+  }
+
+  @override
+  String get updateDownload => 'Download';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get monthlyClosingsTitle => 'Monthly closings';
+
+  @override
+  String get monthlyClosingsOpenScreen => 'Open';
+
+  @override
+  String get monthlyClosingsIntro =>
+      'In a closed calendar month you cannot create or edit goods receipts, stock issues, warehouse transfers, inventory adjustments, invoices, price quotes, or related production orders (by document date, production date, or invoice dates).';
+
+  @override
+  String get monthlyClosingsEmpty => 'No closed months';
+
+  @override
+  String get monthlyClosingsCloseMonth => 'Close month';
+
+  @override
+  String get monthlyClosingsReopenMonth => 'Reopen';
+
+  @override
+  String get monthlyClosingsClosedAt => 'Closed';
+
+  @override
+  String get monthlyClosingsBy => 'By';
+
+  @override
+  String get monthlyClosingsAdminOnly =>
+      'Only an administrator can close or reopen months.';
+
+  @override
+  String get monthlyClosingsPickMonth => 'Select month';
+
+  @override
+  String get monthlyClosingsNoteOptional => 'Note (optional)';
+
+  @override
+  String monthlyClosingsConfirmReopen(String month) {
+    return 'Reopen month $month?';
+  }
+
+  @override
+  String get monthlyClosingsAlreadyClosed => 'This month is already closed.';
+
+  @override
+  String get monthlyClosingsClosedSuccess => 'Month closed.';
 }

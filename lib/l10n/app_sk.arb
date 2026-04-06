@@ -275,5 +275,34 @@
   "importVatPurchase": "DPH nákup %",
   "importPriceSaleWithoutVat": "Predaj bez DPH",
   "importPriceSaleWithVat": "Predaj s DPH",
-  "importVatSale": "DPH predaj %"
+  "importVatSale": "DPH predaj %",
+  "updateAvailableTitle": "Je dostupná nová verzia",
+  "updateAvailableBody": "K dispozícii je verzia {version} (aktuálna: {current}).",
+  "@updateAvailableBody": {
+    "placeholders": {
+      "version": { "type": "String" },
+      "current": { "type": "String" }
+    }
+  },
+  "updateDownload": "Stiahnuť",
+  "updateLater": "Neskôr",
+  "monthlyClosingsTitle": "Mesačné uzávierky",
+  "monthlyClosingsOpenScreen": "Otvoriť",
+  "monthlyClosingsIntro": "V uzavretom kalendárnom mesiaci nie je možné vytvárať ani upravovať príjemky, výdajky, presuny skladom, inventúru, faktúry, cenové ponuky ani súvisiace výrobné príkazy (podľa dátumu dokladu, dátumu výroby alebo dátumov na faktúre).",
+  "monthlyClosingsEmpty": "Žiadny uzavretý mesiac",
+  "monthlyClosingsCloseMonth": "Uzavrieť mesiac",
+  "monthlyClosingsReopenMonth": "Znovu otvoriť",
+  "monthlyClosingsClosedAt": "Uzavreté",
+  "monthlyClosingsBy": "Kto",
+  "monthlyClosingsAdminOnly": "Uzatváranie a otváranie mesiacov môže len administrátor.",
+  "monthlyClosingsPickMonth": "Vyberte mesiac",
+  "monthlyClosingsNoteOptional": "Poznámka (voliteľné)",
+  "monthlyClosingsConfirmReopen": "Znovu otvoriť mesiac {month}?",
+  "@monthlyClosingsConfirmReopen": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "monthlyClosingsAlreadyClosed": "Tento mesiac je už uzavretý.",
+  "monthlyClosingsClosedSuccess": "Mesiac bol uzavretý."
 }

@@ -12,6 +12,7 @@ import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/Common/change_password_dialog.dart';
 import '../../widgets/welcome/welcome_reveal_screen.dart';
+import '../../services/app_update_service.dart';
 import 'create_user_screen.dart';
 
 /// Tmavé pozadie s mriežkou a zlatou žiarou zhora. [glowOpacity] pre jemné pulzovanie (0.1–0.2).
@@ -115,6 +116,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     )..repeat(reverse: true);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) AppUpdateService.maybeShowUpdateBanner(context);
+    });
   }
 
   Future<void> _loadSavedLogin() async {

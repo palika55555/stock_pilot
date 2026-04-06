@@ -15,6 +15,7 @@ import '../../services/sync_check_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/auto_push_service.dart';
 import '../../services/sync/sync_manager.dart';
+import '../../services/app_update_service.dart';
 import '../../services/Notifications/notification_service.dart';
 import '../../services/auto_lock_service.dart';
 import '../../services/product_cache.dart';
@@ -87,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) AutoLockService.instance.start(context);
+      AppUpdateService.maybeShowUpdateBanner(context);
       final msg = widget.initialSnackBarText;
       if (msg != null && msg.isNotEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

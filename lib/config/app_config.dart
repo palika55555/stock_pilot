@@ -12,4 +12,17 @@ class AppConfig {
 
   /// Plná base URL pre API volania.
   static const String apiBase = '$backendApiBase$apiPrefix';
+
+  /// URL JSON manifestu s najnovšou verziou aplikácie (napr. GitHub raw).
+  /// Príklad:
+  /// `https://raw.githubusercontent.com/OWNER/repo/main/config/version.json`
+  /// Prázdne = kontrola aktualizácií vypnutá.
+  static const String appUpdateManifestUrlDefault = '';
+
+  /// Priorita: `--dart-define=APP_UPDATE_MANIFEST_URL=...` → potom [appUpdateManifestUrlDefault].
+  static String get appUpdateManifestUrl {
+    const env = String.fromEnvironment('APP_UPDATE_MANIFEST_URL');
+    if (env.isNotEmpty) return env;
+    return appUpdateManifestUrlDefault;
+  }
 }

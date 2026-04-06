@@ -30,6 +30,8 @@ import '../../models/production_batch_recipe_item.dart';
 import '../../models/pallet.dart';
 import '../../models/recipe.dart';
 import '../../models/production_order.dart';
+import '../../models/monthly_closure.dart';
+import '../../models/monthly_closure_validation.dart';
 import '../data_change_notifier.dart';
 
 class DatabaseService {
@@ -235,7 +237,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 39,
+      version: 40,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -1067,6 +1069,15 @@ class DatabaseService {
         actual_qty INTEGER NOT NULL DEFAULT 0,
         difference INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (audit_id) REFERENCES inventory_audits(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS monthly_closures (
+        year_month TEXT PRIMARY KEY NOT NULL,
+        closed_at TEXT NOT NULL,
+        closed_by TEXT,
+        notes TEXT
       )
     ''');
 
@@ -2159,6 +2170,17 @@ class DatabaseService {
       }
       // Existujúce plaintext heslá ponecháme — pri ďalšom prihlásení
       // sa automaticky zahashujú (viď login_page.dart).
+    }
+
+    if (oldVersion < 40) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS monthly_closures (
+          year_month TEXT PRIMARY KEY NOT NULL,
+          closed_at TEXT NOT NULL,
+          closed_by TEXT,
+          notes TEXT
+        )
+      ''');
     }
   }
 
@@ -3296,6 +3318,205 @@ class DatabaseService {
     return v != null ? (v as num).toDouble() : null;
   }
 
+  // Mesačné uzávierky (globálne pre databázu)
+  Future<bool> isYearMonthClosed(String yearMonth) async {
+    final db = await database;
+    final r = await db.query(
+      'monthly_closures',
+      columns: ['year_month'],
+      where: 'year_month = ?',
+      whereArgs: [yearMonth],
+      limit: 1,
+    );
+    return r.isNotEmpty;
+  }
+
+  Future<List<MonthlyClosure>> getMonthlyClosures() async {
+    final db = await database;
+    final maps = await db.query(
+      'monthly_closures',
+      orderBy: 'year_month DESC',
+    );
+    return maps.map(MonthlyClosure.fromMap).toList();
+  }
+
+  Future<void> insertMonthlyClosure({
+    required String yearMonth,
+    String? closedBy,
+    String? notes,
+  }) async {
+    if (await isYearMonthClosed(yearMonth)) {
+      throw Exception('Mesiac $yearMonth je už uzavretý.');
+    }
+    final db = await database;
+    await db.insert('monthly_closures', {
+      'year_month': yearMonth,
+      'closed_at': DateTime.now().toIso8601String(),
+      'closed_by': closedBy,
+      'notes': notes,
+    });
+    DataChangeNotifier.notify();
+  }
+
+  Future<void> deleteMonthlyClosure(String yearMonth) async {
+    final db = await database;
+    await db.delete(
+      'monthly_closures',
+      where: 'year_month = ?',
+      whereArgs: [yearMonth],
+    );
+    DataChangeNotifier.notify();
+  }
+
+  /// Kontrola dokladov pred uzavretím kalendárneho mesiaca [yearMonth] (YYYY-MM).
+  /// Blokujúce zistenia zabránia uzavretiu; varovania je možné obísť potvrdením.
+  Future<MonthlyClosureValidationResult> validateBeforeMonthClose(
+    String yearMonth,
+  ) async {
+    final blocking = <String>[];
+    final warnings = <String>[];
+
+    if (_currentUserId == null || _currentUserId!.isEmpty) {
+      blocking.add('Nie ste prihlásený — kontrola nedostupná.');
+      return MonthlyClosureValidationResult(
+        blocking: blocking,
+        warnings: warnings,
+      );
+    }
+
+    final parts = yearMonth.split('-');
+    if (parts.length != 2) {
+      blocking.add('Neplatný formát mesiaca.');
+      return MonthlyClosureValidationResult(
+        blocking: blocking,
+        warnings: warnings,
+      );
+    }
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (y == null || m == null || m < 1 || m > 12) {
+      blocking.add('Neplatný formát mesiaca.');
+      return MonthlyClosureValidationResult(
+        blocking: blocking,
+        warnings: warnings,
+      );
+    }
+
+    final start = DateTime(y, m, 1);
+    final endNext = DateTime(y, m + 1, 1);
+    final startIso = start.toIso8601String();
+    final endIso = endNext.toIso8601String();
+    final prodStart =
+        '${y.toString().padLeft(4, '0')}-${m.toString().padLeft(2, '0')}-01';
+    final prodEndExclusive = DateTime(y, m + 1, 1)
+        .toIso8601String()
+        .split('T')
+        .first;
+
+    final db = await database;
+    final uid = _currentUserId!;
+
+    final rReceipts = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM inbound_receipts
+      WHERE user_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status IN ('rozpracovany', 'vykazana', 'pending')
+    ''', [uid, startIso, endIso]);
+    final nRec = (rReceipts.first['c'] as int?) ?? 0;
+    if (nRec > 0) {
+      blocking.add(
+        'Príjemky v neukončenom stave (rozpracovaná / vykázaná / na schválení): $nRec',
+      );
+    }
+
+    final rStockOut = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM stock_outs
+      WHERE user_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status IN ('rozpracovany', 'vykazana')
+    ''', [uid, startIso, endIso]);
+    final nSo = (rStockOut.first['c'] as int?) ?? 0;
+    if (nSo > 0) {
+      blocking.add(
+        'Výdajky bez schválenia (rozpracovaná / vykázaná): $nSo',
+      );
+    }
+
+    final rSoUnsettled = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM stock_outs
+      WHERE user_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status = 'schvalena'
+        AND (je_vysporiadana IS NULL OR je_vysporiadana = 0)
+    ''', [uid, startIso, endIso]);
+    final nSoU = (rSoUnsettled.first['c'] as int?) ?? 0;
+    if (nSoU > 0) {
+      warnings.add(
+        'Schválené výdajky bez vysporiadania (väzba na faktúru): $nSoU',
+      );
+    }
+
+    final rInv = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM invoices
+      WHERE user_id = ?
+        AND status = 'draft'
+        AND (
+          (issue_date >= ? AND issue_date < ?)
+          OR (tax_date >= ? AND tax_date < ?)
+        )
+    ''', [uid, startIso, endIso, startIso, endIso]);
+    final nInv = (rInv.first['c'] as int?) ?? 0;
+    if (nInv > 0) {
+      blocking.add(
+        'Faktúry v koncepte (vystavenie alebo DUZP v tomto mesiaci): $nInv',
+      );
+    }
+
+    final rPo = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM production_orders
+      WHERE user_id = ?
+        AND production_date >= ? AND production_date < ?
+        AND status NOT IN ('completed', 'cancelled')
+    ''', [uid, prodStart, prodEndExclusive]);
+    final nPo = (rPo.first['c'] as int?) ?? 0;
+    if (nPo > 0) {
+      blocking.add(
+        'Nedokončené výrobné príkazy (dátum výroby v mesiaci): $nPo',
+      );
+    }
+
+    final rQu = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM quotes
+      WHERE user_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status = 'draft'
+    ''', [uid, startIso, endIso]);
+    final nQu = (rQu.first['c'] as int?) ?? 0;
+    if (nQu > 0) {
+      warnings.add(
+        'Cenové ponuky v koncepte (vytvorené v tomto mesiaci): $nQu',
+      );
+    }
+
+    final rRej = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM inbound_receipts
+      WHERE user_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status = 'rejected'
+    ''', [uid, startIso, endIso]);
+    final nRej = (rRej.first['c'] as int?) ?? 0;
+    if (nRej > 0) {
+      warnings.add(
+        'Zamietnuté príjemky v danom mesiaci (odporúčame skontrolovať): $nRej',
+      );
+    }
+
+    return MonthlyClosureValidationResult(
+      blocking: blocking,
+      warnings: warnings,
+    );
+  }
+
   // Inbound receipts
   Future<int> insertInboundReceipt(InboundReceipt receipt) async {
     Database db = await database;
@@ -4127,6 +4348,19 @@ class DatabaseService {
       orderBy: 'id ASC',
     );
     return maps.map((m) => QuoteItem.fromMap(m)).toList();
+  }
+
+  Future<QuoteItem?> getQuoteItemById(int itemId) async {
+    Database db = await database;
+    if (_currentUserId == null) return null;
+    final maps = await db.query(
+      'quote_items',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [itemId, _currentUserId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return QuoteItem.fromMap(maps.first);
   }
 
   Future<int> insertQuoteItem(QuoteItem item) async {
@@ -5626,6 +5860,10 @@ class DatabaseService {
     List<Product>? allProducts,
   }) async {
     Database db = await database;
+    final auditNow = DateTime.now();
+    if (await isYearMonthClosed(formatYearMonth(auditNow))) {
+      throw MonthClosedException(formatYearMonth(auditNow));
+    }
 
     int? auditId;
     if (allProducts != null && allProducts.isNotEmpty) {

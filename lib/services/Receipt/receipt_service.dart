@@ -3,12 +3,14 @@ import '../../models/product.dart';
 import '../../models/receipt.dart';
 import '../../models/stock_out.dart';
 import '../Database/database_service.dart';
+import '../monthly_closure_service.dart';
 import '../Notifications/notification_service.dart';
 import '../api_sync_service.dart' show syncReceiptsToBackend, syncStockOutsToBackend;
 
 class ReceiptService {
   final DatabaseService _db = DatabaseService();
   final NotificationService _notificationService = NotificationService();
+  final MonthlyClosureService _closures = MonthlyClosureService();
 
   static const String _transferCode = 'TRANSFER';
 
@@ -29,6 +31,9 @@ class ReceiptService {
 
   /// Vymaže neschválenú príjemku a jej položky.
   Future<bool> deleteReceipt(int receiptId) async {
+    final existing = await _db.getInboundReceiptById(receiptId);
+    if (existing == null) return false;
+    await _closures.assertDateOpen(existing.createdAt);
     final n = await _db.deleteInboundReceipt(receiptId);
     return n > 0;
   }
@@ -51,6 +56,7 @@ class ReceiptService {
     List<ReceiptAcquisitionCost>? acquisitionCosts,
     bool isDraft = false,
   }) async {
+    await _closures.assertDateOpen(receipt.createdAt);
     final isTransfer = receipt.movementTypeCode == _transferCode &&
         receipt.sourceWarehouseId != null &&
         receipt.warehouseId != null;
@@ -186,6 +192,8 @@ class ReceiptService {
     if (receipt.id == null) return;
     final existing = await _db.getInboundReceiptById(receipt.id!);
     if (existing == null || existing.isApproved) return;
+    await _closures.assertDateOpen(existing.createdAt);
+    await _closures.assertDateOpen(receipt.createdAt);
 
     await _db.deleteInboundReceiptItemsByReceiptId(receipt.id!);
     await _db.deleteReceiptAcquisitionCostsByReceiptId(receipt.id!);
@@ -229,6 +237,7 @@ class ReceiptService {
   Future<void> submitForApproval(int receiptId, String creatorName) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null || receipt.isApproved || receipt.isPendingApproval) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final now = DateTime.now();
     final updated = receipt.copyWith(
       status: InboundReceiptStatus.pending,
@@ -243,6 +252,7 @@ class ReceiptService {
   Future<void> recallReceipt(int receiptId, String creatorName) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null || !receipt.isPendingApproval) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final updated = receipt.copyWith(
       status: InboundReceiptStatus.vykazana,
       submittedAt: null,
@@ -256,6 +266,7 @@ class ReceiptService {
   Future<void> rejectReceipt(int receiptId, String rejectionReason) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null || !receipt.isPendingApproval) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final now = DateTime.now();
     final updated = receipt.copyWith(
       status: InboundReceiptStatus.rejected,
@@ -271,6 +282,7 @@ class ReceiptService {
   Future<void> cancelReceipt(int receiptId) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null || receipt.stockApplied) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final updated = receipt.copyWith(status: InboundReceiptStatus.cancelled);
     await _db.updateInboundReceiptFull(updated);
     syncReceiptsToBackend().ignore();
@@ -280,6 +292,7 @@ class ReceiptService {
   Future<void> reverseReceipt(int receiptId, String userName, String reason, {bool deductFromStock = true}) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final isReported = receipt.stockApplied ||
         receipt.isApproved ||
         receipt.status == InboundReceiptStatus.vykazana;
@@ -359,6 +372,7 @@ class ReceiptService {
   Future<void> _applyReceiptToStock(int receiptId) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null || receipt.stockApplied) return;
+    await _closures.assertDateOpen(receipt.createdAt);
     final items = await _db.getInboundReceiptItems(receiptId);
     final today = DateTime.now().toIso8601String().substring(0, 10);
     for (final item in items) {

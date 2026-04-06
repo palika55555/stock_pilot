@@ -2,10 +2,17 @@ import '../../models/invoice.dart';
 import '../../models/quote.dart';
 import '../../models/customer.dart';
 import '../Database/database_service.dart';
+import '../monthly_closure_service.dart';
 import '../api_sync_service.dart' show syncInvoicesToBackend;
 
 class InvoiceService {
   final DatabaseService _db = DatabaseService();
+  final MonthlyClosureService _closures = MonthlyClosureService();
+
+  Future<void> _assertInvoiceDatesOpen(Invoice invoice) async {
+    await _closures.assertDateOpen(invoice.issueDate);
+    await _closures.assertDateOpen(invoice.taxDate);
+  }
 
   // ── Číslovanie ────────────────────────────────────────────────────────────
 
@@ -16,6 +23,7 @@ class InvoiceService {
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
   Future<int> createInvoice(Invoice invoice, List<InvoiceItem> items) async {
+    await _assertInvoiceDatesOpen(invoice);
     final id = await _db.insertInvoice(invoice);
     for (final item in items) {
       await _db.insertInvoiceItem(item.copyWith(invoiceId: id));
@@ -37,6 +45,11 @@ class InvoiceService {
   }
 
   Future<int> updateInvoice(Invoice invoice, List<InvoiceItem> items) async {
+    if (invoice.id != null) {
+      final existing = await _db.getInvoiceById(invoice.id!);
+      if (existing != null) await _assertInvoiceDatesOpen(existing);
+    }
+    await _assertInvoiceDatesOpen(invoice);
     final n = await _db.updateInvoice(invoice);
     if (invoice.id != null) {
       await _db.deleteInvoiceItemsByInvoiceId(invoice.id!);
@@ -49,6 +62,8 @@ class InvoiceService {
   }
 
   Future<int> deleteInvoice(int id) async {
+    final existing = await _db.getInvoiceById(id);
+    if (existing != null) await _assertInvoiceDatesOpen(existing);
     final n = await _db.deleteInvoice(id);
     syncInvoicesToBackend().ignore();
     return n;

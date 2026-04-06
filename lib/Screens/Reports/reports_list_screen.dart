@@ -6,6 +6,7 @@ import 'price_history_report_screen.dart';
 import 'receipt_summary_report_screen.dart';
 import 'supplier_report_screen.dart';
 import 'warehouse_movements_report_screen.dart';
+import 'monthly_closures_report_screen.dart';
 
 /// Sekcia Reporty – zoznam typov reportov.
 class ReportsListScreen extends StatelessWidget {
@@ -25,6 +26,18 @@ class ReportsListScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _ReportTile(
+            icon: Icons.event_busy_rounded,
+            title: 'Mesačné uzávierky',
+            subtitle: 'Zoznam uzavretých mesiacov, PDF tlač a zdieľanie',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MonthlyClosuresReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           _ReportTile(
             icon: Icons.receipt_long_rounded,
             title: 'Prehľad príjemiek',
