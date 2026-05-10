@@ -1,13 +1,17 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAuth, getAuthHeaders } from '../utils/auth'
-import { apiFetch } from '../utils/apiFetch'
 import { API_BASE_FOR_CALLS } from '../config'
 import './sync-pages.css'
 
 function fmtDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('sk-SK')
+  const d = typeof iso === 'string' ? iso.slice(0, 10) : iso
+  try {
+    return new Date(d).toLocaleDateString('sk-SK')
+  } catch {
+    return '—'
+  }
 }
 
 function fmtNum(v, dec = 2) {
@@ -19,13 +23,13 @@ function fmtEur(v) {
 }
 
 const STATUS_MAP = {
-  draft:       { label: 'Koncept',          cls: 'sync-badge--gray' },
-  pending:     { label: 'Čaká na schválenie', cls: 'sync-badge--amber' },
-  approved:    { label: 'Schválený',         cls: 'sync-badge--green' },
-  rejected:    { label: 'Zamietnutý',        cls: 'sync-badge--red' },
-  in_progress: { label: 'Prebieha výroba',   cls: 'sync-badge--inprogress' },
-  completed:   { label: 'Dokončený',         cls: 'sync-badge--completed' },
-  cancelled:   { label: 'Zrušený',           cls: 'sync-badge--red' },
+  draft: { label: 'Koncept', cls: 'sync-badge--gray' },
+  pending: { label: 'Čaká na schválenie', cls: 'sync-badge--amber' },
+  approved: { label: 'Schválený', cls: 'sync-badge--green' },
+  rejected: { label: 'Zamietnutý', cls: 'sync-badge--red' },
+  in_progress: { label: 'Prebieha výroba', cls: 'sync-badge--inprogress' },
+  completed: { label: 'Dokončený', cls: 'sync-badge--completed' },
+  cancelled: { label: 'Zrušený', cls: 'sync-badge--red' },
 }
 
 function statusBadge(status) {
@@ -37,10 +41,17 @@ export default function VyrobneProkazaPage() {
   const navigate = useNavigate()
   const [auth, setAuth] = useState(null)
   const [orders, setOrders] = useState([])
+  const [recipes, setRecipes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [recipeId, setRecipeId] = useState('')
+  const [plannedQty, setPlannedQty] = useState('1')
+  const [prodDate, setProdDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [poNotes, setPoNotes] = useState('')
+  const [requiresApproval, setRequiresApproval] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     const a = getAuth()
@@ -48,16 +59,28 @@ export default function VyrobneProkazaPage() {
     setAuth(a)
   }, [navigate])
 
-  useEffect(() => {
-    if (!auth) return
-    let cancelled = false
+  const loadOrders = () => {
+    if (!auth?.token) return
     setLoading(true)
     fetch(`${API_BASE_FOR_CALLS}/production-orders/all`, { headers: getAuthHeaders(auth) })
-      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
-      .then((d) => { if (!cancelled) setOrders(Array.isArray(d?.production_orders) ? d.production_orders : []) })
-      .catch((e) => { if (!cancelled) setError(`Načítanie zlyhalo (${e})`) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => { setOrders(Array.isArray(d?.production_orders) ? d.production_orders : []) })
+      .catch((e) => setError(`Načítanie zlyhalo (${e})`))
+      .finally(() => setLoading(false))
+  }
+
+  const loadRecipes = () => {
+    if (!auth?.token) return
+    fetch(`${API_BASE_FOR_CALLS}/recipes/all`, { headers: getAuthHeaders(auth) })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setRecipes(Array.isArray(d?.recipes) ? d.recipes : []))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!auth) return
+    loadOrders()
+    loadRecipes()
   }, [auth])
 
   const filtered = useMemo(() => {
@@ -72,6 +95,63 @@ export default function VyrobneProkazaPage() {
     })
   }, [orders, search, statusFilter])
 
+  const createOrder = (e) => {
+    e.preventDefault()
+    if (!auth?.token) return
+    const rid = parseInt(recipeId, 10)
+    const pq = parseFloat(String(plannedQty).replace(',', '.'))
+    if (!rid || !(pq > 0)) {
+      setError('Vyberte receptúru a zadajte plánované množstvo.')
+      return
+    }
+    setError('')
+    setCreating(true)
+    fetch(`${API_BASE_FOR_CALLS}/production-orders`, {
+      method: 'POST',
+      headers: getAuthHeaders(auth),
+      body: JSON.stringify({
+        recipe_id: rid,
+        planned_quantity: pq,
+        production_date: prodDate,
+        notes: poNotes.trim() || undefined,
+        requires_approval: requiresApproval,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.error)))))
+      .then(() => {
+        setRecipeId('')
+        setPlannedQty('1')
+        setPoNotes('')
+        setRequiresApproval(false)
+        loadOrders()
+      })
+      .catch((err) => setError(err.message || 'Vytvorenie zlyhalo'))
+      .finally(() => setCreating(false))
+  }
+
+  const patchStatus = (orderId, status, extra = {}) => {
+    if (!auth?.token) return
+    setPatching(orderId)
+    setError('')
+    fetch(`${API_BASE_FOR_CALLS}/production-orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(auth),
+      body: JSON.stringify({ status, ...extra }),
+    })
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.error)))))
+      .then(() => loadOrders())
+      .catch((err) => setError(err.message || 'Zmena stavu zlyhala'))
+      .finally(() => setPatching(null))
+  }
+
+  const deleteOrder = (orderId) => {
+    if (!auth?.token || !window.confirm('Trvalo zmazať tento príkaz?')) return
+    fetch(`${API_BASE_FOR_CALLS}/production-orders/${orderId}`, { method: 'DELETE', headers: getAuthHeaders(auth) })
+      .then((r) => (r.ok ? null : r.json().then((d) => Promise.reject(new Error(d.error)))))
+      .then(() => loadOrders())
+      .catch((err) => setError(err.message || 'Zmazanie zlyhalo'))
+  }
+
   if (!auth) return null
 
   return (
@@ -82,9 +162,35 @@ export default function VyrobneProkazaPage() {
           <h2 className="dashboard-overview-title">Výrobné príkazy</h2>
         </div>
 
-        <div className="sync-readonly-banner">
-          ℹ️ Dáta sú synchronizované z Flutter aplikácie. Editácia prebieha v aplikácii.
-        </div>
+        <form onSubmit={createOrder} className="sync-filters" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <strong>Nový príkaz (web)</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <select className="sync-select" value={recipeId} onChange={(e) => setRecipeId(e.target.value)} style={{ minWidth: '220px' }}>
+              <option value="">— Receptúra —</option>
+              {recipes.map((r) => (
+                <option key={r.id} value={r.id}>{r.name || r.finished_product_name || `Recept #${r.id}`}</option>
+              ))}
+            </select>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              Množstvo
+              <input className="sync-search" type="text" inputMode="decimal" value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} style={{ width: '100px' }} />
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              Dátum
+              <input className="sync-search" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value.slice(0, 10))} />
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input type="checkbox" checked={requiresApproval} onChange={(e) => setRequiresApproval(e.target.checked)} />
+              Vyžaduje schválenie
+            </label>
+          </div>
+          <input className="sync-search" placeholder="Poznámky" value={poNotes} onChange={(e) => setPoNotes(e.target.value)} />
+          <button type="submit" className="dashboard-scan-card" style={{ alignSelf: 'flex-start', padding: '0.5rem 1rem' }} disabled={creating}>
+            {creating ? 'Ukladám…' : 'Vytvoriť príkaz'}
+          </button>
+        </form>
+
+        {error ? <p className="customers-error">{error}</p> : null}
 
         <div className="sync-filters">
           <input
@@ -107,13 +213,9 @@ export default function VyrobneProkazaPage() {
             <span className="btn-spinner" aria-hidden="true" />
             <span>Načítavam výrobné príkazy...</span>
           </div>
-        ) : error ? (
-          <p className="customers-error">{error}</p>
         ) : filtered.length === 0 ? (
           <div className="sync-empty">
-            {orders.length === 0
-              ? 'Žiadne výrobné príkazy. Vytvorte ich v mobilnej aplikácii.'
-              : 'Žiadne výsledky pre zadaný filter.'}
+            {orders.length === 0 ? 'Žiadne výrobné príkazy. Vytvorte prvý vyššie.' : 'Žiadne výsledky pre zadaný filter.'}
           </div>
         ) : (
           <ul className="sync-list">
@@ -135,7 +237,61 @@ export default function VyrobneProkazaPage() {
                     {o.total_cost != null && Number(o.total_cost) > 0 && (
                       <span>Náklady: <span className="sync-list-item__accent">{fmtEur(o.total_cost)}</span></span>
                     )}
-                    {o.created_by_username && <span>Vytvoril: {o.created_by_username}</span>}
+                  </div>
+                  <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                    {o.status === 'draft' && (
+                      <>
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'pending')}>Odoslať</button>
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'approved')}>Schváliť</button>
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'in_progress')}>Spustiť výrobu</button>
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => deleteOrder(o.id)}>Zmazať</button>
+                      </>
+                    )}
+                    {o.status === 'pending' && (
+                      <>
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'approved')}>Schváliť</button>
+                        <input className="sync-search" placeholder="Dôvod" id={`reject-${o.id}`} style={{ width: '140px' }} />
+                        <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => {
+                          const el = document.getElementById(`reject-${o.id}`)
+                          patchStatus(o.id, 'rejected', { rejection_reason: el?.value?.trim() || null })
+                          if (el) el.value = ''
+                        }}>Zamietnuť</button>
+                      </>
+                    )}
+                    {o.status === 'approved' && (
+                      <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'in_progress')}>Spustiť výrobu</button>
+                    )}
+                    {o.status === 'rejected' && (
+                      <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => deleteOrder(o.id)}>Zmazať</button>
+                    )}
+                    {(o.status === 'in_progress' || o.status === 'approved') && (
+                      <>
+                        <input
+                          className="sync-search"
+                          placeholder="Skutočné množ."
+                          style={{ width: '120px' }}
+                          id={`complete-qty-${o.id}`}
+                        />
+                        <button
+                          type="button"
+                          className="dashboard-scan-card"
+                          style={{ padding: '0.35rem 0.75rem' }}
+                          disabled={patching === o.id}
+                          onClick={() => {
+                            const el = document.getElementById(`complete-qty-${o.id}`)
+                            const raw = el?.value?.trim() || ''
+                            const aq = raw ? parseFloat(String(raw).replace(',', '.')) : undefined
+                            patchStatus(o.id, 'completed', { actual_quantity: aq })
+                            if (el) el.value = ''
+                          }}
+                        >
+                          Dokončiť
+                        </button>
+                      </>
+                    )}
+                    {['draft', 'pending', 'approved', 'in_progress'].includes(o.status) && (
+                      <button type="button" className="dashboard-back" disabled={patching === o.id} onClick={() => patchStatus(o.id, 'cancelled')}>Zrušiť</button>
+                    )}
                   </div>
                 </div>
               </li>

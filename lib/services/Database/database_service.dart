@@ -59,7 +59,9 @@ class DatabaseService {
   static Future<void> setCurrentUser(String userId) async {
     _currentUserId = userId;
     // SharedPreferences write beží na pozadí – neblokuje UI
-    SharedPreferences.getInstance().then((prefs) => prefs.setString(_kCurrentUserIdKey, userId));
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString(_kCurrentUserIdKey, userId),
+    );
     await _maybeBackfillInvoiceUserIdsOnce();
   }
 
@@ -1171,9 +1173,7 @@ class DatabaseService {
       if (await File(path).exists()) {
         await File(path).delete();
       }
-    } catch (e) {
-
-    }
+    } catch (e) {}
 
     Database db = await database;
     await db.delete('users');
@@ -2085,7 +2085,9 @@ class DatabaseService {
       final existingTypes = await db.rawQuery(
         "SELECT code FROM receipt_movement_types WHERE code IN ('DOMESTIC','FOREIGN','INTERNAL','TRANSFER_RECEIPT')",
       );
-      final existingCodes = existingTypes.map((r) => r['code'] as String).toSet();
+      final existingCodes = existingTypes
+          .map((r) => r['code'] as String)
+          .toSet();
       const oberonTypes = [
         {'code': 'DOMESTIC', 'name': 'Tuzemsko'},
         {'code': 'FOREIGN', 'name': 'Zahraničie'},
@@ -2574,7 +2576,8 @@ class DatabaseService {
     if (q != null && q.isNotEmpty) {
       final like = '%${q.toLowerCase()}%';
       parts.add(
-          '(LOWER(name) LIKE ? OR LOWER(plu) LIKE ? OR LOWER(IFNULL(category, \'\')) LIKE ?)');
+        '(LOWER(name) LIKE ? OR LOWER(plu) LIKE ? OR LOWER(IFNULL(category, \'\')) LIKE ?)',
+      );
       args.addAll([like, like, like]);
     }
 
@@ -2675,7 +2678,7 @@ class DatabaseService {
 
   /// Súhrnné štatistiky pre aktuálne filtre (celá množstvo / hodnota / počet nízkeho stavu).
   Future<({double totalQty, double totalValue, int lowStockCount})>
-      aggregateWarehouseSuppliesFiltered({
+  aggregateWarehouseSuppliesFiltered({
     int? warehouseId,
     String? searchQuery,
     String? statusFilter,
@@ -2689,17 +2692,14 @@ class DatabaseService {
       searchQuery: searchQuery,
       statusFilter: statusFilter,
     );
-    final rows = await db.rawQuery(
-      '''
+    final rows = await db.rawQuery('''
       SELECT
         COALESCE(SUM(qty), 0) AS total_qty,
         COALESCE(SUM(price * qty), 0) AS total_value,
         SUM(CASE WHEN min_quantity > 0 AND qty < min_quantity THEN 1 ELSE 0 END) AS low_stock
       FROM products
       WHERE ${f.where}
-      ''',
-      f.args,
-    );
+      ''', f.args);
     final row = rows.first;
     final tq = row['total_qty'];
     final tv = row['total_value'];
@@ -3463,19 +3463,27 @@ class DatabaseService {
     int receiptId,
   ) async {
     Database db = await database;
-    final maps = await db.query(
-      'receipt_acquisition_costs',
-      where: 'receipt_id = ?',
-      whereArgs: [receiptId],
-      orderBy: 'sort_order ASC, id ASC',
-    );
+    final maps = _currentUserId != null
+        ? await db.query(
+            'receipt_acquisition_costs',
+            where: 'receipt_id = ? AND user_id = ?',
+            whereArgs: [receiptId, _currentUserId],
+            orderBy: 'sort_order ASC, id ASC',
+          )
+        : await db.query(
+            'receipt_acquisition_costs',
+            where: 'receipt_id = ?',
+            whereArgs: [receiptId],
+            orderBy: 'sort_order ASC, id ASC',
+          );
     return maps.map((m) => ReceiptAcquisitionCost.fromMap(m)).toList();
   }
 
   Future<int> insertReceiptAcquisitionCost(ReceiptAcquisitionCost cost) async {
     Database db = await database;
-    final map = cost.toMap();
+    final map = Map<String, dynamic>.from(cost.toMap());
     map.remove('id');
+    if (_currentUserId != null) map['user_id'] = _currentUserId;
     final _r = await db.insert('receipt_acquisition_costs', map);
     DataChangeNotifier.notify();
     return _r;
@@ -3483,11 +3491,17 @@ class DatabaseService {
 
   Future<int> deleteReceiptAcquisitionCostsByReceiptId(int receiptId) async {
     Database db = await database;
-    final _r = await db.delete(
-      'receipt_acquisition_costs',
-      where: 'receipt_id = ?',
-      whereArgs: [receiptId],
-    );
+    final _r = _currentUserId != null
+        ? await db.delete(
+            'receipt_acquisition_costs',
+            where: 'receipt_id = ? AND user_id = ?',
+            whereArgs: [receiptId, _currentUserId],
+          )
+        : await db.delete(
+            'receipt_acquisition_costs',
+            where: 'receipt_id = ?',
+            whereArgs: [receiptId],
+          );
     DataChangeNotifier.notify();
     return _r;
   }
@@ -3846,7 +3860,6 @@ class DatabaseService {
       await DatabaseService.restoreCurrentUser();
     }
     if (_currentUserId == null) {
-
       throw Exception('User not logged in – cannot insert customer');
     }
     final db = await database;
@@ -3863,7 +3876,6 @@ class DatabaseService {
       await DatabaseService.restoreCurrentUser();
     }
     if (_currentUserId == null) {
-
       return [];
     }
 
@@ -4287,9 +4299,7 @@ class DatabaseService {
           SELECT user_id FROM invoices WHERE invoices.id = invoice_items.invoice_id
         ) WHERE user_id IS NULL
       ''');
-    } catch (e, st) {
-
-    }
+    } catch (e, st) {}
   }
 
   /// Generuje ďalšie číslo faktúry pre daný typ (napr. FAK-2026-0001).
@@ -4905,10 +4915,8 @@ class DatabaseService {
     if (uid == null) await DatabaseService.restoreCurrentUser();
     uid = _currentUserId;
     if (uid == null) {
-
       return _emptyDashboardStats();
     }
-
 
     Database db = await database;
 
@@ -4918,7 +4926,6 @@ class DatabaseService {
       [uid],
     );
     int productCount = Sqflite.firstIntValue(productCountResult) ?? 0;
-
 
     // Počet zákazníkov
     final customerCountResult = await db.rawQuery(
@@ -5226,12 +5233,18 @@ class DatabaseService {
     for (final r in receipts) {
       final items = await db.query(
         'inbound_receipt_items',
-        where: 'receipt_id = ?',
-        whereArgs: [r['id']],
+        where: _currentUserId != null
+            ? 'receipt_id = ? AND user_id = ?'
+            : 'receipt_id = ?',
+        whereArgs: _currentUserId != null
+            ? [r['id'], _currentUserId]
+            : [r['id']],
       );
       double total = 0;
       for (final i in items) {
-        total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
+        total +=
+            ((i['unit_price'] as num?) ?? 0).toDouble() *
+            ((i['qty'] as num?) ?? 0).toDouble();
       }
       result.add({...r, 'total': total});
     }
@@ -5255,12 +5268,18 @@ class DatabaseService {
     for (final o in outs) {
       final items = await db.query(
         'stock_out_items',
-        where: 'stock_out_id = ?',
-        whereArgs: [o['id']],
+        where: _currentUserId != null
+            ? 'stock_out_id = ? AND user_id = ?'
+            : 'stock_out_id = ?',
+        whereArgs: _currentUserId != null
+            ? [o['id'], _currentUserId]
+            : [o['id']],
       );
       double total = 0;
       for (final i in items) {
-        total += ((i['unit_price'] as num?) ?? 0) * ((i['qty'] as int?) ?? 0);
+        total +=
+            ((i['unit_price'] as num?) ?? 0).toDouble() *
+            ((i['qty'] as num?) ?? 0).toDouble();
       }
       result.add({...o, 'total': total});
     }
@@ -5349,8 +5368,8 @@ class DatabaseService {
     if (_currentUserId == null) return [];
     final maps = await db.query(
       'stock_out_items',
-      where: 'stock_out_id = ?',
-      whereArgs: [stockOutId],
+      where: 'stock_out_id = ? AND user_id = ?',
+      whereArgs: [stockOutId, _currentUserId],
     );
     return maps.map((m) => StockOutItem.fromMap(m)).toList();
   }
@@ -5420,8 +5439,8 @@ class DatabaseService {
     if (_currentUserId == null) return;
     await db.delete(
       'stock_out_items',
-      where: 'stock_out_id = ?',
-      whereArgs: [stockOutId],
+      where: 'stock_out_id = ? AND user_id = ?',
+      whereArgs: [stockOutId, _currentUserId],
     );
     DataChangeNotifier.notify();
   }
@@ -5476,6 +5495,18 @@ class DatabaseService {
       whereArgs: [stockOutId, _currentUserId],
     );
     return maps.map((m) => StockMovement.fromMap(m)).toList();
+  }
+
+  /// Efektívna kontrola, či výdajka už má zapísané skladové pohyby.
+  Future<bool> hasStockMovementsForStockOutId(int stockOutId) async {
+    Database db = await database;
+    if (_currentUserId == null) return false;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM stock_movements WHERE stock_out_id = ? AND user_id = ?',
+      [stockOutId, _currentUserId],
+    );
+    final count = (rows.first['cnt'] as num?)?.toInt() ?? 0;
+    return count > 0;
   }
 
   Future<int> insertStockMovement(StockMovement sm) async {

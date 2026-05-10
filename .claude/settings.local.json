@@ -6,7 +6,14 @@
       "Bash(grep -i \"purchase_price\\\\|below_cost\\\\|min_price\" backend/DBsync/migrations/*.sql)",
       "Bash(find C:UserspavolDesktopFlutterstock_pilot -type f \\\\\\(-name .env* -o -name *.env -o -name *secret* -o -name *config* -o -name *credentials* \\\\\\))",
       "Bash(flutter analyze:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(xargs grep:*)",
+      "Bash(flutter test:*)",
+      "Bash(grep -o \"\"text\"\":\"\"[^\"\"]*\"\" C:/Users/pavol/AppData/Local/Temp/claude/C--Users-pavol-Desktop-Flutter-stock-pilot/93fdcc38-6ebb-4ee7-854e-fcfaa8b037e2/tasks/a58ca8b4673904a55.output)",
+      "Bash(python -c \"import sys; s=sys.stdin.read\\(\\); print\\(s[-500:]\\)\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(flutter build:*)"
     ]
   },
   "enabledMcpjsonServers": [

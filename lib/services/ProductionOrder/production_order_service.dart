@@ -3,7 +3,6 @@ import '../../models/stock_out.dart';
 import '../../models/receipt.dart';
 import '../../models/product.dart';
 import '../Database/database_service.dart';
-import '../Recipe/recipe_service.dart';
 import '../StockOut/stock_out_service.dart';
 import '../Receipt/receipt_service.dart';
 import '../Notifications/notification_service.dart';
@@ -15,7 +14,8 @@ class ProductionOrderService {
   final ReceiptService _receiptService = ReceiptService();
   final NotificationService _notificationService = NotificationService();
 
-  Future<String> getNextOrderNumber() async => _db.getNextProductionOrderNumber();
+  Future<String> getNextOrderNumber() async =>
+      _db.getNextProductionOrderNumber();
 
   Future<List<ProductionOrder>> getOrders({
     int? recipeId,
@@ -35,11 +35,10 @@ class ProductionOrderService {
     );
   }
 
-  Future<ProductionOrder?> getOrderById(int id) async => _db.getProductionOrderById(id);
+  Future<ProductionOrder?> getOrderById(int id) async =>
+      _db.getProductionOrderById(id);
 
-  Future<int> createOrder({
-    required ProductionOrder order,
-  }) async {
+  Future<int> createOrder({required ProductionOrder order}) async {
     final id = await _db.insertProductionOrder(order);
     syncProductionOrdersToBackend().ignore();
     return id;
@@ -55,7 +54,8 @@ class ProductionOrderService {
   /// Submit for approval (draft -> pending). Notifies managers.
   Future<void> submitForApproval(int orderId, String creatorName) async {
     final order = await _db.getProductionOrderById(orderId);
-    if (order == null || !order.status.isDraft || !order.requiresApproval) return;
+    if (order == null || !order.status.isDraft || !order.requiresApproval)
+      return;
     final updated = order.copyWith(
       status: ProductionOrderStatus.pending,
       submittedAt: DateTime.now(),
@@ -150,14 +150,20 @@ class ProductionOrderService {
   }) async {
     final order = await _db.getProductionOrderById(orderId);
     if (order == null || !order.status.canComplete) return;
+    if (actualQuantity <= 0) {
+      throw Exception('Skutočné vyrobené množstvo musí byť väčšie ako 0.');
+    }
     final recipe = await _db.getRecipeById(order.recipeId);
     if (recipe == null) return;
     final ingredients = await _db.getRecipeIngredients(order.recipeId);
     final sourceWh = order.sourceWarehouseId;
     final destWh = order.destinationWarehouseId;
-    if (sourceWh == null || destWh == null) throw Exception('Sklad surovín a sklad výrobku musia byť zadané.');
+    if (sourceWh == null || destWh == null)
+      throw Exception('Sklad surovín a sklad výrobku musia byť zadané.');
 
-    final factor = recipe.outputQuantity > 0 ? actualQuantity / recipe.outputQuantity : 0.0;
+    final factor = recipe.outputQuantity > 0
+        ? actualQuantity / recipe.outputQuantity
+        : 0.0;
     double materialCostTotal = 0;
 
     // 1) Výdajka surovín
@@ -174,42 +180,50 @@ class ProductionOrderService {
     final stockOutItems = <StockOutItem>[];
     final sourceProducts = await _db.getProductsByWarehouseId(sourceWh);
     for (final ing in ingredients) {
-      final qty = (ing.quantity * factor).round();
+      final qty = ing.quantity * factor;
       if (qty <= 0) continue;
       Product? product;
       try {
-        product = sourceProducts.firstWhere((p) => p.uniqueId == ing.productUniqueId);
+        product = sourceProducts.firstWhere(
+          (p) => p.uniqueId == ing.productUniqueId,
+        );
       } catch (_) {
         product = await _db.getProductByUniqueId(ing.productUniqueId);
         if (product != null && product.warehouseId != sourceWh) product = null;
       }
       if (product == null) {
-        throw Exception('Surovina ${ing.productName ?? ing.productUniqueId} nie je v sklade surovín.');
+        throw Exception(
+          'Surovina ${ing.productName ?? ing.productUniqueId} nie je v sklade surovín.',
+        );
       }
       materialCostTotal += qty * product.purchasePrice;
-      stockOutItems.add(StockOutItem(
-        stockOutId: 0,
-        productUniqueId: product.uniqueId!,
-        productName: product.name,
-        plu: product.plu,
-        qty: qty.toDouble(),
-        unit: ing.unit,
-        unitPrice: product.purchasePrice,
-      ));
+      stockOutItems.add(
+        StockOutItem(
+          stockOutId: 0,
+          productUniqueId: product.uniqueId!,
+          productName: product.name,
+          plu: product.plu,
+          qty: qty,
+          unit: ing.unit,
+          unitPrice: product.purchasePrice,
+        ),
+      );
     }
     int? rawMaterialsStockOutId;
     if (stockOutItems.isNotEmpty) {
       rawMaterialsStockOutId = await _db.insertStockOut(stockOut);
       for (final item in stockOutItems) {
-        await _db.insertStockOutItem(StockOutItem(
-          stockOutId: rawMaterialsStockOutId,
-          productUniqueId: item.productUniqueId,
-          productName: item.productName,
-          plu: item.plu,
-          qty: item.qty,
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-        ));
+        await _db.insertStockOutItem(
+          StockOutItem(
+            stockOutId: rawMaterialsStockOutId,
+            productUniqueId: item.productUniqueId,
+            productName: item.productName,
+            plu: item.plu,
+            qty: item.qty,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+          ),
+        );
       }
       await _stockOutService.approveStockOut(rawMaterialsStockOutId);
     }
@@ -223,16 +237,26 @@ class ProductionOrderService {
     final costPerUnit = actualQuantity > 0 ? totalCost / actualQuantity : 0.0;
 
     // 3) Príjemka výrobku (finished product)
-    Product? finishedProduct = await _db.getProductByUniqueId(recipe.finishedProductUniqueId);
+    Product? finishedProduct = await _db.getProductByUniqueId(
+      recipe.finishedProductUniqueId,
+    );
     if (finishedProduct == null) {
       final inDest = await _db.getProductsByWarehouseId(destWh);
-      finishedProduct = inDest.cast<Product?>().where((p) => p?.uniqueId == recipe.finishedProductUniqueId).firstOrNull;
+      finishedProduct = inDest
+          .cast<Product?>()
+          .where((p) => p?.uniqueId == recipe.finishedProductUniqueId)
+          .firstOrNull;
     }
-    if (finishedProduct == null) throw Exception('Výsledný produkt receptúry nebol nájdený v cieľovom sklade.');
+    if (finishedProduct == null)
+      throw Exception(
+        'Výsledný produkt receptúry nebol nájdený v cieľovom sklade.',
+      );
     if (finishedProduct.warehouseId != destWh) {
       final inDest = await _db.getProductsByWarehouseId(destWh);
       try {
-        final fp = inDest.firstWhere((p) => p.uniqueId == recipe.finishedProductUniqueId);
+        final fp = inDest.firstWhere(
+          (p) => p.uniqueId == recipe.finishedProductUniqueId,
+        );
         finishedProduct = fp;
       } catch (_) {}
     }
@@ -249,17 +273,20 @@ class ProductionOrderService {
       stockApplied: false,
     );
     final receiptId = await _db.insertInboundReceipt(inboundReceipt);
-    await _db.insertInboundReceiptItem(InboundReceiptItem(
-      receiptId: receiptId,
-      productUniqueId: finishedProduct?.uniqueId ?? recipe.finishedProductUniqueId,
-      productName: finishedProduct?.name ?? recipe.finishedProductName ?? '',
-      plu: finishedProduct?.plu ?? '',
-      qty: actualQuantity.round().toDouble(),
-      unit: recipe.unit,
-      unitPrice: costPerUnit,
-      vatPercent: finishedProduct?.vat ?? 20,
-      allocatedCost: 0,
-    ));
+    await _db.insertInboundReceiptItem(
+      InboundReceiptItem(
+        receiptId: receiptId,
+        productUniqueId:
+            finishedProduct?.uniqueId ?? recipe.finishedProductUniqueId,
+        productName: finishedProduct?.name ?? recipe.finishedProductName ?? '',
+        plu: finishedProduct?.plu ?? '',
+        qty: actualQuantity,
+        unit: recipe.unit,
+        unitPrice: costPerUnit,
+        vatPercent: finishedProduct?.vat ?? 20,
+        allocatedCost: 0,
+      ),
+    );
     await _receiptService.applyReceiptToStock(receiptId);
     await _db.setReceiptStockApplied(receiptId, applied: true);
 
@@ -291,7 +318,10 @@ class ProductionOrderService {
     syncProductionOrdersToBackend().ignore();
   }
 
-  Future<int> getCountByStatus(String status) => _db.getProductionOrderCountByStatus(status);
-  Future<int> getCountForDate(String dateYyyyMmDd) => _db.getProductionOrderCountForDate(dateYyyyMmDd);
-  Future<double?> getTotalProductionCostThisMonth() => _db.getTotalProductionCostThisMonth();
+  Future<int> getCountByStatus(String status) =>
+      _db.getProductionOrderCountByStatus(status);
+  Future<int> getCountForDate(String dateYyyyMmDd) =>
+      _db.getProductionOrderCountForDate(dateYyyyMmDd);
+  Future<double?> getTotalProductionCostThisMonth() =>
+      _db.getTotalProductionCostThisMonth();
 }

@@ -144,7 +144,10 @@ export default function ProductionPage() {
                     onClick={() => navigate(`/dashboard/production/${b.id}`)}
                   >
                     <span className="production-list-type">{b.product_type}</span>
-                    <span className="production-list-qty">{b.quantity_produced} ks</span>
+                    <span className="production-list-qty">
+                      {b.quantity_produced} ks
+                      {b.requested_m2 != null ? ` · ${Number(b.requested_m2).toFixed(1)} m²` : ''}
+                    </span>
                     <span className="production-list-arrow">→</span>
                   </button>
                 </li>

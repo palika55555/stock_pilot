@@ -1,0 +1,19 @@
+{
+  "agents": {
+    "agent-1774419595532-gsqhwo": {
+      "agentId": "agent-1774419595532-gsqhwo",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "provider": "anthropic",
+        "task": "Create a Flutter/Dart utility class for paving stone calculations. It must convert PCS to m2 based on stone dimensions (e.g. 20x10x6 cm). Implement logic for palletization where input is in m2, but output is rounded up to the nearest full layer or full pallet. Include a model for different stone types."
+      },
+      "createdAt": "2026-03-25T06:19:55.537Z",
+      "model": "sonnet",
+      "modelRoutedBy": "router"
+    }
+  },
+  "version": "3.0.0"
+}

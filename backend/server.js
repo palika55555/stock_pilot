@@ -20,6 +20,8 @@ const { syncQuotesFull, fetchQuotesFull } = require('./DBsync/sync/quoteSyncFull
 const { syncInvoicesFull, fetchInvoicesFull } = require('./DBsync/sync/invoiceSync');
 const { syncTransports, fetchTransports } = require('./DBsync/sync/transportSync');
 const { syncCompany, fetchCompany } = require('./DBsync/sync/companySync');
+const { mountProductionWebRoutes } = require('./routes/productionWeb');
+const { pavingCalcFromM2 } = require('./utils/pavingCalc');
 const {
   signTokens,
   verifyAccessToken,
@@ -877,18 +879,25 @@ apiRouter.post('/sync/batches', async (req, res) => {
       const createdAt = b.created_at || null;
       const costTotal = b.cost_total != null ? parseFloat(b.cost_total) : null;
       const revenueTotal = b.revenue_total != null ? parseFloat(b.revenue_total) : null;
+      const requestedM2 = b.requested_m2 != null ? parseFloat(b.requested_m2) : null;
+      const actualStoredM2 = b.actual_stored_m2 != null ? parseFloat(b.actual_stored_m2) : null;
+      let pavingBackendId = b.paving_stone_backend_id != null ? parseInt(b.paving_stone_backend_id, 10) : null;
+      if (Number.isNaN(pavingBackendId)) pavingBackendId = null;
       const existing = await client.query('SELECT id FROM production_batches WHERE user_id = $1 AND local_id = $2', [userId, localId]);
       let backendBatchId;
       if (existing.rows.length > 0) {
         backendBatchId = existing.rows[0].id;
         await client.query(
-          `UPDATE production_batches SET production_date = $1, product_type = $2, quantity_produced = $3, notes = $4, created_at = $5::timestamp, cost_total = $6, revenue_total = $7 WHERE id = $8`,
-          [productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal, backendBatchId]
+          `UPDATE production_batches SET production_date = $1, product_type = $2, quantity_produced = $3, notes = $4, created_at = $5::timestamp, cost_total = $6, revenue_total = $7,
+           paving_stone_id = COALESCE($9, paving_stone_id), requested_m2 = COALESCE($10, requested_m2), actual_stored_m2 = COALESCE($11, actual_stored_m2)
+           WHERE id = $8`,
+          [productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal, backendBatchId, pavingBackendId, requestedM2, actualStoredM2]
         );
       } else {
         const ins = await client.query(
-          `INSERT INTO production_batches (user_id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, $8, $9) RETURNING id`,
-          [userId, localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal]
+          `INSERT INTO production_batches (user_id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::timestamp, $8, $9, $10, $11, $12) RETURNING id`,
+          [userId, localId, productionDate, productType, quantityProduced, notes, createdAt, costTotal, revenueTotal, pavingBackendId, requestedM2, actualStoredM2]
         );
         backendBatchId = ins.rows[0]?.id;
       }
@@ -1524,7 +1533,8 @@ apiRouter.get('/batches/sync', async (req, res) => {
   try {
     const dataUserId = req.dataUserId ?? req.userId;
     const batchRows = await pool.query(
-      `SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total
+      `SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total,
+        paving_stone_id, requested_m2, actual_stored_m2
        FROM production_batches WHERE user_id = $1 AND production_date >= $2 AND production_date <= $3 ORDER BY production_date DESC, created_at DESC`,
       [dataUserId, from, to]
     );
@@ -1533,7 +1543,10 @@ apiRouter.get('/batches/sync', async (req, res) => {
       const batchId = b.id;
       const [recipeRes, palletRes] = await Promise.all([
         pool.query('SELECT id, batch_id, material_name, quantity, unit FROM production_batch_recipe WHERE batch_id = $1 ORDER BY id', [batchId]),
-        pool.query('SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE batch_id = $1 ORDER BY id', [batchId]),
+        pool.query(
+          'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at, sold_at, sale_note FROM pallets WHERE batch_id = $1 ORDER BY id',
+          [batchId]
+        ),
       ]);
       const productionDate = b.production_date instanceof Date ? b.production_date.toISOString().slice(0, 10) : b.production_date;
       batches.push({
@@ -1546,6 +1559,9 @@ apiRouter.get('/batches/sync', async (req, res) => {
         created_at: b.created_at,
         cost_total: b.cost_total != null ? Number(b.cost_total) : null,
         revenue_total: b.revenue_total != null ? Number(b.revenue_total) : null,
+        paving_stone_id: b.paving_stone_id != null ? Number(b.paving_stone_id) : null,
+        requested_m2: b.requested_m2 != null ? Number(b.requested_m2) : null,
+        actual_stored_m2: b.actual_stored_m2 != null ? Number(b.actual_stored_m2) : null,
         recipe: (recipeRes.rows || []).map((r) => ({ id: r.id, batch_id: r.batch_id, material_name: r.material_name, quantity: Number(r.quantity), unit: r.unit || 'kg' })),
         pallets: (palletRes.rows || []).map((p) => ({
           id: p.id,
@@ -1555,6 +1571,8 @@ apiRouter.get('/batches/sync', async (req, res) => {
           customer_id: p.customer_id,
           status: p.status || 'Na sklade',
           created_at: p.created_at,
+          sold_at: p.sold_at,
+          sale_note: p.sale_note,
         })),
       });
     }
@@ -1573,7 +1591,7 @@ apiRouter.get('/batches', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 0, 200);
   try {
     const dataUserId = req.dataUserId ?? req.userId;
-    let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1';
+    let query = 'SELECT id, local_id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2 FROM production_batches WHERE user_id = $1';
     const params = [dataUserId];
     if (date) {
       query += ' AND production_date = $2';
@@ -1595,6 +1613,9 @@ apiRouter.get('/batches', async (req, res) => {
       created_at: r.created_at,
       cost_total: r.cost_total != null ? Number(r.cost_total) : null,
       revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+      paving_stone_id: r.paving_stone_id != null ? Number(r.paving_stone_id) : null,
+      requested_m2: r.requested_m2 != null ? Number(r.requested_m2) : null,
+      actual_stored_m2: r.actual_stored_m2 != null ? Number(r.actual_stored_m2) : null,
     })));
   } catch (err) {
     console.error('[GET /api/batches]', err.message);
@@ -1604,26 +1625,66 @@ apiRouter.get('/batches', async (req, res) => {
 
 apiRouter.post('/batches', async (req, res) => {
   if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
-  const { production_date, product_type, quantity_produced, notes, cost_total, revenue_total, recipe } = req.body || {};
+  const {
+    production_date,
+    product_type,
+    quantity_produced,
+    notes,
+    cost_total,
+    revenue_total,
+    recipe,
+    paving_stone_id,
+    requested_m2,
+  } = req.body || {};
   const dateVal = (production_date || '').toString().trim();
   const typeVal = (product_type || '').toString().trim();
   if (!dateVal || !typeVal) {
     return res.status(400).json({ error: 'production_date a product_type sú povinné' });
   }
-  const qty = parseInt(quantity_produced, 10) || 0;
+  const dataUserId = req.dataUserId ?? req.userId;
+
+  let qty = parseInt(quantity_produced, 10) || 0;
+  let pavingId = paving_stone_id != null ? parseInt(paving_stone_id, 10) : null;
+  if (Number.isNaN(pavingId)) pavingId = null;
+  let reqM2 = requested_m2 != null ? parseFloat(requested_m2) : null;
+  if (reqM2 != null && Number.isNaN(reqM2)) reqM2 = null;
+  let actualM2 = null;
+  let insertType = typeVal;
+
+  if (pavingId) {
+    const stoneRes = await pool.query('SELECT * FROM paving_stones WHERE user_id = $1 AND id = $2', [dataUserId, pavingId]);
+    if (!stoneRes.rows.length) {
+      return res.status(400).json({ error: 'Neplatná dlažba (paving_stone_id)' });
+    }
+    if (!(reqM2 > 0)) {
+      return res.status(400).json({ error: 'Pre dlažbu zadajte requested_m2 > 0' });
+    }
+    const calc = pavingCalcFromM2(reqM2, stoneRes.rows[0]);
+    if (!calc) return res.status(400).json({ error: 'Nepodarilo sa vypočítať kusy z m²' });
+    qty = calc.totalPieces;
+    actualM2 = calc.actualM2;
+    insertType = stoneRes.rows[0].name || insertType;
+  } else {
+    pavingId = null;
+    reqM2 = null;
+    actualM2 = null;
+  }
+
   try {
-    const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
-      `INSERT INTO production_batches (user_id, production_date, product_type, quantity_produced, notes, cost_total, revenue_total)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total`,
+      `INSERT INTO production_batches (user_id, production_date, product_type, quantity_produced, notes, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2`,
       [
         dataUserId,
         dateVal,
-        typeVal,
+        insertType,
         qty,
         notes != null ? String(notes).trim() || null : null,
         cost_total != null ? parseFloat(cost_total) : null,
         revenue_total != null ? parseFloat(revenue_total) : null,
+        pavingId,
+        reqM2,
+        actualM2,
       ]
     );
     const batch = rows[0];
@@ -1639,15 +1700,19 @@ apiRouter.post('/batches', async (req, res) => {
         [batchId, matName, q, unit]
       );
     }
+    const productionDateOut = batch.production_date instanceof Date ? batch.production_date.toISOString().slice(0, 10) : batch.production_date;
     res.status(201).json({
       id: batchId,
-      production_date: batch.production_date instanceof Date ? batch.production_date.toISOString().slice(0, 10) : batch.production_date,
+      production_date: productionDateOut,
       product_type: batch.product_type,
       quantity_produced: Number(batch.quantity_produced) || 0,
       notes: batch.notes,
       created_at: batch.created_at,
       cost_total: batch.cost_total != null ? Number(batch.cost_total) : null,
       revenue_total: batch.revenue_total != null ? Number(batch.revenue_total) : null,
+      paving_stone_id: batch.paving_stone_id != null ? Number(batch.paving_stone_id) : null,
+      requested_m2: batch.requested_m2 != null ? Number(batch.requested_m2) : null,
+      actual_stored_m2: batch.actual_stored_m2 != null ? Number(batch.actual_stored_m2) : null,
     });
   } catch (err) {
     console.error('[POST /api/batches]', err.message);
@@ -1662,7 +1727,7 @@ apiRouter.get('/batches/by-local/:localId', async (req, res) => {
   try {
     const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
-      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND local_id = $2',
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2 FROM production_batches WHERE user_id = $1 AND local_id = $2',
       [dataUserId, localId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
@@ -1676,6 +1741,9 @@ apiRouter.get('/batches/by-local/:localId', async (req, res) => {
       created_at: r.created_at,
       cost_total: r.cost_total != null ? Number(r.cost_total) : null,
       revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+      paving_stone_id: r.paving_stone_id != null ? Number(r.paving_stone_id) : null,
+      requested_m2: r.requested_m2 != null ? Number(r.requested_m2) : null,
+      actual_stored_m2: r.actual_stored_m2 != null ? Number(r.actual_stored_m2) : null,
     });
   } catch (err) {
     console.error('[GET /api/batches/by-local/:localId]', err.message);
@@ -1690,7 +1758,7 @@ apiRouter.get('/batches/:id', async (req, res) => {
   try {
     const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
-      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total FROM production_batches WHERE user_id = $1 AND id = $2',
+      'SELECT id, production_date, product_type, quantity_produced, notes, created_at, cost_total, revenue_total, paving_stone_id, requested_m2, actual_stored_m2 FROM production_batches WHERE user_id = $1 AND id = $2',
       [dataUserId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
@@ -1704,6 +1772,9 @@ apiRouter.get('/batches/:id', async (req, res) => {
       created_at: r.created_at,
       cost_total: r.cost_total != null ? Number(r.cost_total) : null,
       revenue_total: r.revenue_total != null ? Number(r.revenue_total) : null,
+      paving_stone_id: r.paving_stone_id != null ? Number(r.paving_stone_id) : null,
+      requested_m2: r.requested_m2 != null ? Number(r.requested_m2) : null,
+      actual_stored_m2: r.actual_stored_m2 != null ? Number(r.actual_stored_m2) : null,
     });
   } catch (err) {
     console.error('[GET /api/batches/:id]', err.message);
@@ -1735,7 +1806,7 @@ apiRouter.get('/batches/:id/pallets', async (req, res) => {
   try {
     const dataUserId = req.dataUserId ?? req.userId;
     const { rows } = await pool.query(
-      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at FROM pallets WHERE user_id = $1 AND batch_id = $2 ORDER BY id ASC',
+      'SELECT id, batch_id, product_type, quantity, customer_id, status, created_at, sold_at, sale_note FROM pallets WHERE user_id = $1 AND batch_id = $2 ORDER BY id ASC',
       [dataUserId, id]
     );
     res.json(
@@ -1747,6 +1818,8 @@ apiRouter.get('/batches/:id/pallets', async (req, res) => {
         customer_id: r.customer_id,
         status: r.status || 'Na sklade',
         created_at: r.created_at,
+        sold_at: r.sold_at,
+        sale_note: r.sale_note,
       }))
     );
   } catch (err) {
@@ -1773,9 +1846,16 @@ apiRouter.post('/batches/:id/pallets', async (req, res) => {
     );
     if (batchRes.rows.length === 0) return res.status(404).json({ error: 'Šarža nebola nájdená' });
     const batch = batchRes.rows[0];
+    const sumRes = await pool.query(
+      'SELECT COALESCE(SUM(quantity), 0)::bigint AS s FROM pallets WHERE user_id = $1 AND batch_id = $2',
+      [dataUserId, batchId]
+    );
+    const already = Number(sumRes.rows[0]?.s) || 0;
     const total = qty * count;
-    if (total > Number(batch.quantity_produced)) {
-      return res.status(400).json({ error: `Celkom ${total} kusov prevyšuje počet vyrobených (${batch.quantity_produced}).` });
+    if (already + total > Number(batch.quantity_produced)) {
+      return res.status(400).json({
+        error: `Celkom ${already + total} kusov na paletách prevyšuje počet vyrobených (${batch.quantity_produced}).`,
+      });
     }
     const created = [];
     for (let i = 0; i < count; i++) {
@@ -3734,6 +3814,8 @@ apiRouter.post('/invoices/export/pohoda-batch', async (req, res) => {
     res.status(500).json({ error: 'Chyba servera' });
   }
 });
+
+mountProductionWebRoutes(apiRouter, { pool, poolReady });
 
 // Montovanie API routera pod tajný prefix – bez znalosti cesty /api/:prefix/ sa nikto nedostane k dátam
 app.use(`/api/${API_PATH_PREFIX}`, apiRouter);

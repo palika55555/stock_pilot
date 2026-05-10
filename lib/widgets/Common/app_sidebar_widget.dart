@@ -17,6 +17,7 @@ import '../../screens/Settings/settings_page.dart';
 import '../../screens/Recipe/recipe_list_screen.dart';
 import '../../screens/ProductionOrder/production_order_list_screen.dart';
 import '../../screens/pallet/customers_pallets_screen.dart';
+import '../../screens/paving_stone/paving_stone_list_screen.dart';
 import '../../Screens/Invoices/invoices_screen.dart';
 import '../../Screens/inventory/inventory_history_screen.dart';
 import '../../Screens/Transport/transport_calculator_screen.dart';
@@ -47,6 +48,7 @@ const _productionItems = [
   _NavItem(icon: Icons.precision_manufacturing_rounded, label: 'Výroba', index: 4),
   _NavItem(icon: Icons.menu_book_rounded, label: 'Receptúry', index: 12),
   _NavItem(icon: Icons.assignment_rounded, label: 'Výrobné príkazy', index: 13),
+  _NavItem(icon: Icons.view_module_rounded, label: 'Katalóg dlažieb', index: 18),
 ];
 
 class AppSidebar extends StatefulWidget {
@@ -168,6 +170,9 @@ class _AppSidebarState extends State<AppSidebar> with SingleTickerProviderStateM
         break;
       case 17:
         Navigator.push(context, _fadeRoute(const TransportCalculatorScreen()));
+        break;
+      case 18:
+        Navigator.push(context, _fadeRoute(const PavingStoneListScreen()));
         break;
     }
   }

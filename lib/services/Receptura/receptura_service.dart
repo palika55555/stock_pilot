@@ -81,16 +81,16 @@ class RecepturaService {
         );
       }
     } else {
-      final qtyToDeduct = mnozstvo.round();
+      final qtyToDeduct = round3(mnozstvo);
       if (product.qty < qtyToDeduct) {
         throw NedostatokSurovinyException(
           kartaId: kartaId,
           nazov: product.name,
-          potrebne: qtyToDeduct.toDouble(),
-          dostupne: product.qty.toDouble(),
+          potrebne: qtyToDeduct,
+          dostupne: product.qty,
         );
       }
-      final newQty = product.qty - qtyToDeduct;
+      final newQty = round3(product.qty - qtyToDeduct);
       final updated = Product(
         uniqueId: product.uniqueId,
         name: product.name,

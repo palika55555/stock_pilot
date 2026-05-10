@@ -21,6 +21,7 @@ import PrijemkyListPage from './pages/PrijemkyListPage'
 import VydajkyPage from './pages/VydajkyPage'
 import RecepturyPage from './pages/RecepturyPage'
 import VyrobneProkazaPage from './pages/VyrobneProkazaPage'
+import PavingStonesPage from './pages/PavingStonesPage'
 import TransportyPage from './pages/TransportyPage'
 import SystemStatusPage from './pages/SystemStatusPage'
 import Security2FAPage from './pages/Security2FAPage'
@@ -52,6 +53,7 @@ function App() {
           <Route path="scan" element={<ScanProductPage />} />
           <Route path="production" element={<ProductionPage />} />
           <Route path="production/new" element={<ProductionBatchFormPage />} />
+          <Route path="production/edit/:batchId" element={<ProductionBatchFormPage />} />
           <Route path="production/:id" element={<ProductionBatchDetailPage />} />
           <Route path="quotes" element={<QuotesPage />} />
           <Route path="quotes/:id" element={<QuoteFormPage />} />
@@ -64,6 +66,7 @@ function App() {
           <Route path="vydajky" element={<VydajkyPage />} />
           <Route path="receptury" element={<RecepturyPage />} />
           <Route path="vyroba-prikazy" element={<VyrobneProkazaPage />} />
+          <Route path="dlažba-typy" element={<PavingStonesPage />} />
           <Route path="transporty" element={<TransportyPage />} />
           <Route path="system-status" element={<SystemStatusPage />} />
           <Route path="security-2fa" element={<Security2FAPage />} />

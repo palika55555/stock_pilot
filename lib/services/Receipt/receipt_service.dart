@@ -4,7 +4,8 @@ import '../../models/receipt.dart';
 import '../../models/stock_out.dart';
 import '../Database/database_service.dart';
 import '../Notifications/notification_service.dart';
-import '../api_sync_service.dart' show syncReceiptsToBackend, syncStockOutsToBackend;
+import '../api_sync_service.dart'
+    show syncReceiptsToBackend, syncStockOutsToBackend;
 
 class ReceiptService {
   final DatabaseService _db = DatabaseService();
@@ -37,7 +38,9 @@ class ReceiptService {
     return await _db.getInboundReceiptItems(receiptId);
   }
 
-  Future<List<ReceiptAcquisitionCost>> getReceiptAcquisitionCosts(int receiptId) async {
+  Future<List<ReceiptAcquisitionCost>> getReceiptAcquisitionCosts(
+    int receiptId,
+  ) async {
     return await _db.getReceiptAcquisitionCosts(receiptId);
   }
 
@@ -51,7 +54,8 @@ class ReceiptService {
     List<ReceiptAcquisitionCost>? acquisitionCosts,
     bool isDraft = false,
   }) async {
-    final isTransfer = receipt.movementTypeCode == _transferCode &&
+    final isTransfer =
+        receipt.movementTypeCode == _transferCode &&
         receipt.sourceWarehouseId != null &&
         receipt.warehouseId != null;
 
@@ -63,15 +67,18 @@ class ReceiptService {
         final product = await _db.getProductByUniqueId(item.productUniqueId);
         if (product == null) {
           throw Exception(
-              'Produkt ${item.productName ?? item.productUniqueId} nebol nájdený.');
+            'Produkt ${item.productName ?? item.productUniqueId} nebol nájdený.',
+          );
         }
         if (product.warehouseId != receipt.sourceWarehouseId) {
           throw Exception(
-              'Produkt ${item.productName ?? item.productUniqueId} nie je v zdrojovom sklade.');
+            'Produkt ${item.productName ?? item.productUniqueId} nie je v zdrojovom sklade.',
+          );
         }
         if (product.qty < item.qty) {
           throw Exception(
-              'Nedostatočné množstvo: ${item.productName ?? item.productUniqueId}. Požadované: ${item.qty}, dostupné: ${product.qty}.');
+            'Nedostatočné množstvo: ${item.productName ?? item.productUniqueId}. Požadované: ${item.qty}, dostupné: ${product.qty}.',
+          );
         }
       }
     }
@@ -110,17 +117,19 @@ class ReceiptService {
     if (acquisitionCosts != null && acquisitionCosts.isNotEmpty) {
       for (var i = 0; i < acquisitionCosts.length; i++) {
         final c = acquisitionCosts[i];
-        await _db.insertReceiptAcquisitionCost(ReceiptAcquisitionCost(
-          receiptId: receiptId,
-          costType: c.costType,
-          description: c.description,
-          amountWithoutVat: c.amountWithoutVat,
-          vatPercent: c.vatPercent,
-          amountWithVat: c.amountWithVat,
-          costSupplierName: c.costSupplierName,
-          documentNumber: c.documentNumber,
-          sortOrder: i,
-        ));
+        await _db.insertReceiptAcquisitionCost(
+          ReceiptAcquisitionCost(
+            receiptId: receiptId,
+            costType: c.costType,
+            description: c.description,
+            amountWithoutVat: c.amountWithoutVat,
+            vatPercent: c.vatPercent,
+            amountWithVat: c.amountWithVat,
+            costSupplierName: c.costSupplierName,
+            documentNumber: c.documentNumber,
+            sortOrder: i,
+          ),
+        );
       }
     }
 
@@ -166,6 +175,7 @@ class ReceiptService {
         stockOutDocumentNumber: stockOutNumber,
         stockOutCreatedAt: now,
       );
+      await _db.setReceiptStockApplied(receiptId, applied: true);
       await _db.updateInboundReceiptStatus(
         receiptId,
         InboundReceiptStatus.schvalena,
@@ -209,17 +219,19 @@ class ReceiptService {
     if (acquisitionCosts != null && acquisitionCosts.isNotEmpty) {
       for (var i = 0; i < acquisitionCosts.length; i++) {
         final c = acquisitionCosts[i];
-        await _db.insertReceiptAcquisitionCost(ReceiptAcquisitionCost(
-          receiptId: receipt.id!,
-          costType: c.costType,
-          description: c.description,
-          amountWithoutVat: c.amountWithoutVat,
-          vatPercent: c.vatPercent,
-          amountWithVat: c.amountWithVat,
-          costSupplierName: c.costSupplierName,
-          documentNumber: c.documentNumber,
-          sortOrder: i,
-        ));
+        await _db.insertReceiptAcquisitionCost(
+          ReceiptAcquisitionCost(
+            receiptId: receipt.id!,
+            costType: c.costType,
+            description: c.description,
+            amountWithoutVat: c.amountWithoutVat,
+            vatPercent: c.vatPercent,
+            amountWithVat: c.amountWithVat,
+            costSupplierName: c.costSupplierName,
+            documentNumber: c.documentNumber,
+            sortOrder: i,
+          ),
+        );
       }
     }
     syncReceiptsToBackend().ignore();
@@ -228,14 +240,18 @@ class ReceiptService {
   /// Odoslí príjemku na schválenie (draft/vykazana -> pending). Notifikuje manažérov/adminov.
   Future<void> submitForApproval(int receiptId, String creatorName) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
-    if (receipt == null || receipt.isApproved || receipt.isPendingApproval) return;
+    if (receipt == null || receipt.isApproved || receipt.isPendingApproval)
+      return;
     final now = DateTime.now();
     final updated = receipt.copyWith(
       status: InboundReceiptStatus.pending,
       submittedAt: now,
     );
     await _db.updateInboundReceiptFull(updated);
-    await _notificationService.createForReceiptSubmitted(receipt: updated, creatorName: creatorName);
+    await _notificationService.createForReceiptSubmitted(
+      receipt: updated,
+      creatorName: creatorName,
+    );
     syncReceiptsToBackend().ignore();
   }
 
@@ -248,7 +264,10 @@ class ReceiptService {
       submittedAt: null,
     );
     await _db.updateInboundReceiptFull(updated);
-    await _notificationService.createForReceiptRecalled(receipt: updated, creatorName: creatorName);
+    await _notificationService.createForReceiptRecalled(
+      receipt: updated,
+      creatorName: creatorName,
+    );
     syncReceiptsToBackend().ignore();
   }
 
@@ -263,7 +282,10 @@ class ReceiptService {
       rejectionReason: rejectionReason,
     );
     await _db.updateInboundReceiptFull(updated);
-    await _notificationService.createForReceiptRejected(receipt: updated, rejectionReason: rejectionReason);
+    await _notificationService.createForReceiptRejected(
+      receipt: updated,
+      rejectionReason: rejectionReason,
+    );
     syncReceiptsToBackend().ignore();
   }
 
@@ -277,10 +299,16 @@ class ReceiptService {
   }
 
   /// Stornuje vykázanú príjemku. [deductFromStock] = true odpočíta prijaté množstvá zo skladu, false len zmení status.
-  Future<void> reverseReceipt(int receiptId, String userName, String reason, {bool deductFromStock = true}) async {
+  Future<void> reverseReceipt(
+    int receiptId,
+    String userName,
+    String reason, {
+    bool deductFromStock = true,
+  }) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null) return;
-    final isReported = receipt.stockApplied ||
+    final isReported =
+        receipt.stockApplied ||
         receipt.isApproved ||
         receipt.status == InboundReceiptStatus.vykazana;
     if (!isReported) return;
@@ -296,7 +324,11 @@ class ReceiptService {
       stockApplied: deductFromStock ? false : receipt.stockApplied,
     );
     await _db.updateInboundReceiptFull(updated);
-    await _notificationService.createForReceiptReversed(receipt: updated, userName: userName, reason: reason);
+    await _notificationService.createForReceiptReversed(
+      receipt: updated,
+      userName: userName,
+      reason: reason,
+    );
     syncReceiptsToBackend().ignore();
   }
 
@@ -307,7 +339,9 @@ class ReceiptService {
     final items = await _db.getInboundReceiptItems(receiptId);
     for (final item in items) {
       final product = await _db.getProductByUniqueId(item.productUniqueId);
-      if (product != null && receipt.warehouseId != null && product.warehouseId == receipt.warehouseId) {
+      if (product != null &&
+          receipt.warehouseId != null &&
+          product.warehouseId == receipt.warehouseId) {
         final newQty = (product.qty - item.qty).clamp(0.0, double.infinity);
         final updated = Product(
           uniqueId: product.uniqueId,
@@ -365,28 +399,75 @@ class ReceiptService {
       final vatPercent = item.vatPercent ?? receipt.vatRate ?? 20;
       final product = await _db.getProductByUniqueId(item.productUniqueId);
       if (product != null) {
-        double itemPriceWithVat = receipt.pricesIncludeVat ? item.unitPrice : calculateWithVat(item.unitPrice, vatPercent);
-        double itemPriceWithoutVat = receipt.pricesIncludeVat ? calculateWithoutVat(item.unitPrice, vatPercent) : item.unitPrice;
+        double itemPriceWithVat = receipt.pricesIncludeVat
+            ? item.unitPrice
+            : calculateWithVat(item.unitPrice, vatPercent);
+        double itemPriceWithoutVat = receipt.pricesIncludeVat
+            ? calculateWithoutVat(item.unitPrice, vatPercent)
+            : item.unitPrice;
         final allocated = item.allocatedCost;
         if (allocated > 0 && item.qty > 0) {
-          final truePriceWithVat = _roundPrice((itemPriceWithVat * item.qty + allocated) / item.qty);
+          final truePriceWithVat = _roundPrice(
+            (itemPriceWithVat * item.qty + allocated) / item.qty,
+          );
           itemPriceWithVat = truePriceWithVat;
-          itemPriceWithoutVat = calculateWithoutVat(truePriceWithVat, vatPercent);
+          itemPriceWithoutVat = calculateWithoutVat(
+            truePriceWithVat,
+            vatPercent,
+          );
         }
         final newQty = product.qty + item.qty;
-        final weightedPurchasePriceWithVat = product.qty <= 0 ? itemPriceWithVat : _roundPrice((product.qty * product.purchasePrice + item.qty * itemPriceWithVat) / newQty);
-        final weightedPurchasePriceWithoutVat = product.qty <= 0 ? itemPriceWithoutVat : _roundPrice((product.qty * product.purchasePriceWithoutVat + item.qty * itemPriceWithoutVat) / newQty);
+        final weightedPurchasePriceWithVat = product.qty <= 0
+            ? itemPriceWithVat
+            : _roundPrice(
+                (product.qty * product.purchasePrice +
+                        item.qty * itemPriceWithVat) /
+                    newQty,
+              );
+        final weightedPurchasePriceWithoutVat = product.qty <= 0
+            ? itemPriceWithoutVat
+            : _roundPrice(
+                (product.qty * product.purchasePriceWithoutVat +
+                        item.qty * itemPriceWithoutVat) /
+                    newQty,
+              );
         final updated = Product(
-          uniqueId: product.uniqueId, name: product.name, plu: product.plu, ean: product.ean, category: product.category,
-          qty: newQty, unit: product.unit, price: product.price, withoutVat: product.withoutVat, vat: product.vat, discount: product.discount,
-          lastPurchasePrice: _roundPrice(itemPriceWithVat), lastPurchasePriceWithoutVat: _roundPrice(itemPriceWithoutVat), lastPurchaseDate: today,
-          currency: product.currency, location: product.location, purchasePrice: weightedPurchasePriceWithVat, purchasePriceWithoutVat: weightedPurchasePriceWithoutVat,
-          purchaseVat: product.purchaseVat, recyclingFee: product.recyclingFee, productType: product.productType,
-          supplierName: receipt.supplierName?.trim().isNotEmpty == true ? receipt.supplierName : product.supplierName,
-          kindId: product.kindId, warehouseId: receipt.warehouseId ?? product.warehouseId, linkedProductUniqueId: product.linkedProductUniqueId,
-          minQuantity: product.minQuantity, allowAtCashRegister: product.allowAtCashRegister, showInPriceList: product.showInPriceList,
-          isActive: product.isActive, temporarilyUnavailable: product.temporarilyUnavailable, stockGroup: product.stockGroup,
-          cardType: product.cardType, hasExtendedPricing: product.hasExtendedPricing, ibaCeleMnozstva: product.ibaCeleMnozstva,
+          uniqueId: product.uniqueId,
+          name: product.name,
+          plu: product.plu,
+          ean: product.ean,
+          category: product.category,
+          qty: newQty,
+          unit: product.unit,
+          price: product.price,
+          withoutVat: product.withoutVat,
+          vat: product.vat,
+          discount: product.discount,
+          lastPurchasePrice: _roundPrice(itemPriceWithVat),
+          lastPurchasePriceWithoutVat: _roundPrice(itemPriceWithoutVat),
+          lastPurchaseDate: today,
+          currency: product.currency,
+          location: product.location,
+          purchasePrice: weightedPurchasePriceWithVat,
+          purchasePriceWithoutVat: weightedPurchasePriceWithoutVat,
+          purchaseVat: product.purchaseVat,
+          recyclingFee: product.recyclingFee,
+          productType: product.productType,
+          supplierName: receipt.supplierName?.trim().isNotEmpty == true
+              ? receipt.supplierName
+              : product.supplierName,
+          kindId: product.kindId,
+          warehouseId: receipt.warehouseId ?? product.warehouseId,
+          linkedProductUniqueId: product.linkedProductUniqueId,
+          minQuantity: product.minQuantity,
+          allowAtCashRegister: product.allowAtCashRegister,
+          showInPriceList: product.showInPriceList,
+          isActive: product.isActive,
+          temporarilyUnavailable: product.temporarilyUnavailable,
+          stockGroup: product.stockGroup,
+          cardType: product.cardType,
+          hasExtendedPricing: product.hasExtendedPricing,
+          ibaCeleMnozstva: product.ibaCeleMnozstva,
         );
         await _db.updateProduct(updated);
       }
@@ -395,7 +476,11 @@ class ReceiptService {
   }
 
   /// Schváli príjemku a pridá množstvá položiek do skladu (ak ešte neboli). [approverUsername] a [approverNote] pre notifikáciu.
-  Future<void> approveReceipt(int receiptId, {String? approverUsername, String? approverNote}) async {
+  Future<void> approveReceipt(
+    int receiptId, {
+    String? approverUsername,
+    String? approverNote,
+  }) async {
     final receipt = await _db.getInboundReceiptById(receiptId);
     if (receipt == null) return;
     await _applyReceiptToStock(receiptId);
@@ -425,7 +510,7 @@ class ReceiptService {
             product.warehouseId == warehouseId) {
           final wh = await _db.getWarehouseById(warehouseId);
           await _notificationService.createForStockLow(
-            productName: product.name ?? product.uniqueId ?? '',
+            productName: product.name,
             warehouseName: wh?.name ?? 'Sklad',
             currentQty: product.qty.round(),
             minQty: product.minQuantity,

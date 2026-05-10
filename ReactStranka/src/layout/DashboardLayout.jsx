@@ -33,6 +33,7 @@ const NAV_SECTIONS = [
     label: 'Výroba',
     items: [
       { path: '/dashboard/receptury', label: 'Receptúry', icon: '📋' },
+      { path: '/dashboard/dlažba-typy', label: 'Typy dlažby (m²)', icon: '⬛' },
       { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
       { path: '/dashboard/production', label: 'Výrobné šarže', icon: '🔢' },
     ],

@@ -29,6 +29,11 @@ class StockOutService {
   final DatabaseService _db = DatabaseService();
   final PricingService _pricingService = PricingService();
 
+  /// Výdajka je skladovo aplikovaná, ak už existujú naviazané skladové pohyby.
+  Future<bool> _hasAppliedStockMovements(int stockOutId) async {
+    return _db.hasStockMovementsForStockOutId(stockOutId);
+  }
+
   Future<List<StockOut>> getAllStockOuts() async {
     return await _db.getStockOuts();
   }
@@ -43,7 +48,10 @@ class StockOutService {
 
   /// Vráti efektívnu predajnú cenu pre daný produkt a množstvo.
   /// Zohľadňuje pravidlá rozšírenej cenotvorby – vhodné na predvyplnenie ceny v UI.
-  Future<double> resolveEffectiveUnitPrice(String productUniqueId, double qty) async {
+  Future<double> resolveEffectiveUnitPrice(
+    String productUniqueId,
+    double qty,
+  ) async {
     final product = await _db.getProductByUniqueId(productUniqueId);
     if (product == null) return 0;
     if (!product.hasExtendedPricing) return product.price;
@@ -60,7 +68,9 @@ class StockOutService {
     for (final item in items) {
       final product = await _db.getProductByUniqueId(item.productUniqueId);
       if (product == null) {
-        throw Exception('Produkt ${item.productName ?? item.productUniqueId} nebol nájdený.');
+        throw Exception(
+          'Produkt ${item.productName ?? item.productUniqueId} nebol nájdený.',
+        );
       }
       if (product.qty < item.qty) {
         throw InsufficientStockException(
@@ -74,7 +84,10 @@ class StockOutService {
   }
 
   /// Zníži stav skladu podľa položiek výdajky a vytvorí záznamy v SkladovyPohyb.
-  Future<void> _applyStockOutToProducts(StockOut stockOut, int stockOutId) async {
+  Future<void> _applyStockOutToProducts(
+    StockOut stockOut,
+    int stockOutId,
+  ) async {
     final items = await _db.getStockOutItems(stockOutId);
     for (final item in items) {
       final product = await _db.getProductByUniqueId(item.productUniqueId);
@@ -117,17 +130,19 @@ class StockOutService {
         );
         await _db.updateProduct(updated);
       }
-      await _db.insertStockMovement(StockMovement(
-        stockOutId: stockOutId,
-        documentNumber: stockOut.documentNumber,
-        createdAt: stockOut.createdAt,
-        productUniqueId: item.productUniqueId,
-        productName: item.productName,
-        plu: item.plu,
-        qty: item.qty.round(),
-        unit: item.unit,
-        direction: 'OUT',
-      ));
+      await _db.insertStockMovement(
+        StockMovement(
+          stockOutId: stockOutId,
+          documentNumber: stockOut.documentNumber,
+          createdAt: stockOut.createdAt,
+          productUniqueId: item.productUniqueId,
+          productName: item.productName,
+          plu: item.plu,
+          qty: item.qty.round(),
+          unit: item.unit,
+          direction: 'OUT',
+        ),
+      );
     }
   }
 
@@ -190,7 +205,9 @@ class StockOutService {
       number = await _db.getNextStockOutNumber();
     }
 
-    final status = isDraft ? StockOutStatus.rozpracovany : StockOutStatus.vykazana;
+    final status = isDraft
+        ? StockOutStatus.rozpracovany
+        : StockOutStatus.vykazana;
     final toInsert = stockOut.copyWith(documentNumber: number, status: status);
 
     final stockOutId = await _db.insertStockOut(toInsert);
@@ -229,18 +246,20 @@ class StockOutService {
     syncStockOutsToBackend().ignore();
   }
 
-  /// Aktualizuje výdajku. Zásoby sa neodpisujú – až pri schválení.
-  /// Aktualizuje výdajku. Ak nie je vysporiadaná: vráti pôvodné zásoby, uloží zmeny, znova odpočíta a upraví SkladovyPohyb.
+  /// Aktualizuje výdajku.
+  /// Ak už bola skladovo aplikovaná (má skladové pohyby), najprv vráti pôvodný stav,
+  /// uloží zmeny a znova aplikuje odpísanie.
   Future<void> updateStockOut({
     required StockOut stockOut,
     required List<StockOutItem> items,
   }) async {
     if (stockOut.id == null) return;
     final existing = await _db.getStockOutById(stockOut.id!);
-    if (existing == null || existing.isStorned || existing.jeVysporiadana) return;
+    if (existing == null || existing.isStorned || existing.jeVysporiadana)
+      return;
 
-    final wasApproved = existing.isApproved;
-    if (wasApproved) {
+    final hadAppliedStock = await _hasAppliedStockMovements(stockOut.id!);
+    if (hadAppliedStock) {
       await _revertStockOutFromProducts(stockOut.id!);
     }
 
@@ -261,7 +280,7 @@ class StockOutService {
       await _db.insertStockOutItem(dbItem);
     }
 
-    if (wasApproved && items.isNotEmpty) {
+    if (hadAppliedStock && items.isNotEmpty) {
       final itemsWithId = await _db.getStockOutItems(stockOut.id!);
       await _validateStock(itemsWithId);
       await _applyStockOutToProducts(stockOut, stockOut.id!);
@@ -269,12 +288,14 @@ class StockOutService {
     syncStockOutsToBackend().ignore();
   }
 
-  /// Schváli výdajku a odpočíta zásoby zo skladu (pre draft: až teraz sa množstvo odpisuje a vytvoría pohyby).
+  /// Schváli výdajku.
+  /// Odpísanie zásob spraví len ak ešte nebolo aplikované (ochrana pred duplicitným odpisom).
   Future<void> approveStockOut(int stockOutId) async {
     final stockOut = await _db.getStockOutById(stockOutId);
     if (stockOut == null || stockOut.isApproved || stockOut.isStorned) return;
     final items = await _db.getStockOutItems(stockOutId);
-    if (items.isNotEmpty) {
+    final hasAppliedStock = await _hasAppliedStockMovements(stockOutId);
+    if (!hasAppliedStock && items.isNotEmpty) {
       await _validateStock(items);
       await _applyStockOutToProducts(stockOut, stockOutId);
     }
@@ -287,11 +308,15 @@ class StockOutService {
     return await _db.getStockOutsByWarehouseId(warehouseId);
   }
 
-  /// Zruší alebo stornuje výdajku. Pri schválených: voliteľne vráti zásoby na sklad.
-  Future<void> stornoStockOut(int stockOutId, {required bool returnToStock}) async {
+  /// Zruší alebo stornuje výdajku. Ak bola skladovo aplikovaná, voliteľne vráti zásoby na sklad.
+  Future<void> stornoStockOut(
+    int stockOutId, {
+    required bool returnToStock,
+  }) async {
     final stockOut = await _db.getStockOutById(stockOutId);
     if (stockOut == null || stockOut.isStorned) return;
-    if (stockOut.isApproved && returnToStock) {
+    final hasAppliedStock = await _hasAppliedStockMovements(stockOutId);
+    if (hasAppliedStock && returnToStock) {
       await _revertStockOutFromProducts(stockOutId);
     }
     await _db.updateStockOutStatus(stockOutId, StockOutStatus.stornovana);
@@ -317,15 +342,17 @@ class StockOutService {
       final productId = i.productUniqueId;
       if (productId == null || productId.isEmpty || i.qty <= 0) continue;
       final product = await _db.getProductByUniqueId(productId);
-      mappedItems.add(StockOutItem(
-        stockOutId: 0,
-        productUniqueId: productId,
-        productName: i.productName,
-        plu: product?.plu,
-        qty: i.qty,
-        unit: i.unit,
-        unitPrice: i.unitPrice,
-      ));
+      mappedItems.add(
+        StockOutItem(
+          stockOutId: 0,
+          productUniqueId: productId,
+          productName: i.productName,
+          plu: product?.plu,
+          qty: i.qty,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+        ),
+      );
     }
     if (mappedItems.isEmpty) return;
 
@@ -342,7 +369,8 @@ class StockOutService {
       recipientDic: invoice.customerDic,
       recipientAddress: [
         invoice.customerAddress,
-        '${invoice.customerPostalCode ?? ''} ${invoice.customerCity ?? ''}'.trim(),
+        '${invoice.customerPostalCode ?? ''} ${invoice.customerCity ?? ''}'
+            .trim(),
       ].where((x) => x != null && x.trim().isNotEmpty).join(', '),
     );
 
