@@ -183,37 +183,112 @@ function mountProductionWebRoutes(apiRouter, { pool, poolReady }) {
 
   apiRouter.get('/production/summary', async (req, res) => {
     if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
-    const from = (req.query.from || new Date(Date.now() - 31 * 864e5).toISOString().slice(0, 10)).toString().slice(0, 10);
+    const from = (req.query.from || new Date(Date.now() - 31 * 864e5).toISOString().slice(0, 10))
+      .toString()
+      .slice(0, 10);
     const to = (req.query.to || new Date().toISOString().slice(0, 10)).toString().slice(0, 10);
     try {
       const uid = dataUserId(req);
       const prod = await pool.query(
-        `SELECT COALESCE(SUM(quantity_produced), 0)::bigint AS pieces
+        `SELECT
+           COALESCE(SUM(quantity_produced), 0)::bigint AS pieces,
+           COALESCE(SUM(actual_stored_m2), 0)::numeric AS m2,
+           COALESCE(SUM(cost_total), 0)::numeric AS cost,
+           COALESCE(SUM(revenue_total), 0)::numeric AS revenue,
+           COUNT(*)::int AS batches
          FROM production_batches WHERE user_id = $1 AND production_date >= $2 AND production_date <= $3`,
         [uid, from, to]
       );
       const pal = await pool.query(
-        `SELECT p.status, COALESCE(SUM(p.quantity), 0)::bigint AS pieces
+        `SELECT p.status, COALESCE(SUM(p.quantity), 0)::bigint AS pieces, COUNT(*)::int AS pallets
          FROM pallets p
          INNER JOIN production_batches b ON b.id = p.batch_id AND b.user_id = $1
          WHERE b.production_date >= $2 AND b.production_date <= $3
-         GROUP BY p.status`,
+         GROUP BY p.status
+         ORDER BY p.status`,
         [uid, from, to]
       );
       const soldRows = await pool.query(
-        `SELECT COALESCE(SUM(p.quantity), 0)::bigint AS pieces
+        `SELECT COALESCE(SUM(p.quantity), 0)::bigint AS pieces, COUNT(*)::int AS pallets
          FROM pallets p
          INNER JOIN production_batches b ON b.id = p.batch_id AND b.user_id = $1
          WHERE b.production_date >= $2 AND b.production_date <= $3
            AND (p.sold_at IS NOT NULL OR p.status IN ('Predané', 'Expedované'))`,
         [uid, from, to]
       );
+      const byType = await pool.query(
+        `SELECT
+           b.product_type,
+           COALESCE(SUM(b.quantity_produced), 0)::bigint AS produced_pieces,
+           COALESCE(SUM(b.actual_stored_m2), 0)::numeric AS produced_m2,
+           COALESCE(SUM(p.quantity) FILTER (WHERE p.sold_at IS NOT NULL OR p.status IN ('Predané','Expedované')), 0)::bigint AS sold_pieces,
+           COALESCE(SUM(p.quantity) FILTER (WHERE p.status = 'Na sklade'), 0)::bigint AS in_stock_pieces,
+           COALESCE(SUM(p.quantity) FILTER (WHERE p.status = 'U zákazníka'), 0)::bigint AS at_customer_pieces
+         FROM production_batches b
+         LEFT JOIN pallets p ON p.batch_id = b.id AND p.user_id = b.user_id
+         WHERE b.user_id = $1 AND b.production_date >= $2 AND b.production_date <= $3
+         GROUP BY b.product_type
+         ORDER BY produced_pieces DESC`,
+        [uid, from, to]
+      );
+      const daily = await pool.query(
+        `SELECT to_char(production_date, 'YYYY-MM-DD') AS day,
+                COALESCE(SUM(quantity_produced), 0)::bigint AS pieces,
+                COALESCE(SUM(actual_stored_m2), 0)::numeric AS m2
+         FROM production_batches
+         WHERE user_id = $1 AND production_date >= $2 AND production_date <= $3
+         GROUP BY production_date
+         ORDER BY production_date ASC`,
+        [uid, from, to]
+      );
+      const topCustomers = await pool.query(
+        `SELECT c.id, c.name,
+                COALESCE(SUM(p.quantity), 0)::bigint AS pieces,
+                COUNT(p.id)::int AS pallets
+         FROM pallets p
+         INNER JOIN production_batches b ON b.id = p.batch_id AND b.user_id = $1
+         INNER JOIN customers c ON c.id = p.customer_id AND c.user_id = $1
+         WHERE b.production_date >= $2 AND b.production_date <= $3
+           AND (p.sold_at IS NOT NULL OR p.status IN ('Predané','Expedované','U zákazníka'))
+         GROUP BY c.id, c.name
+         ORDER BY pieces DESC
+         LIMIT 10`,
+        [uid, from, to]
+      );
       res.json({
         from,
         to,
         total_produced_pieces: Number(prod.rows[0]?.pieces) || 0,
-        pallets_by_status: (pal.rows || []).map((r) => ({ status: r.status, pieces: Number(r.pieces) || 0 })),
+        total_produced_m2: Number(prod.rows[0]?.m2) || 0,
+        total_cost: Number(prod.rows[0]?.cost) || 0,
+        total_revenue: Number(prod.rows[0]?.revenue) || 0,
+        total_batches: Number(prod.rows[0]?.batches) || 0,
+        pallets_by_status: (pal.rows || []).map((r) => ({
+          status: r.status,
+          pieces: Number(r.pieces) || 0,
+          pallets: Number(r.pallets) || 0,
+        })),
         sold_pieces: Number(soldRows.rows[0]?.pieces) || 0,
+        sold_pallets: Number(soldRows.rows[0]?.pallets) || 0,
+        by_product_type: (byType.rows || []).map((r) => ({
+          product_type: r.product_type,
+          produced_pieces: Number(r.produced_pieces) || 0,
+          produced_m2: Number(r.produced_m2) || 0,
+          sold_pieces: Number(r.sold_pieces) || 0,
+          in_stock_pieces: Number(r.in_stock_pieces) || 0,
+          at_customer_pieces: Number(r.at_customer_pieces) || 0,
+        })),
+        daily: (daily.rows || []).map((r) => ({
+          day: r.day,
+          pieces: Number(r.pieces) || 0,
+          m2: Number(r.m2) || 0,
+        })),
+        top_customers: (topCustomers.rows || []).map((r) => ({
+          id: r.id,
+          name: r.name,
+          pieces: Number(r.pieces) || 0,
+          pallets: Number(r.pallets) || 0,
+        })),
       });
     } catch (err) {
       console.error('[GET /production/summary]', err.message);
@@ -530,6 +605,118 @@ function mountProductionWebRoutes(apiRouter, { pool, poolReady }) {
     }
   });
 
+  apiRouter.post('/pallets/bulk-sell', async (req, res) => {
+    if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((n) => parseInt(n, 10)).filter((n) => !Number.isNaN(n)) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids je povinné (pole id paliet)' });
+    const customerId = req.body?.customer_id != null ? parseInt(req.body.customer_id, 10) : null;
+    const saleNote = req.body?.sale_note != null ? String(req.body.sale_note).trim() || null : null;
+    const soldAt = req.body?.sold_at ? new Date(req.body.sold_at) : new Date();
+    const status = (req.body?.status || 'Predané').toString().trim();
+    const client = await pool.connect();
+    try {
+      const uid = dataUserId(req);
+      await client.query('BEGIN');
+      if (customerId) {
+        const ck = await client.query('SELECT id FROM customers WHERE user_id = $1 AND id = $2', [uid, customerId]);
+        if (!ck.rows.length) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Zákazník neexistuje' });
+        }
+      }
+      const cur = await client.query(
+        'SELECT id, customer_id, status FROM pallets WHERE user_id = $1 AND id = ANY($2::int[]) FOR UPDATE',
+        [uid, ids]
+      );
+      if (!cur.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Žiadna z paliet sa nenašla' });
+      }
+      let releasedFromCustomer = 0;
+      for (const row of cur.rows) {
+        if (row.status === 'U zákazníka' && row.customer_id && row.customer_id !== customerId) {
+          await client.query(
+            'UPDATE customers SET pallet_balance = GREATEST(0, COALESCE(pallet_balance,0) - 1) WHERE user_id = $1 AND id = $2',
+            [uid, row.customer_id]
+          );
+          releasedFromCustomer += 1;
+        }
+      }
+      const isAtCustomer = status === 'U zákazníka';
+      if (isAtCustomer && customerId) {
+        for (const row of cur.rows) {
+          if (row.status !== 'U zákazníka' || row.customer_id !== customerId) {
+            await client.query(
+              'UPDATE customers SET pallet_balance = COALESCE(pallet_balance,0) + 1 WHERE user_id = $1 AND id = $2',
+              [uid, customerId]
+            );
+          }
+        }
+      }
+      await client.query(
+        `UPDATE pallets SET status = $3, customer_id = $4, sale_note = COALESCE($5, sale_note), sold_at = $6
+         WHERE user_id = $1 AND id = ANY($2::int[])`,
+        [uid, ids, status, isAtCustomer ? customerId : null, saleNote, ['Predané', 'Expedované'].includes(status) || isAtCustomer ? soldAt : null]
+      );
+      await client.query('COMMIT');
+      res.json({ success: true, updated: cur.rows.length, released_from_customer: releasedFromCustomer });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[POST /pallets/bulk-sell]', err.message);
+      res.status(500).json({ error: 'Chyba servera' });
+    } finally {
+      client.release();
+    }
+  });
+
+  apiRouter.get('/production/export.csv', async (req, res) => {
+    if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
+    const from = (req.query.from || '2020-01-01').toString().slice(0, 10);
+    const to = (req.query.to || new Date().toISOString().slice(0, 10)).toString().slice(0, 10);
+    try {
+      const uid = dataUserId(req);
+      const { rows } = await pool.query(
+        `SELECT b.production_date, b.product_type, b.quantity_produced, b.actual_stored_m2, b.cost_total, b.revenue_total,
+                COALESCE(SUM(p.quantity), 0)::bigint AS pallet_pieces,
+                COALESCE(SUM(p.quantity) FILTER (WHERE p.sold_at IS NOT NULL OR p.status IN ('Predané','Expedované')), 0)::bigint AS sold_pieces,
+                COALESCE(SUM(p.quantity) FILTER (WHERE p.status = 'Na sklade'), 0)::bigint AS in_stock_pieces
+           FROM production_batches b
+           LEFT JOIN pallets p ON p.batch_id = b.id AND p.user_id = b.user_id
+          WHERE b.user_id = $1 AND b.production_date >= $2 AND b.production_date <= $3
+          GROUP BY b.id, b.production_date, b.product_type, b.quantity_produced, b.actual_stored_m2, b.cost_total, b.revenue_total
+          ORDER BY b.production_date DESC`,
+        [uid, from, to]
+      );
+      const escape = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        return s.includes(';') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = 'datum;typ;vyrobene_ks;vyrobene_m2;naklady_eur;vynos_eur;na_paletach_ks;predane_ks;na_sklade_ks';
+      const lines = rows.map((r) => {
+        const day = r.production_date instanceof Date ? r.production_date.toISOString().slice(0, 10) : r.production_date;
+        return [
+          day,
+          r.product_type,
+          Number(r.quantity_produced) || 0,
+          r.actual_stored_m2 != null ? Number(r.actual_stored_m2).toFixed(2) : '',
+          r.cost_total != null ? Number(r.cost_total).toFixed(2) : '',
+          r.revenue_total != null ? Number(r.revenue_total).toFixed(2) : '',
+          Number(r.pallet_pieces) || 0,
+          Number(r.sold_pieces) || 0,
+          Number(r.in_stock_pieces) || 0,
+        ].map(escape).join(';');
+      });
+      const body = '\uFEFF' + [header, ...lines].join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="vyroba-${from}-az-${to}.csv"`);
+      res.send(body);
+    } catch (err) {
+      console.error('[GET /production/export.csv]', err.message);
+      res.status(500).json({ error: 'Chyba servera' });
+    }
+  });
+
   apiRouter.delete('/pallets/:id', async (req, res) => {
     if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
     const palletId = parseInt(req.params.id, 10);
@@ -726,7 +913,7 @@ function mountProductionWebRoutes(apiRouter, { pool, poolReady }) {
     if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });
     const id = parseInt(req.params.id, 10);
     if (Number.isNaN(id)) return res.status(400).json({ error: 'Neplatné id' });
-    const { status, rejection_reason, actual_quantity } = req.body || {};
+    const { status, rejection_reason, actual_quantity, create_batch } = req.body || {};
     const newStatus = (status || '').toString().trim();
     if (!newStatus) return res.status(400).json({ error: 'status je povinný' });
     const client = await pool.connect();
@@ -809,8 +996,38 @@ function mountProductionWebRoutes(apiRouter, { pool, poolReady }) {
           updates.variance != null ? updates.variance : null,
         ]
       );
+
+      let createdBatch = null;
+      if (newStatus === 'completed' && create_batch) {
+        const aq = updates.actual_quantity != null ? Number(updates.actual_quantity) : Number(o.planned_quantity);
+        if (aq > 0) {
+          const recName = recipeName(rows[0]);
+          const dateStr = (rows[0].production_date || new Date().toISOString().slice(0, 10)).toString().slice(0, 10);
+          const batch = await client.query(
+            `INSERT INTO production_batches (user_id, production_date, product_type, quantity_produced, notes, created_at)
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+             RETURNING id, local_id, production_date, product_type, quantity_produced, notes, created_at`,
+            [
+              uid,
+              dateStr,
+              recName,
+              Math.round(aq),
+              `Auto z VP ${rows[0].order_number || rows[0].id}`,
+            ]
+          );
+          createdBatch = mapBatch(batch.rows[0]);
+          if (batch.rows[0].local_id != null) {
+            await client.query(
+              `UPDATE production_orders SET finished_goods_receipt_local_id = $3
+               WHERE user_id = $1 AND id = $2`,
+              [uid, id, batch.rows[0].local_id]
+            );
+          }
+        }
+      }
+
       await client.query('COMMIT');
-      res.json(rows[0]);
+      res.json({ ...rows[0], created_batch: createdBatch });
     } catch (err) {
       await client.query('ROLLBACK');
       console.error('[PATCH /production-orders/:id/status]', err.message);
@@ -819,6 +1036,10 @@ function mountProductionWebRoutes(apiRouter, { pool, poolReady }) {
       client.release();
     }
   });
+
+  function recipeName(row) {
+    return row.recipe_name || `VP ${row.order_number || row.id}`;
+  }
 
   apiRouter.delete('/production-orders/:id', async (req, res) => {
     if (!pool || !poolReady) return res.status(503).json({ error: 'Databáza nie je k dispozícii' });

@@ -226,3 +226,135 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Reportingové karty (súhrn výroby) */
+.prod-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.prod-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+}
+.prod-summary-card h4 {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.prod-summary-card .num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.prod-summary-card .sub {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Tabuľka súhrnov */
+.prod-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  background: var(--bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.prod-table th,
+.prod-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.92rem;
+}
+.prod-table thead th {
+  background: rgba(255, 193, 7, 0.08);
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.prod-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.prod-table td.num,
+.prod-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Progress bar pre alokáciu paliet */
+.prod-progress {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0.4rem 0;
+}
+.prod-progress > span {
+  display: block;
+  height: 100%;
+}
+.prod-progress > span.is-stock { background: #10b981; }
+.prod-progress > span.is-cust { background: #3b82f6; }
+.prod-progress > span.is-sold { background: #f59e0b; }
+.prod-progress > span.is-free { background: rgba(255, 255, 255, 0.06); }
+
+.prod-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.prod-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+.prod-legend .is-stock { background: #10b981; }
+.prod-legend .is-cust { background: #3b82f6; }
+.prod-legend .is-sold { background: #f59e0b; }
+.prod-legend .is-free { background: rgba(255, 255, 255, 0.18); }
+
+/* Karta palety v detaile */
+.prod-pallet-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.prod-pallet-card.is-sold { border-color: rgba(245, 158, 11, 0.5); }
+.prod-pallet-card.is-cust { border-color: rgba(59, 130, 246, 0.4); }
+.prod-pallet-card .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.prod-pallet-card .row + .row { margin-top: 0.5rem; }
+.prod-pallet-status {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.prod-pallet-status.is-stock { background: rgba(16, 185, 129, 0.18); color: #10b981; }
+.prod-pallet-status.is-cust { background: rgba(59, 130, 246, 0.18); color: #60a5fa; }
+.prod-pallet-status.is-sold { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+.prod-pallet-status.is-other { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+

@@ -661,7 +661,11 @@ class _ProductionListScreenState extends State<ProductionListScreen> {
                                       border: Border.all(color: accent.withValues(alpha: 0.35)),
                                     ),
                                     child: Text(
-                                      '${b.quantityProduced} ks',
+                                      b.actualStoredM2 != null && b.actualStoredM2! > 0
+                                          ? '${b.quantityProduced} ks · ${b.actualStoredM2!.toStringAsFixed(1)} m²'
+                                          : (b.requestedM2 != null && b.requestedM2! > 0
+                                              ? '${b.quantityProduced} ks · ${b.requestedM2!.toStringAsFixed(1)} m²'
+                                              : '${b.quantityProduced} ks'),
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w800,

@@ -52,6 +52,8 @@ export default function VyrobneProkazaPage() {
   const [poNotes, setPoNotes] = useState('')
   const [requiresApproval, setRequiresApproval] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [patching, setPatching] = useState(null)
+  const [autoBatch, setAutoBatch] = useState(true)
 
   useEffect(() => {
     const a = getAuth()
@@ -139,7 +141,14 @@ export default function VyrobneProkazaPage() {
       body: JSON.stringify({ status, ...extra }),
     })
       .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.error)))))
-      .then(() => loadOrders())
+      .then((res) => {
+        if (res?.created_batch?.id) {
+          if (window.confirm(`Vytvorená šarža #${res.created_batch.id}. Otvoriť detail (na palety, predaj atď.)?`)) {
+            navigate(`/dashboard/production/${res.created_batch.id}`)
+          }
+        }
+        loadOrders()
+      })
       .catch((err) => setError(err.message || 'Zmena stavu zlyhala'))
       .finally(() => setPatching(null))
   }
@@ -272,6 +281,14 @@ export default function VyrobneProkazaPage() {
                           style={{ width: '120px' }}
                           id={`complete-qty-${o.id}`}
                         />
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                          <input
+                            type="checkbox"
+                            defaultChecked={autoBatch}
+                            id={`auto-batch-${o.id}`}
+                          />
+                          + šarža
+                        </label>
                         <button
                           type="button"
                           className="dashboard-scan-card"
@@ -281,7 +298,8 @@ export default function VyrobneProkazaPage() {
                             const el = document.getElementById(`complete-qty-${o.id}`)
                             const raw = el?.value?.trim() || ''
                             const aq = raw ? parseFloat(String(raw).replace(',', '.')) : undefined
-                            patchStatus(o.id, 'completed', { actual_quantity: aq })
+                            const cb = document.getElementById(`auto-batch-${o.id}`)
+                            patchStatus(o.id, 'completed', { actual_quantity: aq, create_batch: !!cb?.checked })
                             if (el) el.value = ''
                           }}
                         >

@@ -237,7 +237,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 41,
+      version: 42,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -724,10 +724,19 @@ class DatabaseService {
         customer_id INTEGER,
         status TEXT NOT NULL DEFAULT 'Na sklade',
         created_at TEXT,
+        sold_at TEXT,
+        sale_note TEXT,
         FOREIGN KEY (batch_id) REFERENCES production_batches(id),
         FOREIGN KEY (customer_id) REFERENCES customers(id)
       )
     ''');
+    final palInfoEnsure = await db.rawQuery('PRAGMA table_info(pallets)');
+    if (!palInfoEnsure.any((c) => c['name'] == 'sold_at')) {
+      await db.execute('ALTER TABLE pallets ADD COLUMN sold_at TEXT');
+    }
+    if (!palInfoEnsure.any((c) => c['name'] == 'sale_note')) {
+      await db.execute('ALTER TABLE pallets ADD COLUMN sale_note TEXT');
+    }
     await db.execute('''
       CREATE TABLE IF NOT EXISTS paving_stones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2215,6 +2224,15 @@ class DatabaseService {
       await db.execute(
         "ALTER TABLE app_notifications ADD COLUMN is_manual INTEGER DEFAULT 0",
       );
+    }
+    if (oldVersion < 42) {
+      final palInfo = await db.rawQuery('PRAGMA table_info(pallets)');
+      if (!palInfo.any((c) => c['name'] == 'sold_at')) {
+        await db.execute('ALTER TABLE pallets ADD COLUMN sold_at TEXT');
+      }
+      if (!palInfo.any((c) => c['name'] == 'sale_note')) {
+        await db.execute('ALTER TABLE pallets ADD COLUMN sale_note TEXT');
+      }
     }
   }
 
@@ -5995,6 +6013,10 @@ class DatabaseService {
     final customer = await getCustomerById(customerId);
     if (pallet == null || customer == null) return;
     if (_currentUserId == null) return;
+    if (pallet.status == PalletStatus.uZakaznika && pallet.customerId == customerId) return;
+    if (pallet.status == PalletStatus.uZakaznika && pallet.customerId != null && pallet.customerId != customerId) {
+      await returnPalletsForCustomer(pallet.customerId!, 1);
+    }
     await db.update(
       'pallets',
       {'customer_id': customerId, 'status': PalletStatus.uZakaznika.label},
@@ -6007,6 +6029,76 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [customerId],
     );
+    DataChangeNotifier.notify();
+  }
+
+  /// Označí paletu ako Predané/Expedované s dátumom a poznámkou.
+  /// Ak bola u zákazníka, dekrementuje jeho pallet_balance.
+  Future<void> markPalletSold(
+    int palletId, {
+    PalletStatus status = PalletStatus.predane,
+    DateTime? soldAt,
+    String? saleNote,
+  }) async {
+    final db = await database;
+    if (_currentUserId == null) return;
+    final p = await getPalletById(palletId);
+    if (p == null) return;
+    if (p.status == PalletStatus.uZakaznika && p.customerId != null) {
+      await returnPalletsForCustomer(p.customerId!, 1);
+    }
+    final values = <String, Object?>{
+      'status': status.label,
+      'sold_at': (soldAt ?? DateTime.now()).toIso8601String(),
+    };
+    if (saleNote != null) values['sale_note'] = saleNote;
+    if (status != PalletStatus.uZakaznika) values['customer_id'] = null;
+    await db.update(
+      'pallets',
+      values,
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [palletId, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+  }
+
+  /// Vráti paletu na sklad (zruší zákazníka, status Na sklade, vyčistí sold_at).
+  Future<void> returnPalletToStock(int palletId) async {
+    final db = await database;
+    if (_currentUserId == null) return;
+    final p = await getPalletById(palletId);
+    if (p == null) return;
+    if (p.status == PalletStatus.uZakaznika && p.customerId != null) {
+      await returnPalletsForCustomer(p.customerId!, 1);
+    }
+    await db.update(
+      'pallets',
+      {
+        'status': PalletStatus.naSklade.label,
+        'customer_id': null,
+        'sold_at': null,
+        'sale_note': null,
+      },
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [palletId, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+  }
+
+  Future<int> deletePallet(int palletId) async {
+    final db = await database;
+    if (_currentUserId == null) return 0;
+    final p = await getPalletById(palletId);
+    if (p != null && p.status == PalletStatus.uZakaznika && p.customerId != null) {
+      await returnPalletsForCustomer(p.customerId!, 1);
+    }
+    final r = await db.delete(
+      'pallets',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [palletId, _currentUserId],
+    );
+    DataChangeNotifier.notify();
+    return r;
   }
 
   /// Nahradí lokálne šarže recepty a palety dátami z backendu. Vkladá s user_id = _currentUserId.
@@ -6047,6 +6139,9 @@ class DatabaseService {
         'created_at': b['created_at']?.toString(),
         'cost_total': (b['cost_total'] as num?)?.toDouble(),
         'revenue_total': (b['revenue_total'] as num?)?.toDouble(),
+        'paving_stone_id': (b['paving_stone_id'] as num?)?.toInt(),
+        'requested_m2': (b['requested_m2'] as num?)?.toDouble(),
+        'actual_stored_m2': (b['actual_stored_m2'] as num?)?.toDouble(),
       });
       final recipe = b['recipe'] as List<dynamic>? ?? [];
       for (final r in recipe) {
@@ -6075,6 +6170,8 @@ class DatabaseService {
           'customer_id': map['customer_id'] as int?,
           'status': (map['status'] as String?) ?? 'Na sklade',
           'created_at': map['created_at']?.toString(),
+          'sold_at': map['sold_at']?.toString(),
+          'sale_note': map['sale_note'] as String?,
         });
       }
     }

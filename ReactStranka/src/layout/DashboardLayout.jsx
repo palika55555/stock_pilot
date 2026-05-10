@@ -36,6 +36,7 @@ const NAV_SECTIONS = [
       { path: '/dashboard/dlažba-typy', label: 'Typy dlažby (m²)', icon: '⬛' },
       { path: '/dashboard/vyroba-prikazy', label: 'Výrobné príkazy', icon: '🏭' },
       { path: '/dashboard/production', label: 'Výrobné šarže', icon: '🔢' },
+      { path: '/dashboard/production/report', label: 'Súhrn výroby', icon: '📊' },
     ],
   },
   {

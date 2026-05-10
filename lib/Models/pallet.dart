@@ -1,11 +1,17 @@
-/// Paleta – výstup z výroby, evidovaný cez QR (STOCKPILOT_PALLET:id).
+/// Paleta – výstup z výroby, evidovaná cez QR (STOCKPILOT_PALLET:id).
 enum PalletStatus {
   naSklade('Na sklade'),
   uZakaznika('U zákazníka'),
+  predane('Predané'),
+  expedovane('Expedované'),
+  rezervovane('Rezervované'),
   vratenaPrazdna('Vrátená prázdna');
 
   const PalletStatus(this.label);
   final String label;
+
+  bool get isSold => this == PalletStatus.predane || this == PalletStatus.expedovane;
+  bool get atCustomer => this == PalletStatus.uZakaznika;
 
   static PalletStatus fromString(String? v) {
     if (v == null) return PalletStatus.naSklade;
@@ -24,6 +30,8 @@ class Pallet {
   final int? customerId;
   final PalletStatus status;
   final String? createdAt;
+  final String? soldAt;
+  final String? saleNote;
 
   Pallet({
     this.id,
@@ -33,6 +41,8 @@ class Pallet {
     this.customerId,
     this.status = PalletStatus.naSklade,
     this.createdAt,
+    this.soldAt,
+    this.saleNote,
   });
 
   static String qrPayload(int palletId) => 'STOCKPILOT_PALLET:$palletId';
@@ -52,6 +62,8 @@ class Pallet {
       'customer_id': customerId,
       'status': status.label,
       'created_at': createdAt,
+      'sold_at': soldAt,
+      'sale_note': saleNote,
     };
   }
 
@@ -64,6 +76,8 @@ class Pallet {
       customerId: map['customer_id'] as int?,
       status: PalletStatus.fromString(map['status'] as String?),
       createdAt: map['created_at'] as String?,
+      soldAt: map['sold_at'] as String?,
+      saleNote: map['sale_note'] as String?,
     );
   }
 
@@ -73,17 +87,24 @@ class Pallet {
     String? productType,
     int? quantity,
     int? customerId,
+    bool clearCustomer = false,
     PalletStatus? status,
     String? createdAt,
+    String? soldAt,
+    bool clearSoldAt = false,
+    String? saleNote,
+    bool clearSaleNote = false,
   }) {
     return Pallet(
       id: id ?? this.id,
       batchId: batchId ?? this.batchId,
       productType: productType ?? this.productType,
       quantity: quantity ?? this.quantity,
-      customerId: customerId ?? this.customerId,
+      customerId: clearCustomer ? null : (customerId ?? this.customerId),
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      soldAt: clearSoldAt ? null : (soldAt ?? this.soldAt),
+      saleNote: clearSaleNote ? null : (saleNote ?? this.saleNote),
     );
   }
 }

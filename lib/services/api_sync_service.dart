@@ -629,6 +629,9 @@ Future<void> syncBatchesToBackend() async {
         'created_at': b.createdAt,
         'cost_total': b.costTotal,
         'revenue_total': b.revenueTotal,
+        'paving_stone_id': b.pavingStoneId,
+        'requested_m2': b.requestedM2,
+        'actual_stored_m2': b.actualStoredM2,
         'recipe': recipe
             .map((r) => {
                   'material_name': r.materialName,
@@ -647,6 +650,8 @@ Future<void> syncBatchesToBackend() async {
           'quantity': p.quantity,
           'customer_id': p.customerId,
           'status': p.status.label,
+          'sold_at': p.soldAt,
+          'sale_note': p.saleNote,
         });
       }
     }

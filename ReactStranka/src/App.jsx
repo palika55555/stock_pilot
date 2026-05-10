@@ -11,6 +11,7 @@ import ScanProductPage from './pages/ScanProductPage'
 import ProductionPage from './pages/ProductionPage'
 import ProductionBatchFormPage from './pages/ProductionBatchFormPage'
 import ProductionBatchDetailPage from './pages/ProductionBatchDetailPage'
+import ProductionReportPage from './pages/ProductionReportPage'
 import QuotesPage from './pages/QuotesPage'
 import QuoteFormPage from './pages/QuoteFormPage'
 import WarehousesPage from './pages/WarehousesPage'
@@ -52,6 +53,7 @@ function App() {
           <Route path="products/:uniqueId" element={<ProductDetailPage />} />
           <Route path="scan" element={<ScanProductPage />} />
           <Route path="production" element={<ProductionPage />} />
+          <Route path="production/report" element={<ProductionReportPage />} />
           <Route path="production/new" element={<ProductionBatchFormPage />} />
           <Route path="production/edit/:batchId" element={<ProductionBatchFormPage />} />
           <Route path="production/:id" element={<ProductionBatchDetailPage />} />
